@@ -55,9 +55,8 @@ turn_input:
                 jr   z, .nd                    ; deferred level-up waits too); the input is read on
                 res  TRK_DUE_BIT, (hl)         ; the next tick (40 ms, once per 48 turns). A turn
                                                ; never starts with it set: end_turn sees it clear
-                ld   hl, rsp_run               ; LARGER-D T5: the progress respawn event (bank 0 rsp0.asm), set
-                ld   c, BANK_TEXT              ; by lp_transition on every room entry; the time trickle is off
-                jp   farb
+                jp   rsp_run                   ; LARGER-D T5: the progress respawn event (low-RAM rsp0.asm), set
+                                               ; by lp_transition on every room entry; the time trickle is off
 .nd:            ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
                 or   a                         ; deferred (xp_level: 1st frame only)
                 call nz, xp_level

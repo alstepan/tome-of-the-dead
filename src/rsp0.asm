@@ -1,10 +1,11 @@
 ;==============================================================================
-; rsp0.asm — LARGER-D T5 progress respawn (bank 0, B0_CODE2; INCLUDEd by nm3_b0.asm). Pairs with R6
-; trickle6.asm rsp_pick. Bank-0 rules (no SMC, never pages $C000: far6 hands R6 back).
+; rsp0.asm — LARGER-D T5 progress respawn (bank 5 low-RAM cold block; INCLUDEd by lowram.asm). Pairs
+; with R6 trickle6.asm rsp_pick. Runs with any bank at $C000 (bank 7 from turn_input; never pages $C000
+; itself: far6 hands the caller's bank back). Contended RAM: once per room entry, not hot.
 ;==============================================================================
 ;------------------------------------------------------------------------------
-; rsp_run — LARGER-D T5 (BANK 0, B0_CODE2: R6 has no room; FARB0 from bank-7 turn_input, rules of nm3_b0.asm) (larger_depths §3.2): the PROGRESS respawn, replacing the time trickle on
-; D1-D8 (end_turn no longer counts it). R6 far6 from turn_input on the idle INPUT tick after any
+; rsp_run — LARGER-D T5 (low RAM: R6 / B0_CODE2 have no room; jp from bank-7 turn_input) (larger_depths §3.2): the PROGRESS respawn, replacing the time trickle on
+; D1-D8 (end_turn no longer counts it). Tail-jumped from turn_input on the idle INPUT tick after any
 ; room entry (lp_transition sets TRK_DUE: the event never runs inside the transition).
 ;   1. trk_gate; the room just left (TRK_PREV) gets its "last seen" stamp RD_STAMP =
 ;      (TURN_COUNTER >> 2) & 255 (4-turn units, wraps after 1,024 turns: a stale hit only skips an event);

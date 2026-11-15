@@ -2547,7 +2547,7 @@ def w14(p, check):
 
 
 def present_rooms(blk):
-    return [r for r in range(9) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
+    return [r for r in range(S["GRID_CELLS"]) if room_model.field(blk, r, "RD_FLAGS") & S["RDF_PRESENT"]]
 
 
 def wall_decor_ids(d):
@@ -3399,6 +3399,9 @@ def w16_level(p, check):
         mm = bytes(p.z.read_memory(S["ROOM_MAP"], 576))
         # cells under ANIM_LIST may hold the other glyph frame: compare the rest
         cells = {(al0[i], al0[i + 1]) for i in range(0, len(al0), 4)}
+        if side in "LR":                        # LARGER-D T4: a door on that exit was opened by the walk (planks ->
+            c0 = 30 if side == "R" else 0       # jambs; game.md §2.3): its plank cells are not compared
+            cells |= {(c, 9 * s_ + S["DOOR_PLANK_DY"] + k) for c in (c0, c0 + 1) for k in range(S["DOOR_PLANK_H"])}
         same = all(mm[i] == m0[i] for i in range(576) if (i % 32, i // 32) not in cells)
         check(f"W16 D2: re-entry {dest} -> {st}: ROOM_MAP == the first build (decor cells aside), "
               "ANIM_LIST cells == the room's, GEN_TRAP 0",

@@ -69,7 +69,7 @@ def first_entries(depth, seed, lvl):
     b = G.generate(depth, seed, f3=True)
     lp = G.lp_budget(b, lvl, True)
     out = {}
-    for r in range(9):
+    for r in range(G.NCELL):                             # LARGER-D T4: 3 x 4 grid
         if b[G.OFF_DESC + r * 16] & 1:
             lp2, placed = G.lp_enter(b, lp, r, 0, 14, 3, True)
             out[r] = (placed, lp2)
@@ -115,8 +115,8 @@ check(lp[G.lp_off("LP_KINDS"):G.lp_off("LP_KINDS") + 8] == bytes(G.D[k] for k in
 for seed in range(1, 300):
     b = G.generate(8, seed, f3=True)
     sc, lair = b[G.H["LVL_SANCTUM"]], b[G.H["LVL_LAIR"]]
-    check(lair == 7 and sc in (6, 8), "D8 lair 7, Sanctum 6/8")
-    e = b[G.OFF_EDGE + G.hedge(min(7, sc))]
+    check(lair == G.BOT + 1 and sc in (G.BOT, G.BOT + 2), "D8 lair 10, Sanctum 9/11")   # LARGER-D T4
+    e = b[G.OFF_EDGE + G.hedge(min(lair, sc))]
     check(e == G.D["EG_LINK"] | G.D["EG_DOOR"] | G.D["EG_SEAL"], "sealed edge")
     check(not b[G.H["LVL_FLAGS"]] & G.D["LF_GRATE_OPEN"], "grate closed")
     check(b[G.OFF_DESC + sc * 16 + G.D["RD_FLAGS"]] & G.D["RDF_SANCTUM"], "Sanctum flag")

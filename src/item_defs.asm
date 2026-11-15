@@ -356,7 +356,7 @@ ITEM_RAM_LEN    EQU ITEM_RAM_END - ITEM_RAM     ; 95 (M0: 81 + ST1_LEN; STATS2: 
 TRAP_LIST       EQU DN_QN + 1       ; $6E9D (LARGER-D T2; TRAP_N stays right after the list: items_model.py)
 TRAP_MAX        EQU 8               ; LARGER-D T2: 8 (was 6); the generator's own cap is unchanged until T6
 TRAP_STRIDE     EQU 2
-TRAP_N          EQU TRAP_LIST + TRAP_MAX * TRAP_STRIDE   ; $6EAD ($6EAE..$6EAF spare)
+TRAP_N          EQU TRAP_LIST + TRAP_MAX * TRAP_STRIDE   ; $6EAD ($6EAE LVL_KEYROOM2 (T4), $6EAF spare)
 TR_B0           EQU 0
 TR_B1           EQU 1
 TRF_ROOM_MASK   EQU %00001111
@@ -377,6 +377,7 @@ TT_ALARM        EQU 3               ; D5+, one-shot
 TT_STUN         EQU 4               ; D4+, one-shot (STUN1: the falling stone; pool order DART GAS TELEPORT STUN ALARM)
                 ASSERT TRAP_N < DG_PLAN && (TRAP_LIST >> 8) == (TRAP_N >> 8)   ; below DG_PLAN, one page
                 ASSERT TRAP_LIST == $6E9D && TRAP_N == $6EAD
+                ASSERT LVL_KEYROOM2 == TRAP_N + 1        ; LARGER-D T4: the colour-1 key room in the T2 spare
 ; 3E-T16 traps runtime state (state block spare $BFF5..$BFF7, test-observable,
 ; never zeroed: both are written before they are read on every accepted turn)
 TRP_PRE         EQU $BFF5           ; 2 B: the hero's E_X, E_Y before this turn's action

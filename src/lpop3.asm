@@ -36,7 +36,7 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
 
 ; Per-depth budget rows lp_dtab (+ LP_DROW): NEW-MON3 T1 moved them to bank-0 B0_CODE2 with the
 ; header copy (src/nm3_b0.asm lp_hdr0, FARB0 from lp_budget); A-1 (the row-31 alias) hooks in there.
-; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 10 >= 7 = the most rooms R
+; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 16 >= 10 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
 ; LARGER-D T5: lp_dtab max count 24 (D5) vs the tight min room capacity: the 3x4 grid's min |R| 8 x ROOM_MAX 3 = 24
@@ -276,7 +276,7 @@ lp_transition:
                 call hla
                 inc  (hl)
                 ld   hl, TRK_PHASE             ; LARGER-D T5: a room entry: the progress-respawn event runs on the next
-                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> R6 rsp_run: the first-entry test, the roll, the pick)
+                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> low-RAM rsp_run: the first-entry test, the roll, the pick)
                 ld   hl, SLOTREC + SLOTREC_STRIDE + R_VIS
                 ld   de, SLOTREC_STRIDE
                 ld   b, P_MAX_ENT - 1

@@ -149,15 +149,16 @@ tut_d0:
                 call farb4
                 ; --- the level block (tut0_level.asm; LVL_DEPTH stays 1) ---
                 ; LARGER-D T2: one HL run over the images, stored in LVL_STATE memory order:
-                ; GRID_CELLS descriptors (slots GRID_CELLS..ROOM_SLOTS-1 := 0, as level_gen's
-                ; attempt), FLOOR_LIST, the header less MASTER_SEED (new_game's),
-                ; EDGE_TAB..TRAP_N (TRK_*, TOME_*, DN_QN = 0 in the image); the spare + DG_PLAN := 0
+                ; TUT0_CELLS (9: the D0 level is 3x3) descriptors (slots 9..11 := 0: LARGER-D T4 keeps
+                ; the loop, the blob has no room for 48 B of zero descriptors), FLOOR_LIST, the header
+                ; less MASTER_SEED (new_game's), EDGE_TAB..TRAP_N (TRK_*, TOME_*, DN_QN = 0 in the
+                ; image); LVL_KEYROOM2 := ROOM_NONE (T4: no colour-1 key in D0), the spare + DG_PLAN := 0
                 ld   hl, tut0_room_desc
                 ld   de, ROOM_DESC
-                ld   bc, GRID_CELLS * RD_STRIDE
+                ld   bc, TUT0_CELLS * RD_STRIDE
                 ldir
                 xor  a
-                ld   b, (ROOM_SLOTS - GRID_CELLS) * RD_STRIDE
+                ld   b, (ROOM_SLOTS - TUT0_CELLS) * RD_STRIDE
 .zs:            ld   (de), a
                 inc  de
                 djnz .zs                       ; DE = FLOOR_LIST
@@ -168,16 +169,19 @@ tut_d0:
                 inc  de
                 inc  de                        ; MASTER_SEED kept
                 ld   c, TRAP_N + 1 - EDGE_TAB
-                ldir
-                ld   b, LVL_STATE_END - TRAP_N - 1
-.zt:            ld   (de), a
-                inc  e
+                ldir                           ; DE = LVL_KEYROOM2
+                ex   de, hl
+                ld   (hl), ROOM_NONE
+                inc  l
+                ld   b, LVL_STATE_END - LVL_KEYROOM2 - 1
+.zt:            ld   (hl), a
+                inc  l
                 djnz .zt
-                ASSERT GRID_CELLS < ROOM_SLOTS && (ROOM_SLOTS - GRID_CELLS) * RD_STRIDE < 256   ; (T4: drop the .zs loop at 12)
+                ASSERT TUT0_CELLS < ROOM_SLOTS && (ROOM_SLOTS - TUT0_CELLS) * RD_STRIDE < 256 && LVL_KEYROOM2 == TRAP_N + 1
                 ASSERT FLOOR_LIST == ROOM_DESC + ROOM_SLOTS * RD_STRIDE && FLOOR_MAX * FL_STRIDE < 256
                 ASSERT LVL_HDR == FLOOR_LIST + FLOOR_MAX * FL_STRIDE && TUT0_HDR_COPY == MASTER_SEED - LVL_HDR
                 ASSERT EDGE_TAB == MASTER_SEED + 2 && (TRAP_N >> 8) == ((LVL_STATE_END - 1) >> 8)
-                ASSERT tut0_floor_list - tut0_room_desc == GRID_CELLS * RD_STRIDE
+                ASSERT tut0_floor_list - tut0_room_desc == TUT0_CELLS * RD_STRIDE
                 ASSERT tut0_lvl_state - tut0_floor_list == FLOOR_MAX * FL_STRIDE
                 ASSERT tut0_edge_tab - tut0_lvl_state == TUT0_HDR_COPY
                 ASSERT tut0_lvl_vars - tut0_edge_tab == EDGE_SLOTS && tut0_trap_list - tut0_edge_tab == TRAP_LIST - EDGE_TAB
