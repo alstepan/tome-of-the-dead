@@ -47,6 +47,62 @@ Levelcheck (D1–D8, 300 seeds): start row 0, lair row 3, `n` 10–12 (D8 10–1
 edge, D8 lair = 10 with `S` free, reseeds 0, **BFS start → lair ≥ 3**, I1 "7–9" → "10–12", I2 caps 2 → 3,
 I3–I6 unchanged. Junior reports Restart counts (feature/potion) before vs after.
 
+### 2.1 Level key (user 2026-11-15: "avoid quick pass through without visiting most of rooms")
+
+Keys and locked doors go live on D1–D8 (rev 2026-11-15, user: a lock may sit mid-route, and there may be several).
+This **supersedes game.md §1.4 "Key / locked door"**, game.md §1.1 "Key room" (the farthest leaf, with the lock always
+on the lair door) and L1 step (7)'s note "key gating only matters from 3F". The grate and the boss stay the final gate.
+
+| Topic | Rule (KEY, designer decision 2026-11-15) |
+|---|---|
+| Graph `G` | Rooms + tree edges (horizontal and vertical) + the 0–1 loop edge. Pits only drop storey 0 → 1 inside a room, the arrival shaft enters the start room, and the exit shaft leaves the level, so `G` holds **every** room-to-room link. `P` = the BFS-shortest path start → lair in `G` |
+| Lock candidates | An edge `e` may be locked iff it is (a) on `P`, (b) a **tree** edge, (c) **horizontal** (`T_DOOR_LOCK` plank art; shafts can't hold planks) and (d) a **bridge** of `G` (not on the loop's cycle). Removing `e` splits `G` into a start side and a lair side, so nothing (loop, shaft, fall) bypasses it. The lair door is a valid candidate when it qualifies |
+| Lock count `m` | **D1–D3: 1. D4–D8: 2 if `n ≥ 11` and a valid pair exists, else 1.** Never more than 2, because 3+ fetches in a scrolling side-view are tedious. Locks are ordered along `P`: `L1` is nearer the start. The regions are `R0` (start side of `L1`), `R1` (between), `R2` (lair side of the last lock) |
+| Key rooms | Key `j` lies in `R(j−1)` (the region that is open before `Lj`). It is the room there **farthest (BFS within the region) from `Lj`'s near-side room**, i.e. the deepest leaf and the longest detour. Excluded: start, lair, Sanctum; ties lowest id. A lock set is valid only if every region it needs has a candidate. Stored as `LVL_KEYROOM[0..1]` (`ROOM_NONE` if unused) |
+| Lock choice | Enumerate the valid sets (1 edge, or 2 ordered edges). `F` = the distinct rooms on the BFS paths start → K1 (→ K2) → lair in `G` with all locks open. Both ends count, and a loop shortcut lowers `F`. **Pick the max `F`**; ties go to the lowest `P` index (lock 1, then lock 2). With ≤ 12 rooms and ≤ ~8 candidates this is a trivial loop |
+| Generic keys | `IT_KEY` is a **count 0–2**, not coloured, and needs no new art. This is safe because of the ordering: `Lj+1` can only be reached through `Lj`, and key `j+1` lies beyond `Lj`. The bag `KEY` slot shows the count (`KEY 2`); the panel icon is lit while the count is ≥ 1 |
+| Coverage minimum | **`F_min = n − 4`** (10 → 6, 11 → 7, 12 → 8: 60–67 %) over the full forced route with every detour. If `F < F_min` **or no valid lock exists**, the tree **restarts** in-stream (no reseed): pass 2 reruns steps 3–8 with the DFS **Warnsdorff bias** (pick the unvisited neighbour with the fewest unvisited onward neighbours; ties `rnd`), continuing GEN_RNG. Pass 2 is accepted as is, and if it still has no candidate the level is keyless (sweep target 0). Pass 1 has no fork bias, so side branches and their items still pull players in |
+| Sweep (300 seeds × D1–D8) | Assert `F ≥ F_min` after pass 2 and reseeds 0. Report the `F/n` histogram (mean **target ≥ 75 %**), the restart rate (**≤ 10 %**), the keyless count (**0**), and the share of D4–D8 levels with 2 locks and with a lair-door lock. If a target misses, report back to the designer rather than tuning silently |
+| No-softlock proof (levelcheck) | Simulate per level: the hero starts with 0 keys in **each** region `R0..Rm` (start, plus teleport arrival). Repeat: flood-fill the open rooms, take the keys there (first entry), and open any adjacent lock while the count is > 0. Assert the lair is always reached. By induction each `Rj` (j < m) holds key `j+1`, and the lair is in `Rm` |
+| Monsters | A locked edge is a **wall** to every monster, `KF_OPENER` included: they can't open it, path through it or attack through it. The boss stays posted on the grate (§9.2) |
+| Bump, no key | **0 turns**, no monster acts. Log `THE DOOR IS LOCKED` (existing), through the same `LOCK_SHOWN` path and latch as the D8 Sanctum door. The door is locked from both sides |
+| Bump, with key | The Open-door action (1 turn, game.md §2.3): **one key consumed** (count −1). `EG_LOCK` is cleared and the door is **open**. It stays unlocked for the rest of the level across re-entry (edge state lives in the level state), then behaves as an ordinary door (`C` closes it, `KF_OPENER` opens it). It never relocks |
+| Pickup | Granted on first entry into a key room (game.md §8.11 Q1), with no floor item. The flags `LF_KEY_TAKEN` become 2 bits, one per key room |
+| Byte hint (engineer sizes) | Level state +1 B (2nd key room) + 1 bit (2nd taken flag); `IT_KEY` is already a counter; `EG_LOCK` already exists per edge (0 B); +19 B unlock string; the generator gains bridge + region BFS + enumeration (bank 3, est. 250–400 B) |
+
+**Messages** (≤ 32 chars, uppercase, game style):
+
+| Event | Line | Bytes |
+|---|---|---|
+| Key room, first entry | `YOU FIND A KEY` (replaces `YOU FIND THE LAIR KEY`, since a key may open a mid door) | 14 (−7) |
+| Bump locked, no key | `THE DOOR IS LOCKED` (existing, reused) | 0 new |
+| Bump locked, with key | `YOU UNLOCK THE DOOR` (**new**) | 19 |
+
+**Edge cases.**
+
+| Case | Rule |
+|---|---|
+| D8 | The Sanctum door is **sealed, not locked**: it is never a lock candidate (it is off `P`), it opens only on the Archmage's death, and **a key never opens it** (existing sealed line, no key consumed). Locks may include the 10–E lair door. Key rooms exclude `S` |
+| D0 tutorial | Keyless: both `LVL_KEYROOM` = `ROOM_NONE`, and `EG_LOCK` is never set. The D0 blob is untouched |
+| Teleport | **Allowed, no exclusion.** Landing beyond a lock skips that key, but scrolls are rare, so this is a rare reward or gamble. The proof row covers every 0-key arrival region. In the lair the exit is the boss grate |
+| Falls / shafts | No bypass by construction: locks sit on bridges of `G`, and `G` holds every vertical, shaft and loop link. Levelcheck asserts that each lock edge is a bridge |
+| Death / reload | Single-life run, so nothing to save. A new game regenerates from the seed |
+
+**Tests (named only).** levelcheck: `K1` every lock is a horizontal tree bridge on `P` · `K2` `m` per depth/n,
+≤ 2 · `K3` key `j` ∈ `R(j−1)`, deepest by BFS (lowest id), never start/lair/Sanctum · `K4` lock set = argmax `F` · `K5` `F ≥ n − 4`,
+reseeds 0, histogram/restart/keyless stats · `K6` no-softlock simulation from every region · `K7` D0 none, D8 seal
+never `EG_LOCK`. Emulator: `key_pickup_first_entry` · `lock_bump_nokey` (0 turns, line) · `lock_unlock_key` (1 turn,
+count −1) · `lock_persists_reentry` · `lock_opener_blocked` · `two_keys_count` (D4+) · `d8_lock_and_seal` ·
+`teleport_past_lock_no_softlock`.
+
+**Decisions (user 2026-11-15): Q1 (c), Q2 n − 4, Q3 0 turns, Q4 allowed APPROVED; Q5 default (no hint) taken.**
+1. Lock model: (a) lair door only, 1 lock; (b) 1 mid-route lock (the lair door allowed); **(c) 1 lock on D1–D3, up to 2
+   on D4–D8 when `n ≥ 11`, the lair door allowed as either.**
+2. Coverage floor: **`F_min = n − 4`**, with a mean target of ≥ 75 %. The alternative `n − 3` forces more backtracking.
+3. Bump without a key: **0 turns** (not 1).
+4. Teleport past a lock: **allowed** (vs excluding the regions beyond any lock that is still shut).
+5. A hint in the locked line (`LOCKED - FIND A KEY`, 19 B)? **No: reuse `THE DOOR IS LOCKED`.** The panel key cell is the hint.
+
 ## 3. Pacing: monsters and consumables ×~1.35, power items fixed
 
 ROOM_MAX 3 unchanged, so per-room fight and supply density stay; books/gear/bow/uniques stay as BAL-1 FINAL.

@@ -33,7 +33,12 @@ Cost: low RAM 844 → ~735 free (LVL_STATE +64, LP +45). Manager decision: DG_PL
 | T6 | junior | T1, T2 | Item generator: food 4–5, scrolls 2, arrows 1d4+6, traps ×4/3 cap 8; `.fe` `bit 7, l` assumes 32 entries | B0 overlay +10–30 |
 | T7 | junior | T4–T6 | Tests / goldens re-baseline, doc sync (game.md §8, budget.md §6, decor_rules2 §3, larger_depths §5); re-check the trickle budget (+33 %) | 0 |
 
-Waves: T1 ∥ T2 ∥ T3 → T4 ∥ T5, then T6 → T7.
+| T3b | junior | T3 | Python level key per `larger_depths.md` §2.1: lock sets on bridge edges of the start→lair path, key placement, F_min = n − 4 with Warnsdorff-bias restart, levelcheck no-softlock proof + coverage report (300 seeds) | 0 |
+| T8 | staff Sonnet-ok | T4 | Z80 key runtime: key found on key-room first entry (count 0–2, `YOU FIND A KEY`), locked door = wall to all monsters, bump 0 turns `THE DOOR IS LOCKED` / with key 1 turn opens for the level (`YOU UNLOCK THE DOOR`), bag KEY slot shows the count | bank 3/7 + 19 B text |
+
+User 2026-11-15: level key goes live in LARGER-D (§2.1, decisions Q1–Q5). T4 ports T3+T3b bit-exact (lock/key generation in levelgen).
+
+Waves: T1 ∥ T2 ∥ T3 → T3b → T4 ∥ T5, then T6 ∥ T8 → T7.
 
 ## Acceptance highlights
 
