@@ -1,6 +1,6 @@
 # NEW-MON3 — Gargoyle, Fire Imp, Frost Wraith (+ pit-stuck ranged fallback)
 
-Status: **APPROVED with manager amendments (user 2026-11-09).** Nothing is built. Amendments that
+Status: **BUILT and merged (PRs #37, #38, #40, #41; 2026-11-15 doc sync).** Approved with manager amendments (user 2026-11-09); the "as built" notes in §4.4, §8.3 and §10 are the final word. Amendments that
 override this doc: (1) NOT plan X replacements by default — raise the per-level kind cap to **5 on
 D4–D7** where the C-era pool fits (keeps Archer/Ghost/Spider); fall back to plan X only per depth where
 it does not fit; (2) Imp/Wraith alias row YES, with a levelcheck/test ASSERT they never share a depth;
@@ -408,21 +408,22 @@ the track-limit read and use the existing "4th waits" FX queue (saves ≈ 6 B).
 
 ---
 
-## 10. Open questions (defaults apply if unanswered)
-1. **Plan X vs Plan Y** (the Archer keeps D5 vs the Imp gets 2 depths). Default **X**.
-2. **Alias row 31** (≈ 100 B), or give up a kind. Default **alias** (the only route under 32 ids).
-3. **COLD-resist gear** so the Wraith "makes cold gear matter": a 6th charm "Frost Ward" (COLD R;
-   item id + name ≈ 20 B + a `gear_pool` entry). Default **no**: the Wraith is tuned to be beatable
-   without it. Revisit after the sim.
-4. `PERCH_GAP` 2 vs 3. Default **2**.
-5. Wraith freeze: **closed 2026-11-13, 1 in 4 / 2 turns** (touch only).
-8. **Wraith FROST BOLT (user 2026-11-14, §4.4):** r8, N2, 1d4+1 COLD, auto-hit, drifts on. Default
-   **damage only** (no freeze on the bolt); knob FROZEN 1 @ 1 in 8 if the sim calls it soft.
-6. Fire Imp ember ink `$42` (Firebolt red) vs `$46`. Default **`$42`**.
-7. FRT page funding (+256 B bank 2) from bank-0 relocation after C. Default **yes**. The architect
-   picks the cold code to move.
+## 10. Open questions: all resolved as built (2026-11-15)
 
----
+1. **Plan X vs Plan Y:** closed. Neither was built: the §12 8-slot `LP_KINDS` lists (§5) replace both, nothing is
+   replaced (`lp_dtab`, `src/nm3_b0.asm`).
+2. **Alias row 31:** **built** (A-1, `src/nm3var0.asm` / `nm3_b0.asm`): the Fire Imp on D4/D6, the Frost Wraith on
+   D5/D7/D8 (`NM3_B_DEPTHS` %11010000), the disjointness asserted.
+3. **COLD-resist gear:** **built as the Frost Charm** (user 2026-11-13): an AMULET (`IT_C_FROST` 44, FROST CHARM, `$45`),
+   COLD R only, from D5 on, normal gear weight (`items_ovl.asm`, `gear6.asm`). It does not stack with the Warrior's innate
+   COLD R (§4.4 "As built"; the Mage keeps its full value).
+4. **`PERCH_GAP`:** **built as 2** (`combat_defs.asm`).
+5. **Wraith freeze:** closed 2026-11-13, 1 in 4 / 2 turns (touch only; `WR_FRZ_N` 4, `WR_FRZ_T` 2).
+6. **Fire Imp ember ink:** **built as `$42`** (`IMP_EMBER_ATTR`, `ranged6.asm`).
+7. **FRT page funding:** **built** (T1 FUND carve, bank-0 `B0_CODE2`); `FRT_MAX` = `FID_COUNT` **163** after the T10b art pass
+   (memory-map "NEW-MON3 T1 / T10b ledgers").
+8. **Wraith FROST BOLT:** **shipped r 8, N 2, 1d4+1 COLD**, damage only, drifts on (§4.4 "As built"), together with the
+   **Warrior's innate COLD R** (the balance fix); the bolt knobs (N 3, r 6, a rider) were not needed.
 
 ## 11. Doc impacts (not edited here)
 - **game.md** §9.1 roster + resistance + immunity tables (3 rows). §9.2: the shooters table (Imp row,

@@ -1167,6 +1167,9 @@ Rabbit Rat offspring) award `KXP / 2`, min 1 (`RESPAWN_XP_DIV`, §9.5). The Arch
 | Orc | 9 | Orc Berserker | 13 | Orc Bouncer | 18 |
 | Necromancer | 10 | Bone Caller | 15 | | |
 | Mummy | 12 | | | | |
+| Gargoyle (NEW-MON3) | 8 | | | | |
+| Fire Imp (NEW-MON3) | 6 | | | | |
+| Frost Wraith (NEW-MON3) | 10 | | | | |
 
 Bosses: Golden Goblin King 20 · Spider Queen 30 · Vampire Lord 45 · **Ogre Warlord 60** ·
 Pharaoh 65 · High Necromancer 80 · **Death Knight 90** · Archmage 0. (Tier XP ≈ base ×1.5 /
@@ -1332,8 +1335,8 @@ sprite. **≤ 3 tracks at once**; more are queued.
 | Type | Sources |
 |---|---|
 | **PHYS** | melee, power attacks, arrows, daggers, monster melee |
-| **FIRE** | Firebolt (+ burst) |
-| **COLD** | Frost Shard |
+| **FIRE** | Firebolt (+ burst); **Fire Imp** claw and ember (NEW-MON3) |
+| **COLD** | Frost Shard; **Frost Wraith** touch and frost bolt, Archmage Frost (NEW-MON3) |
 | **SHOCK** | Spark, Lightning |
 | **DRAIN** | Drain Life, Ghost touch |
 | **DARK** | Dark Bolt, Death Bolt |
@@ -1351,6 +1354,7 @@ sprite. **≤ 3 tracks at once**; more are queued.
 - **Encoding (engineer):** per kind 6 × 2 bits {N, R, I, X} + a 6-bit W mask ≈ 3 B.
 - **The hero uses the same format**, OR-combined from worn gear (best response wins).
 - Falls and the Tome's aura ignore resistances.
+- **Hero COLD resistance (NEW-MON3):** the **Warrior has innate COLD R** (§4 Classes; his base response before gear); the **Frost Charm** (§8.4) gives COLD R to anyone wearing it. R does not stack (the per-field best wins), so the Charm matters for the Mage only. No gear is COLD X, so the reflect gate never triggers on the Wraith.
 
 ### 6.1 Mage spells (dmg ignores DEF)
 
@@ -1436,6 +1440,7 @@ attack. Rules:
   the floor, in the same way as `BAG FULL.`.
 - Skeleton Archers' arrows are not recoverable (monster projectiles leave no item); the
   Archer's own drop is the supply (§8.5, §9.1).
+- **Goblin pit-dagger exception (NEW-MON3 P-1, §9.2):** a stranded Goblin's one thrown dagger (once per life) is spent like every monster shot: it does **not** land as loot (the hero's own thrown daggers land only as above).
 - The **Mage has no ammunition**; his limit is MP and the found books/scrolls.
 
 ### 6.4 Status effects (3D; user 2026-10-03 scope, designer decision 2026-10-03 details)
@@ -1481,7 +1486,7 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 
 | Effect | Does | Ends | Durations / sources |
 |---|---|---|---|
-| **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1) |
+| **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1); **Frost Wraith touch (NEW-MON3): 1 in 4 → FROZEN 2** on the hero, only if ≥ 1 damage lands (hero COLD I / X: none; R halves the damage and the turns); the Wraith's bolt never freezes |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero), hunger faint 5 (hero, §7.1) |
 | **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2–3 rolled (hero, §1.5.1) |
 | **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
@@ -1990,6 +1995,7 @@ While POISON is set (`STS_POISON`), the hero **cannot eat** until it ends (timer
 | Hood / Helm | helmet | MP+1 / DEF+1 | D1+ |
 | Ring of Might / Warding / Fire Ward | charm | atk+1 / DEF+1 / FIRE R | D2+ |
 | Amulet of Mana / Plenty | charm | MP regen ×2 / FOOD burn ×½ | D3+ |
+| **Frost Charm** (NEW-MON3, user 2026-11-13) | charm (an **amulet**) | **COLD R only** (halves COLD hits and COLD-ridden FROZEN turns); no other effect; does not stack with the Warrior's innate COLD R | **D5+**, normal gear weight (one `gear_pool` row) |
 
 Weapons are class-locked; everything else is not.
 
@@ -2635,6 +2641,7 @@ truncation rule is needed.
 | BOW | BOW 3 | H_KING / MIRROR (unique) | KING HELM 9 · MIRROR HELM 11 |
 | C_MIGHT / WARD / FIRE | MIGHT RING 10 · WARD RING 9 · FIRE RING 9 (was RING OF FIRE WARD) | C_MANA / PLENTY | MANA AMULET 11 · FOOD AMULET 11 (Plenty: burn ×½) |
 | C_SCARAB (unique) | SCARAB AMULET 13 | C_GRAVE (unique) | GRAVE RING 10 (was RING OF THE GRAVE) |
+| C_FROST (NEW-MON3; `IT_C_FROST` 44) | FROST CHARM 11 | | |
 
 Appearance words (§8.8, unchanged): colours RUBY AZURE EMERALD AMBER VIOLET MILKY; labels
 ZORAK VELMIS OSTRUN KAPPU MIRADEL THUNE YOLQ ABRAXA. Bag types: food 5 + potions 3 + scrolls 4
@@ -2734,7 +2741,7 @@ unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter l
    `NOTHING HAPPENS`, scroll consumed. Charms are never enchanted. Wear (§8.10): `m` −1 on the target, destroyed at −3 (slot empties, fists 1d2);
    Enchant is the repair. EQUIP/REMOVE/swap are always free (no lock, no refusal but `BAG FULL`).
    Tiers: the §8 table unchanged (Short Sword start / Long D2+ / Axe D4+; Chain D3+, Plate
-   D6+; rings D2+, amulets D3+; Hood/Helm D1+; uniques §8.6).
+   D6+; rings D2+, amulets D3+ (the Frost Charm D5+); Hood/Helm D1+; uniques §8.6).
 2. **Names are fixed and always known:** `HEAL POTION` · `MANA POTION` · `CURE POTION` ·
    `TELEPORT SCROLL` · `FEAR SCROLL` · `SLEEP SCROLL` · `ENCHANT SCROLL` (type-first, 2 words,
    no `OF`). No `UNKNOWN`, appearance words, `BLESSED`/`CURSED` prefixes. Floor glyph ink stays
@@ -2778,7 +2785,7 @@ unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter l
 
 ## 9. Monsters
 
-### 9.1 Roster (13 kinds + 2 unique bosses + Archmage → `kind_tab` 32, §11.2)
+### 9.1 Roster (16 kinds + 2 unique bosses + Archmage → `kind_tab` 32, §11.2; NEW-MON3 adds Gargoyle, Fire Imp, Frost Wraith, as built 2026-11-15, `new_monsters.md`)
 
 Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) div 3.
 
@@ -2787,17 +2794,22 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Rat | 32×16 | 3 | 0 | 1 | 0 | 1d2 | 2 | walker | chase | Cheese 1/4 | D1, D2, D4 |
 | Bat | 24×16 | 3 | 1 | 4 | 0 | 1d2 | 2 | flyer | erratic | — | D1–D3 |
 | Slime | 24×16 | 6 | 0 | 0 | 1 | 1d3 | 2 | walker, acts every 2 | chase | — | D1 |
-| Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase | Apple 1/4 | D1, D2 |
-| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (own dorsal climb pair spider_climb1/2, STA|SYM; user 2026-10-30, was its rest pose) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5 |
+| Goblin | 24×32 | 6 | 1 | 1 | 0 | 1d4 | 3 | walker, climber, opener | chase; **one pit-thrown dagger per life** (P-1, below) | Apple 1/4 | D1, D2, D3 |
+| Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (own dorsal climb pair spider_climb1/2, STA|SYM; user 2026-10-30, was its rest pose) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5, D7 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | climber (VAMP-BOSS, user 2026-11-02: the shared climb pair), opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
 | Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
-| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener, climber (shared humanoid climb pair, 3F-T13bc) | chase | Meat 1/3 | D4, D6, D7 |
+| Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener, climber (shared humanoid climb pair, 3F-T13bc) | chase | Meat 1/3 | D4, D6, D7, D8 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener, climber (the Skeleton's climb pair, user 2026-10-29) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
-| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, climber (shared humanoid climb pair, user 2026-10-29), acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5 |
+| Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, climber (shared humanoid climb pair, user 2026-10-29), acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5, D7 |
 | Necromancer | 24×48 | 12 | 2 | 2 | 0 | 1d4; Dark Bolt 1d6+1 DARK r8 | **6** | walker, opener, climber (user 2026-10-29) | ranged, cooldown 2 (§9.2 RANGED-SPEC); Dark Bolt hit 1 in 3 → FEAR 3 (§6.4) | Mana 1/3 | D6–D8 |
+| **Gargoyle** (NEW-MON3) | 24×32 | 9 | 3 | 1 | 0 | 1d6 | 3 | flyer, **perch** (`KF_PERCH`, kind id 30) | **perched statue** until it wakes (G-1, §9.2), then the Ghost's flyer chase | — | D5, D6 |
+| **Fire Imp** (NEW-MON3) | 24×16 | 5 | 2 | 3 | 0 | 1d3 FIRE; ember 1d4+1 FIRE r6 | 3 (small 2 + projectile 1) | flyer, erratic (`KF_BAT`); **kind id 31, variant A** (§11.2) | erratic, **spits embers** from the air (F-1, §9.2), flies on between shots; the first FIRE attacker | Mana 1/4 | D4, D6 |
+| **Frost Wraith** (NEW-MON3; name `ICE SHADE` in hit lines, `FROST WRAITH` in KILLED-BY) | 24×32 | 13 | 3 | 2 | 1 | 1d6+1 COLD; frost bolt 1d4+1 COLD r8 | 3 | flyer, acts every 2 (`KF_SLOW`); **kind id 31, variant B** (§11.2) | Ghost drift; touch 1 in 4 → FROZEN 2 (§6.4); **frost bolt** (F-1), damage only, drifts on | — | D5, D7, D8 |
 | **Ogre Warlord** (unique) | **32×48** | 36 | 4 | 1 | 2 | 1d10+1 | **6** | walker, lair only | chase; every 3rd turn **SLAM**: reach 2, ×1.5 dmg, a hit STUNS 1 (§6.4) | unique | D4 |
 | **Death Knight** (unique) | 24×48 | 50 | 6 | 3 | 3 | 1d10+3 | 5 | walker, lair only (3F-D1: not a climber) | chase; **parries** 1 in 3 PHYS hits (BLOCK frame, 0 dmg); a parried melee hit **notches** the weapon 1 in 2 (§8.10) | unique | D7 |
+
+**NEW-MON3 numbers** (depth scaling applies, §9.1 header): Gargoyle D5 13/4, D6 14/4; Imp D4 8/3, D6 10/3; Wraith D5 17/4, D7 19/5. Gargoyle, Imp and Wraith are **untiered** (no tier byte, §9.6). The names `GARGOYLE` / `FIRE IMP` / `ICE SHADE` (`WRAITH` is the Poltergeist's). **The Imp and the Wraith share kind row 31** (an alias patched at level entry): they never share a depth (§11.2).
 
 **Death Knight silhouette (round 4/5):** an evil twin of the Warrior with a clearly distinct
 outline: a **two-handed greatsword** (blade carried upright above the shoulder when walking,
@@ -2843,6 +2855,9 @@ replaced by the values above (§9.8 D3-1); the §11.4 "monster DEF 0" rule was 3
 | Vampire (undead set) | | **W** | **I** | | **I** | I |
 | Ghost, Poltergeist | R | | **R** | **X** | I | I |
 | Orc | | R | | | | |
+| **Gargoyle** (stone) | **R** | | R | | **I** | |
+| **Fire Imp** | | **I** | **W** | | | |
+| **Frost Wraith** | | **W** | **I** | | I | I |
 | Mummy | | W | I | | I | I |
 | Necromancer, Bone Caller | | | R | | | I |
 | Ogre Warlord | | | R | W | | |
@@ -2853,6 +2868,7 @@ Design intent:
 - Undead shut off Drain (Frost is halved on the Skeleton and Ghost lines, BAL-1 FINAL B), but burn.
 - The Ghost bounces Lightning and Spark back at you.
 - The Death Knight reflects Firebolt.
+- The Fire Imp burns nothing of its own: FIRE is I and Frost is ×2 (Spark works; Firebolt is wasted). The Frost Wraith is the mirror: COLD I, FIRE ×2. Being COLD I it is never FROZEN. The Gargoyle halves PHYS and COLD (the Warrior's tax; Power Strike, Spark and Firebolt answer it).
 - The Archmage reflects Frost and Lightning, so the Mage must fight it with Firebolt and
   the staff, and the Warrior with steel.
 - Reflected Death Bolts (Mirror Helm) deal ½ to the Archmage.
@@ -2864,7 +2880,9 @@ mask bit); WEAK targets only the hero.
 |---|---|
 | Rat, Bat, Goblin, Spider, Orc, Necromancer | — |
 | Slime (mindless) | SLEEP, CONFUSE, FEAR |
-| Undead: Skeleton, Skeleton Archer, Vampire (both forms), Ghost, Mummy | SLEEP, POISON |
+| Undead: Skeleton, Skeleton Archer, Vampire (both forms), Ghost, Mummy, **Frost Wraith** | SLEEP, POISON |
+| **Gargoyle** (stone; CONFUSE still works) | SLEEP, FEAR, POISON |
+| **Fire Imp** | — |
 | Bosses (`BOSS`) | SLEEP, FEAR (+ the kind's own), HOLD/MIND halved (§6.4) |
 | Hero | — (OR of gear: Silk Cloak → POISON) |
 | Tiers (§9.6) | as their base kind, plus the noted extras |
@@ -2951,6 +2969,13 @@ Shooters (one descriptor row each, R6; the Archmage's row is T11):
 | Golden Goblin King (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d3 + 1 PHYS | — | no: walks in between shots | — | dagger_spin `$06` |
 | Golden Spider Queen (BOSS-RANGED, golden only) | 6 | 2 | F1 roll + golden | 1d2 + 1 PHYS | POISON **+12** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
 | **Black Widow** (WIDOW-SPIT, every body) | 6 | **3** (every 4th turn) | F1 roll | **1d2** PHYS (not golden) | POISON **+6** always (Silk Cloak immune) | no: walks in | yes | spark_fly `$43` |
+| **Fire Imp** (F-1, NEW-MON3) | 6 | 2 (every 3rd turn) | auto-hit (spell branch: `roll × res`, no DEF; never meets the DARK reflect gate) | 1d4+1 FIRE | — (FIRE thaws a frozen hero) | **no: flies on** | flyer | spark_fly `$42` (an ember); impact spark_fizz |
+| **Frost Wraith** (F-1, NEW-MON3) | **8** | 2 (every 3rd **acting** turn = every 6th game turn under `KF_SLOW`) | auto-hit (as the Imp) | 1d4+1 COLD (unscaled) | **none** (the touch is the freezer) | **no: drifts on** | flyer | frost_fly `$45` → frost_crack (the Frost Shard pair) |
+| **Pit throws** (P-1, below; base kinds only, **never in open ground**) | | | | | | | | |
+| Spider | 4 | 3 | F1 roll | 1d2 PHYS − DEF, min 1 | POISON +6 (Silk Cloak immune) | — | — | spark_fly `$43` |
+| Goblin | 6 | — | F1 roll | 1d3 PHYS − DEF | **one dagger per life** | — | — | dagger_spin `$47` |
+| Orc (+ Berserker, Bouncer) | 5 | 3 | F1 roll | 1d6 PHYS − DEF | — | — | — | dagger_spin `$07` (a hand axe) |
+| Skeleton (+ Guard, Knight) | 5 | 3 | F1 roll | 1d4 PHYS − DEF | — | — | — | dagger_spin `$47` (a bone) |
 
 Poltergeist is not a shooter (melee touch). atk / dmg include depth scaling and golden +2 / +1.
 - **Geometry.** `gap` = empty cols between the boxes (melee reach = gap 0–1). **In range iff
@@ -3015,6 +3040,12 @@ Archmage row (r 28, N 2, auto-hit, 1d8+3 DARK, 1 bounce, no reflect gate). **ARC
 
 **AI and resistances:** a monster never fires at a body that reflects its type (Archmage
 exempt, above).
+
+**NEW-MON3 rules (built 2026-11-15; spec and rationale `docs/design/new_monsters.md` §4, §8).**
+
+- **G-1 PERCH / WAKE (Gargoyle).** A Gargoyle is **perched**: the per-slot AWAKE bit (`RCD_AWAKE`) is clear and it stays in its single-frame rest pose (the statue, `garg_perch`). It still **blocks** like any flyer at its cruise row. On its own turn (after the status step) it wakes when the hero is **standing on its storey** (not mid-ladder) at a **box gap ≤ `PERCH_GAP` 2**: it prints `THE GARGOYLE WAKES UP.` (the existing ` WAKES UP.` suffix), plays its wake pose and **spends that turn**, so the hero always gets one turn after the wake. It also wakes on **any HP loss** (a hit, a missed bump into it, a POISON tick), with no message. It never wakes while the hero is on the other storey, mid-ladder or farther than the gap, and may stay decor all level (XP forgone). **Re-perch:** every room (re)entry re-spawns it perched (stored hp is kept, §9.4.2; ROOM-MEM). A perched Gargoyle never follows through an exit; an awake one follows and stays awake. **ALARM waves:** the exception is in §1.5 (it arrives perched).
+- **F-1 FLYER SHOOTERS.** The ranged hook sits on the common `ai_flyer` exit (after the melee attack check, for both the erratic Bat path and the Ghost drift path), so any flyer kind with a RANGED-SPEC row shoots: the **Fire Imp ember** (r6, N2, 1d4+1 FIRE) and the **Frost Wraith frost bolt** (r8, N2, 1d4+1 COLD) in the table above. A flyer's flight row is its bottom row, so it is in line when that row lies in the standing hero's rows (`9s+2..9s+7`); the clear-line, cooldown, reflect-gate and ≤ 3-track rules are the §9.2 RANGED-SPEC ones. Adjacent it touches (the melee check runs first), at range it shoots; reloading it flies on (no hold, no step-away). The Wraith's cooldown only ticks on its acting turns (`KF_SLOW`), so it fires about once per 6 game turns. Frost Charm and the Warrior's innate COLD R halve the bolt (§4, §6.0, §8.4).
+- **P-1 PIT THROWS.** A **walker** stranded at a pit edge (§2.5: the pit-column test refuses its step) may throw at a hero standing on the same storey (storey 0) within the row's range with a clear line, **only at that refused step, never across mid-room blocks and never in open ground**. Rows (the table above): Spider (r4, +6 POISON), **Goblin (r6, one dagger per life)**, Orc line (r5, hand axe 1d6), Skeleton line (r5, bone 1d4); bosses never. Counter as RANGED-SPEC (counter 1 at spawn, so the first stranded turn is free); if all 3 projectile tracks are busy the thrower waits. **Goblin dagger exception to "monster shots never drop an item" (§9.2 above):** none is dropped; the thrown dagger is simply spent, and the spent bit is the per-entity once bit (`RCD_ONCE`), which survives room re-entry (banked in `LEK_BRED`): one dagger per life. (The `new_monsters.md` §8.3 idea of landing the dagger as loot is not built: the hero's own daggers do not land yet either, §6.3.)
 
 **Archmage** (never leaves the lair): **superseded by §9.9 ARCHMAGE-SPEC (2026-10-29)**. The
 old list (summon cd 6 → Death Bolt cd 2 → teleport when adjacent cd 4 → melee) is replaced:
@@ -3139,7 +3170,7 @@ drops (normal floor-list entry, identified as Heal). Bosses never carry one.
 - Render budget for a non-input tick ≈ 114k T. Contended cost after the double buffer:
   tall 27.7k, medium 18.9k, small ~12k, projectile 8×8/16×8 ~4–5k, 16×16 impact ~7k.
 - **Weights (≈ 6k T per unit):** small 2 · medium 3 · tall 5 · **ranged shooter 6** (5 + its
-  in-flight projectile) · Ogre 6 · **golden +1**.
+  in-flight projectile) · Ogre 6 · **golden +1**. NEW-MON3: **Gargoyle 3, Fire Imp 3** (small 2 + its ember 1, the Slinger rule), **Frost Wraith 3** (`WT_K_GARGOYLE` / `WT_K_ALIAS`; the alias patch carries no weight byte, so both row-31 bodies weigh 3).
 
 | Rule | Value |
 |---|---|
@@ -3159,25 +3190,26 @@ start room 0 monsters, and the usual §9.5 respawn and trap/arrival rules. The D
 a clean break. Rationale: it keeps the §9.3 cap and the slot budget trivially valid at
 arrival, and it makes descending a valid escape.
 
-### 9.4 Per-level population (≤ 4 kinds + boss; hero + ≤ 15 slots)
+### 9.4 Per-level population (4–6 kinds + boss; hero + ≤ 15 slots; NEW-MON3 curve, as built 2026-11-15)
 
-| Depth | Kinds | Monsters (incl. boss) | Boss |
+**Kinds by depth (user 2026-11-12): D1–D2 4 kinds, D3–D4 5, D5–D8 6, + the boss.** Earlier kinds return deep, so nobody lost a depth. `LP_KINDS` is an **8-slot** list: slots 0..n−1 are the distinct kinds in fallback order, the rest are duplicates that set the draw weight (draw = count / 8). The same list for both heroes. The counts below are the slot counts (the tuned preset `tools/balance_nm3.json`, user 2026-11-13).
+
+| Depth | Kinds (slots of 8) | Monsters (incl. boss) | Boss |
 |---|---|---|---|
-| D1 | Rat, Bat, Slime, Goblin | 13 | Golden Goblin King |
-| D2 | Goblin, Spider, Bat, Rat | 14 | Golden Spider Queen |
-| D3 | Skeleton, Vampire, Ghost, Bat | 14 | Golden Vampire Lord |
-| D4 | Orc, Rat, Spider, Skeleton Archer | 15 | **Ogre Warlord** |
-| D5 | Mummy, Skeleton, Skeleton Archer, Spider | 16 | Golden Pharaoh |
-| D6 | Vampire, Ghost, Necromancer, Orc | 15 | Golden High Necromancer |
-| D7 | Orc, Necromancer, Ghost, Necromancer (two Necro entries, ARCHER-DEPTHS H1) | 15 | **Death Knight** |
-| D8 | Necromancer, Skeleton, Ghost, Vampire | 11 + Archmage (+ ≤ 2 summons) | Archmage |
+| D1 | Rat 2, Bat 2, Slime 2, Goblin 2 | 13 | Golden Goblin King |
+| D2 | Goblin 2, Spider 2, Bat 2, Rat 2 | 14 | Golden Spider Queen |
+| D3 | Skeleton 1, Vampire 2, Ghost 3, Bat 1, **Goblin 1** | 14 | Golden Vampire Lord |
+| D4 | Orc 2, Rat 2, Spider 1, Skeleton Archer 2, **Fire Imp 1** | 15 | **Ogre Warlord** |
+| D5 | Mummy 2, Spider 1, Skeleton 1, Skeleton Archer 2, **Gargoyle 1**, **Frost Wraith 1** | 16 | Golden Pharaoh |
+| D6 | Vampire 2, **Gargoyle 1**, **Fire Imp 1**, Ghost 1, Necromancer 1, Orc 2 | 15 | Golden High Necromancer |
+| D7 | Orc 1, Ghost 1, Necromancer 3, **Frost Wraith 1**, **Mummy 1**, **Spider 1** | 15 | **Death Knight** |
+| D8 | Necromancer 3, Skeleton 1, Ghost 1, Vampire 1, **Orc 1**, **Frost Wraith 1** | 11 + Archmage (+ ≤ 2 summons) | Archmage |
 
-**D7 pool (ARCHER-DEPTHS H1, user 2026-10-29).** `LP_KINDS` D7 = {Orc, Necromancer, Ghost,
-Necromancer}; `LP_KINDS[rnd & 3]` stays a 2-bit pick, so the Necromancer is drawn 2 in 4
-(Orc 1/4, Ghost 1/4). The Necromancer weighs **6 = the Archer's 6**, so Σ, `SIGMA_INIT[7]` and
-`minW` (Ghost 3) are unchanged; the §9.4.3 fallback scan simply meets the Necro twice (index 1
-then 3; harmless). The pool loads the Necro once (kinds are de-duplicated when the pool is
-built; engineer confirms the builder skips a repeated kind).
+Bold = joins or returns. **Alias rule:** the Imp (D4, D6) and the Wraith (D5, D7, D8) never share a depth (kind row 31, §11.2); the Gargoyle is D5, D6. The Archer stays off D7/D8 (ARCHER-DEPTHS H1, §9.8). Every depth from D4 has melee, ranged (Archer / Imp / Necromancer), a flyer and a climber.
+
+**Selection.** `LP_KINDS[rnd & 7]` (one RNG draw per pick, no divide); duplicates give the weights and cost 0 pool (the pool builder de-duplicates per unit). Every consumer (spawn pick, trickle / ALARM / respawn picks, `pool_list`, the minW fallback scan, the boss escort) loops 8. Fallback fillers (§9.4.3, minW kind, ascending index): D3 Bat, D4 Rat, D5 Spider, D6 **Gargoyle before Imp/Ghost**, D7 Spider, D8 Ghost. **D0 (TUT0):** `tut_d0` fills all 8 slots with Goblin.
+
+**Superseded D7 text (ARCHER-DEPTHS H1, user 2026-10-29):** the earlier "two Necro entries in a 4-slot list" is now the D7 weight of 3 of 8 for the Necromancer (weight 6 = the Archer's 6, so the §9.4.3 logic is unchanged; `minW` is computed at runtime (`max(8, ROOM_MAX × minW)`), and D7 now carries the Spider, so its `minW` is 2 (the cap stays 8)).
 
 **Lazy population (principle: user 2026-10-06; details: designer decision 2026-10-06; plan
 task LP).** A level stores no monster list. It stores a **budget** (count, kinds, per-room
@@ -3192,7 +3224,7 @@ Placed after traps, so every earlier generator output stays byte-identical (Pyth
 
 | Field | Value |
 |---|---|
-| `LP_KINDS[4]` | the depth's 4 kinds, in the table order above (tiers are rolled at spawn) |
+| `LP_KINDS[8]` | the depth's 8 slots (§9.4: distinct kinds first, then the weight duplicates; tiers are rolled at spawn). The level header is +4 B (`LP_BOSS` follows at `LP_KINDS + 8`) |
 | `LP_BOSS` | boss kind row |
 | `LP_TOTAL` | the table count incl. boss (tests/levelcheck only) |
 | `LP_LVL` | hero `LVL` at level entry (the §9.6 tier input for the whole level) |
@@ -3276,7 +3308,7 @@ untouched. A room's first-visit contents therefore do not depend on the order in
 are visited.
 
 **FRESH room**, repeated `quota` times:
-- kind = `LP_KINDS[rnd & 3]`, then the §9.6 tier roll (with `LP_LVL`, from the spawn stream).
+- kind = `LP_KINDS[rnd & 7]`, then the §9.6 tier roll (with `LP_LVL`, from the spawn stream).
 - **Reservation fit (designer decision 2026-10-06, replaces "try the others, else lose").** Let
   `SIGMA_INIT[d] = max(8, ROOM_MAX × lightest LP_KINDS weight)` (D1–D4 = 8; D5–D8 = 9 if the
   lightest kind weighs 3), `minW` = the lightest weight in `LP_KINDS`, `left` = units still to
@@ -3285,7 +3317,7 @@ are visited.
   order at base tier; the lightest kind always passes. **Exact fallback order (3F-D2, designer
   2026-10-28, matches T4):** (1) the rolled kind at its rolled tier; (2) the **same kind at base
   tier** (only differs in weight for the Goblin Slinger, 4 → 3; for every other tier it fails
-  again and costs one compare); (3) the other `LP_KINDS` indices **0, 1, 2, 3 ascending, skipping
+  again and costs one compare); (3) the other `LP_KINDS` indices **0..7 ascending (NEW-MON3: 8 slots), skipping
   the rolled index**, base tier. First accepted wins. No RNG is drawn in (2)–(3). A unit is therefore **never lost**
   (`LP_DISCARD` stays 0, and levelcheck asserts it); the cost is a mild bias to light kinds in
   rooms that rolled heavy. Order-independent, no extra RNG steps. Lair: unchanged (cap 12,
@@ -3361,7 +3393,7 @@ levelcheck figure exceeds 15% or a playtest shows visibly empty first rooms.
 
 #### 9.4.4 Lair and bosses
 
-- **Created on the first lair entry:** the boss (`LP_BOSS`) plus 1 escort (`LP_KINDS[rnd & 3]`,
+- **Created on the first lair entry:** the boss (`LP_BOSS`) plus 1 escort (`LP_KINDS[rnd & 7]`,
   base tier, never tier-rolled), within Σ ≤ 12. ~~The boss takes the legal cell farthest from
   the hero.~~ **Placement = the guard post (§9.2 "Boss guard", BOSS-GUARD 2026-10-29)**, on
   every lair entry (first and banked); it draws no spawn-stream step.
@@ -4156,6 +4188,7 @@ Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 | **Spell sprites, lean set M** (round 3) | Spark fly ×2 + fizz, Firebolt fly ×2 + burst, Frost fly + crack, Lightning fly ×2 + flash, Drain fly ×2 + hit (11 already drawn) | 14 | 464 | 1,696 |
 | Other projectile/impact sprites **M** | power burst 1, necro bolt 3 (Death Bolt = same frames, `$43`), arrow 2 + hit 1, dagger spin 2 (4 → 2), staff bonk 1 | 10 | ~370 | ~740 |
 | Golden bosses | recolour + glow | 0 | 0 | 0 |
+| **NEW-MON3 (as built, T7 + T10b; not in the Total below)** | Gargoyle 9 (perch STA\|SYM, fly ×2 MOT, claw, wake, windup, hurt, dead, alert), Fire Imp 4 (fly ×2 MOT, spit, dead), Frost Wraith 5 (drift ×3 MOT, touch, cast), shared `dust_dead` 1 (STA\|SYM, the Wraith's DEAD); all 24-px wide, every non-SYM frame `\|MIR` (`mirror_c_split.md` §4/§6) | **19** (`FID_COUNT` 144 → **163** = `FRT_MAX`) | packed sources in bank-0 `SRC0` (1,879 B) | per level: only that level's kinds |
 | **Total new** | | **75** | **~17.0K raw → ~10.0K ZX0 at 1.7× (E); ~6.3K at the 2.71× block ratio** | projectiles ~2.4 KB resident on every level |
 
 The Vampire's bat form reuses the Bat kind's frames: **0 new ids**. A level with a Vampire
@@ -4166,8 +4199,8 @@ therefore needs the **Bat set resident too** (D6 and D8; D3 already has it): +2.
 
 | Store | Budget limit | Need | Verdict / change |
 |---|---|---|---|
-| Frame ids | 28 free (`FRT_MAX` 96, 68 used) | 68 + 75 = **143** | **`FRT_MAX` → 160**: +64 × 16 B = **+1,024 B bank 2**. 16 spare |
-| Kind ids | 16 | 2 heroes + Rogue hole + 12 monster kinds + Archmage + Ogre + Death Knight = **18** | **`kind_tab` → 32**: **+256 B bank 2**. The resistance table adds ~60 B (3 B/kind) |
+| Frame ids | 28 free (`FRT_MAX` 96, 68 used) | 68 + 75 = **143** | **`FRT_MAX` → 160**: +64 × 16 B = **+1,024 B bank 2**. 16 spare. **NEW-MON3 (as built): `FRT_MAX` = `FID_COUNT` = 163** (+19 fids; the FRT page stepped down, funded from bank-0 `B0_CODE2`; 0 spare) |
+| Kind ids | 16 | 2 heroes + Rogue hole + 12 monster kinds + Archmage + Ogre + Death Knight = **18** | **`kind_tab` → 32**: **+256 B bank 2**. The resistance table adds ~60 B (3 B/kind). **NEW-MON3 (as built):** 30 rows + 12 tiers were already 30 of 32 ids, so the class FX units left the id range (**FX-U**: `K_FXW` / `K_FXM` are generation units, not ids) and **id 30 = Gargoyle, id 31 = the Imp / Wraith alias** (`K_ALIAS`, patched at `level_enter` by `nm3_var` from the depth: Fire Imp on D4 / D6 = the assembled variant A, Frost Wraith on D5 / D7 / D8 = variant B; an ASSERT keeps them off one depth). Ids are now full (`K_COUNT` = `K_MAX` = 32; room records keep the row in 5 bits). The Wraith's own frames are the variant unit `U_WRAITH` |
 | Bank 2 | ~0.87K + ~2.1K freed by the cold-code move ≈ 3.0K | FRT +1,024, kinds +256, resist ~60 = **1.34K**; **text font 768 B** (6×8 × 96, rev 3) | 1.34 + 0.77 = 2.11K, **~0.9K left**. **Resolved 2026-10-03 (§3.4):** text is drawn only into bank 5 since A7; the text font stays in bank 2 (`$B200`); the **menu font moves to bank 3 cold data (≤ 1.5 KB raw)**, so it costs bank 2 nothing and the ≤ 0.8 KB cap is dropped. The text font is fixed. **The static frame descriptors (24 B/frame) must leave bank 2**: 146 × 24 = 3.5K. The engineer trims them to ≤ 12 B (W, H, ax, class/sym, source bank+offset) → 144 × 12 ≈ 1.75K, moved to **bank 5** next to the generator that alone reads them |
 | Bank 5 low RAM | ~6.1K | generator + boot ~2.1K, ZX0 + `GEN_SRC` 0.6K (rev 3: the scratch is the 1.5 KB `GEN_SCRATCH`, **aliasing `ROOM_MAP`/`NEXT_MAP` → 0 extra bytes**; only the decompressor ~0.1K stays here), tile glyphs 0.6K, level state 0.6K, frame descriptors ~1.75K | ~5.65K, fits, **0.45K margin** |
 | Sources + cold data (banks 1+3) | 32,768 − AY reserve | existing 16,899 → ~9.9K ZX0 + new ~10.1K ZX0 + menus code ~2.0K + icons ~2.7K → 1.6K ZX0 + strings ~2.9K → 1.7K ZX0 = **25.3K** | **AY reserve 4 KB, `AY_RESERVE` `$E400` → `$F000` (user 2026-10-06; supersedes 7 KB)**: compact tracker player 1–1.5 KB + effects ~0.3 KB + 1–3 KB in-game loop; sources get **+3 KB** (28.7K free vs 25.3K need → ~3.4K margin even at 1.7×). Earlier: AY 8 KB 0.7K over, 7 KB (user: approved) ~0.3K margin. With the rev-3 block packing (2.71× measured on kind data) the expected total is ~18–20K, i.e. ≥ 5K of real margin; the 1.7× row stays the build gate until A5 reports actual sizes |
@@ -4199,6 +4232,8 @@ of 1.7×, sources grow by ~2.3K. The levers, cheapest first:
 - **3D art (user 2026-10-06):** frost_crack impact stays 8×8 (revisit after playtesting); Firebolt fly frames alternate yellow `$46` and red `$42`; the full effect set is kept, including fizz2 and burst2; Knight POWER_STRIKE 40×48 and the 7 status icons are approved as drawn. Packed total 1,322 B (unchanged; §11.1 figures not altered).
 
 ### 11.3 Pool per level (KB; existing kinds E scaled from the measured 22,688; new **M**)
+
+**NEW-MON3 (as built, 2026-11-15):** the per-level lists are the §9.4 table (4–6 kinds), so the kind sets below are the **pre-NEW-MON3 baseline**; the added kinds are Fire Imp (D4, D6), Gargoyle (D5, D6), Frost Wraith (D5, D7, D8), the returns Goblin (D3), Mummy and Spider (D7), Orc (D8), + the Warrior's extra FX units `U_SPARKW` (Imp, D6) and `U_FROSTW` (Wraith: D5, D7, D8) and, for the Mage, `dagger_spin` on the pit-thrower levels. `POOL_START` `$EFBE` (3,200 B carved from `B0_FREE`, `POOL_CAP` 22,594). The authoritative per-level needs are `tests/zx0_pool.py` `LEVEL_NEED` and the `memory-map.md` NEW-MON3 ledgers; **binding slack (D8 Warrior) 2,320 B** after T10b.
 
 | Depth | Kind sets | Total |
 |---|---|---|
