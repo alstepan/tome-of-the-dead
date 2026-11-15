@@ -788,7 +788,10 @@ def w15(p, check):
     push("long")
     t_whole = step(0)
     check("W15 32-char line drawn whole", log_row(p.composed_frame(), 23) == text6(long32), "")
-    t_s = stub([0xCD] + w(S["log_scroll"]), "log_scroll", measure=True)
+    # log_scroll lives in bank 0's cold code ($C000+, logsc0.asm, C-T6): page it in around the
+    # call, as farb does (it was a fixed-RAM routine when this stub was written)
+    t_s = stub([0x3A] + w(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, S["BANK_TEXT"], 0xCD] + w(S["page_bank"]) +
+               [0xCD] + w(S["log_scroll"]) + [0xF1, 0xCD] + w(S["restore_page"]), "log_scroll", measure=True)
     pr = lambda n: stub([0x21] + w(MSG["long"] + 32 - n) + [0x06, 23, 0x1E, 0, 0xCD] + w(S["print6"]),
                         f"print6 {n}", measure=True)
     t_p = pr(32)
@@ -3305,6 +3308,8 @@ def w16_level(p, check):
               (p.rw("MASTER_SEED"), p.rb("LVL_DEPTH")) == (M, 1), hex(p.rw("MASTER_SEED")))
         h3_want = [0] * h3                       # D3-6a: but the Warrior's HERO_DEF = 1 (Leather)
         h3_want[S["HERO_DEF"] - S["HERO3D"]] = 1 if p.ent(0)["KIND"] == S["K_KNIGHT"] else 0
+        if p.ent(0)["KIND"] == S["K_KNIGHT"]:    # NEW-MON3 T10a: the Warrior's innate COLD R (hero_recalc base)
+            h3_want[S["HERO_RES"] - S["HERO3D"]] = 1 << (2 * S["DTY_COLD"])
         h3_want[S["MP_SH"] - S["HERO3D"]] = p.rb("MP")  # D3-9b: item_mp drew MP since (MP_SH = MP)
         check("W16 new game (D3-0): ST_* arrays (all 16 slots) and HERO3D zeroed (D3-6a: HERO_DEF = class DEF)",
               (st_read(), list(p.z.read_memory(S["HERO3D"], h3)))
