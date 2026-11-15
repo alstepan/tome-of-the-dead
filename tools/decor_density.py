@@ -23,6 +23,8 @@ import levelgen as G            # noqa: E402
 import room_model as RM         # noqa: E402
 from game_lib import S          # noqa: E402
 
+G.rm_compat(RM)                 # LARGER-D: 12-room block layout (a no-op once T2 / T4 land)
+
 COLS, ROWS = DG.COLS, DG.ROWS
 CLS = {DG.C_MOUNT: "mount", DG.C_CEIL: "ceil", DG.C_FLOOR: "floor", DG.C_PATCH: "patch",
        DG.C_BRICK: "brick", DG.C_COMP: "patch"}
@@ -131,8 +133,8 @@ def main(argv):
         nrooms = checked = 0
         for seed in range(1, n + 1):
             blk = bytearray(G.generate(d, seed * 7919 & 0xFFFF or 1))
-            for r in range(9):
-                o = RM.OFF_DESC + r * S["RD_STRIDE"]
+            for r in range(G.NCELL):                # LARGER-D: the 3 x 4 room grid
+                o = G.LOFF_DESC + r * S["RD_STRIDE"]
                 fl = blk[o + S["RD_FLAGS"]]
                 if not fl & S["RDF_PRESENT"] or fl & S["RDF_SANCTUM"]:
                     continue
