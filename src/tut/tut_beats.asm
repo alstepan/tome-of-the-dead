@@ -29,6 +29,7 @@ TUT_TK_PASSIVE      EQU 9               ; never fires; ends when B13/B14 take ov
 TUT_TK_GOB_ASLEEP   EQU 10              ; p2 = cols: G0 shows when the awake Goblin is within p2; fires when it sleeps
 TUT_TK_GOB_DEAD     EQU 11              ; Goblin dead
 TUT_TK_EXIT         EQU 12              ; exit pending at end of turn
+TUT_TK_KEY          EQU 13              ; TUT-KEY: the cyan key held (LVL_FLAGS LF_KEYC: picked up from B's floor)
 
 ; --- fail / skip handlers (+14) ----------------------------------------------
 TUT_FH_PITFALL        EQU 0             ; L69 + L10 (R2), beat stays
@@ -139,9 +140,12 @@ tut_beats:
         TBEAT TUT_RA, TUT_TK_ROOM, TUT_RB, 0, TUT_SP_A3, TUT_POSE_PT, \
               TL_L23, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, \
               TUT_NONE, TUT_NONE, TUT_FH_NONE, 0
-; B7 Key (B): fade-in B1, POINT_DN; L24/L25 (TUT0-F2: no pointer, L24 reworded); storey 0
-        TBEAT TUT_RB, TUT_TK_STOREY, 0, 0, TUT_SP_B1, TUT_PF_FADEIN | TUT_POSE_PT_DN, \
-              TL_L24, TL_L25, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, \
+; B7 Key (B): fade-in B1, POINT_DN (at the key by his feet); TUT-KEY (2026-11-16): G0 L77 (where it is;
+; = its goal line, and tt_knag's keyless-door nudge; a G0 also keeps tt_mentor's .defer off: he fades in at
+; B1 on arrival, not when the key is taken), the key picked up from the floor (col 8): G1 L24/L25 (after the
+; engine's "YOU FIND A CYAN KEY"); no pointer (TUT0-F2)
+        TBEAT TUT_RB, TUT_TK_KEY, 0, 0, TUT_SP_B1, TUT_PF_FADEIN | TUT_POSE_PT_DN, \
+              TL_L77, TUT_NONE, TL_L24, TL_L25, TUT_NONE, TUT_NONE, \
               TUT_NONE, TUT_NONE, TUT_FH_NONE, TUT_BF_FIRST
 ; B8 Trap + status (B): B1, IDLE; G0 silent; POISONED: G1 L26/L27 (pointer
 ; status icon), G2 L28; not poisoned and x >= 17: FH_TRAP_PASSED (L29 + L28)
@@ -154,7 +158,8 @@ tut_beats:
         TBEAT TUT_RB, TUT_TK_POISON_CLR, 0, 0, TUT_SP_B2, TUT_PF_BLINK | TUT_POSE_PT_DN, \
               TL_L30b, TUT_NONE, TL_L31, TUT_NONE, TUT_NONE, TUT_NONE, \
               TUT_PR_BAG, TUT_NONE, TUT_FH_NOT_POISONED, 0
-; B10 Door (B): blink -> B3, POINT right; L33; room = C
+; B10 Door (B): blink -> B3, POINT right; L33; room = C (TUT-KEY: the B-C door is really locked: the
+; key held since B7 unlocks it on the bump, lockl.asm key_door; keyless: tt_knag's L77)
         TBEAT TUT_RB, TUT_TK_ROOM, TUT_RC, 0, TUT_SP_B3, TUT_PF_BLINK | TUT_POSE_PT, \
               TL_L33, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, \
               TUT_NONE, TUT_NONE, TUT_FH_NONE, TUT_BF_H0
@@ -174,7 +179,7 @@ tut_beats:
               TUT_PR_SCROLL, TUT_NONE, TUT_FH_NONE, TUT_BF_H0
 ; B14 Victory (C): blink -> beside the grate, TALK; Goblin dead: G1 L42/L56,
 ; G2 L57/L58, tail pairs 0.. (p3 = TUT_TI_B14 -> index 2 after B1's 2-pair run) =
-; G3 L59/L43, G4 L44/L45, G5 L46/L47; grate opens after tail pair p2 = 0 (G3);
+; G3 L59/L43, G4 L46/L44, G5 L45/L47 (TUT-KEY: the grate line last); grate opens after tail pair p2 = 0 (G3);
 ; FH_VICTORY_EXTRAS adds L48 (after G3) / L52 (after G4)
         TBEAT TUT_RC, TUT_TK_GOB_DEAD, 0, TUT_TI_B14, TUT_SP_GRATE, TUT_PF_BLINK | TUT_POSE_TALK, \
               TUT_NONE, TUT_NONE, TL_L42, TL_L56, TL_L57, TL_L58, \
@@ -198,8 +203,8 @@ tut_tail:
         DEFB TL_L07, TUT_NONE           ; 0  B1 G3: WAIT ({D}) BY ME TO HEAR AGAIN
         DEFB TUT_NONE, TUT_NONE         ; 1  end (B1)
         DEFB TL_L59, TL_L43             ; 2  B14 G3 (the grate opens after this one)
-        DEFB TL_L44, TL_L45             ; 3  B14 G4
-        DEFB TL_L46, TL_L47             ; 4  B14 G5
+        DEFB TL_L46, TL_L44             ; 3  B14 G4 (TUT-KEY 2026-11-16: the pause hint, then the key + boss)
+        DEFB TL_L45, TL_L47             ; 4  B14 G5 (its grate is the way down; ON THE GRATE, PRESS {D}: last)
         DEFB TUT_NONE, TUT_NONE         ; 5  end (B14)
         DEFB TL_L63, TL_L64             ; 6  B3 tail (R2): scrolls from bar or bag, empty icons
         DEFB TUT_NONE, TUT_NONE         ; 7  end (B3)
@@ -213,11 +218,12 @@ tut_tail_hold:
 
 ; TUT0-F4 R4-3 goal lines (tt_goal / tt_gvis): one line id per beat ($FF none; bit 7 = a
 ; tut_cpairs class pair), pinned on row 20 while the beat waits for the player; also the
-; second line of the R4-4 nudge (L75 + goal). No new text: existing lines (R4-5 rewordings).
+; second line of the R4-4 nudge (L75 + goal). Existing lines (R4-5 rewordings); TUT-KEY: B7 = L77
+; (where the key lies: it is on the floor now), B8 keeps L24 (held by then).
 ; B12 / B13 none (combat owns row 20: the target readout); B14 / B15 L47 while the grate is
 ; open, to the exit (the B14 tail ends in B15 a few turns before the step). 16 B.
 tut_goal:
-        DEFB TL_L02, TL_L03, TL_L09, TL_L60, TL_L16, TL_L20, TL_L23, TL_L24     ; B0..B7
+        DEFB TL_L02, TL_L03, TL_L09, TL_L60, TL_L16, TL_L20, TL_L23, TL_L77     ; B0..B7
         DEFB TL_L24, TL_L30b, TL_L33, TUT_CP_L35, TUT_NONE, TUT_NONE, TL_L47, TL_L47   ; B8..B15
 tut_goal_end:
         ASSERT tut_goal_end - tut_goal == 16

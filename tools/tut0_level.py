@@ -74,7 +74,12 @@ SPOT_SPEC = [("A1", ROOM_A, 0, 9), ("A2", ROOM_A, 0, 25), ("A3", ROOM_A, 1, 18),
 # floor items: (room, storey, col, IT_*, qty)  spec §2.1-2.3
 ITEMS = [(ROOM_A, 0, 24, "IT_BOOK", 1), (ROOM_A, 1, 17, "IT_F_PEAR", 1),
          (ROOM_B, 0, 19, "IT_P_CURE", 1),
-         (ROOM_C, 1, 4, "IT_S_SLEEP", 1), (ROOM_C, 1, 9, "IT_P_HEAL", 1)]
+         (ROOM_C, 1, 4, "IT_S_SLEEP", 1), (ROOM_C, 1, 9, "IT_P_HEAL", 1),
+         # TUT-KEY (2026-11-16): the cyan key lies on B's floor (KEY-POLISH floor item, lockl.asm key_take), col 8
+         # = cells 8-9: one step right of the arrival (x 5, cols 5-7) takes it (x 6 covers col 8), before Morrow's B1
+         # box (cols 10-12), the dart (13) and the Cure (19); the balloon spots are the storey's top rows (never 7-8).
+         # Appended: the earlier entries keep their FLOOR_LIST index.
+         (ROOM_B, 0, 8, "IT_KEY", 1)]
 TRAPS = [(ROOM_B, 0, 13, "TT_DART")]      # hidden (TRF_KNOWN clear)
 
 SEED_MAX = 0xFFFF
@@ -94,7 +99,7 @@ def desc_bytes():
     put(ROOM_A, "RD_LAD1", 12)
     put(ROOM_A, "RD_PITCOL", 19)
     put(ROOM_A, "RD_LAD2", 26)
-    # B: key room (RDF_KEY + LVL_KEYROOM). up-exit {5,0}, L1 {24,1}, door right on storey 1
+    # B: key room (RDF_KEY + LVL_KEYROOM; TUT-KEY: its IT_KEY floor entry, ITEMS). up-exit {5,0}, L1 {24,1}, door right on storey 1
     put(ROOM_B, "RD_FLAGS", D["RDF_PRESENT"] | D["RDF_KEY"])
     put(ROOM_B, "RD_EXITS", D["RDX_U"] | D["RDX_R"] | D["RDX_RS1"])
     put(ROOM_B, "RD_UPCOL", 5)

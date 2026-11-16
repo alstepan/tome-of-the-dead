@@ -361,7 +361,7 @@ item_hp_far:
                 jp   farb
 
 ;------------------------------------------------------------------------------
-; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1) + LARGER-D T8
+; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0", SMC below) + LARGER-D T8
 ; KEY-PANEL the two 16x8 key icons (24-25 / 27-28, 21) (key_pan: cyan / magenta while held, else blank).
 ; HL = PANEL_DIRTY.  ~2.3k T
 ;------------------------------------------------------------------------------
@@ -371,7 +371,9 @@ item_depth:
                 or   a
                 jr   nz, .d
                 inc  a
-.d:             add  a, '0'
+.d:             add  a, '0'                    ; SMC: TUT-KEY — the operand (item_depth.d + 1) = '0' - 1 while D0
+                                               ; runs (blob tt_hook; LVL_DEPTH 1 prints "D0"), '0' again on every
+                                               ; D0 exit (tt_unhook, with pl_et / pi_ic / il_go)
                 ld   hl, P_NUMBUF
                 ld   (hl), 'D'
                 inc  l

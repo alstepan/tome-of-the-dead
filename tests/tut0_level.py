@@ -125,11 +125,12 @@ def main():
           and not any(flat["tut0_trap_list"][2:tn]) and not any(flat["tut0_trap_list"][tn + 1:]) and not flat["tut0_trap_list"][0] & D["TRF_KNOWN"])
     fn = blk[H["FLOOR_N"]]
     ents = [tuple(blk[OFF_FLOOR + 4 * i:OFF_FLOOR + 4 * i + 4]) for i in range(D["FLOOR_MAX"])]
-    check("M FLOOR_N 5 + the rest FL_EMPTY", fn == 5 == equs["TUT0_FLOOR_N"] and
+    check("M FLOOR_N 6 + the rest FL_EMPTY", fn == 6 == equs["TUT0_FLOOR_N"] and
           all(e == (D["FL_EMPTY"],) * 4 for e in ents[fn:]))
     want = [(A, 0, 24, "IT_BOOK"), (A, 1, 17, "IT_F_PEAR"), (B, 0, 19, "IT_P_CURE"),
-            (C, 1, 4, "IT_S_SLEEP"), (C, 1, 9, "IT_P_HEAL")]
-    check("M floor entries (book, pear, cure, sleep, heal) qty 1",
+            (C, 1, 4, "IT_S_SLEEP"), (C, 1, 9, "IT_P_HEAL"),
+            (B, 0, 8, "IT_KEY")]                                 # TUT-KEY: the cyan key on B's floor (key room B)
+    check("M floor entries (book, pear, cure, sleep, heal, the B key) qty 1",
           ents[:fn] == [(r | (D["FL_S1"] if s else 0), c, D[it], 1) for r, s, c, it in want], str(ents[:fn]))
     check("M Goblin: room C, x 22 (= the grate col), storey 1", (equs["TUT0_GOB_ROOM"], equs["TUT0_GOB_X"], equs["TUT0_GOB_S"]) ==
           (C, rd(blk, C, "RD_EXITCOL"), 1) and equs["TUT0_GOB_X"] == 22)
@@ -169,7 +170,7 @@ def main():
           exB == D["RDX_U"] | D["RDX_R"] | D["RDX_RS1"] and exC == D["RDX_L"] | D["RDX_LS1"])
     for i, (r, s, col, it) in enumerate(want):
         check(f"L item {i} ({it}) cell legal (levelcheck.item_ok)", LC.item_ok(blk, r, s, col) and LC.item_ok(blk, r, s, col + 1))
-    check("L items: not in the start col zone of the hero, no 2 items on a col", len({(r, s, c) for r, s, c, _ in want}) == 5)
+    check("L items: not in the start col zone of the hero, no 2 items on a col", len({(r, s, c) for r, s, c, _ in want}) == len(want))
     tr = (B, 0, 13)
     check("L trap cells legal (item_ok cols 13, 14)", LC.item_ok(blk, tr[0], tr[1], 13) and LC.item_ok(blk, tr[0], tr[1], 14))
 

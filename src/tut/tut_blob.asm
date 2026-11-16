@@ -33,3 +33,7 @@ blob_base:
                 INCLUDE "tut/tut_text.asm"     ; TUT0-F2: from -i$OUT/build (tools/build.sh), the
                 INCLUDE "tut/tut0_level.asm"   ; build's own copy (src/tut/ has no such files)
                 INCLUDE "../assets/gfx/mentor/aldous34.asm"
+                ; {b} reads only bytes already assembled: these checks on the level image sit after it
+                ASSERT ({b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} & RDX_D) == 0   ; tt_mercy's grate-step rule
+                ASSERT {b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} != 0             ; (the read is real)
+                ASSERT {b tut0_lvl_state} == 1  ; LVL_DEPTH during D0: tt_hook's "D0" digit operand ('0' - 1)
