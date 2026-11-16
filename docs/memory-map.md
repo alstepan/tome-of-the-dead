@@ -977,7 +977,7 @@ close); S, slot keys do nothing. Layout = the approved placeholder, rows
 
 | Rows | Content |
 |------|---------|
-| 0–1 | `BAG` (menu font, cols 2–4); row 0 `ITEMS n/20` (x 48) + **`[CLOSE]`** (cols 26–31, selectable, bright cyan); row 1 `DAGGERS d  ARROWS a` (Warrior only, x 48) + `KEY` (col 26, when `LF_KEY_TAKEN`) |
+| 0–1 | `BAG` (menu font, cols 2–4); row 0 `ITEMS n/20` (x 48) + **`[CLOSE]`** (cols 26–31, selectable, bright cyan); row 1 `DAGGERS d  ARROWS a` (Warrior only, x 48) ; LARGER-D T8: one line per held key, `CYAN KEY` ($45) / `MAGENTA KEY` ($43), col 23, rows 1 then 3 (bank-1 `pg_key`) |
 | 2 / 23 | ornament (`menu_orn_b`) |
 | 4–14 | bag 5×4: slot s icon 2×2 at row `4 + 3(s / 5)`, col `9 + 3(s % 5)` = **IC1: its 16×16 icon** (R6 `icon_slot`, `icons16`) in the floor ink (`item_ink`); QTY digit (≥ 2) at row +1, col +2; empty = a 16×16 frame (`$47`) |
 | 15 | `W A H C` over the worn icons |
@@ -1676,10 +1676,12 @@ Index `e = gy*2 + gx` = edge between `r` and `r+1` (gx ∈ {0,1}): right edge of
 `r` = `r − gy`, left edge = `r − gy − 1`. Bits: `EG_LINK 1` (connected),
 `EG_DOOR 2`, `EG_OPEN 4` (runtime door state, both rooms), `EG_LOCK 8`,
 `EG_SEAL 16` (D8 Sanctum), **`EG_LOCKC 32` (LARGER-D T4: the lock's colour 1 = magenta; clear = colour 0 = cyan; only with
-`EG_LOCK`)**. none = 0 · open passage = LINK · closed door =
+`EG_LOCK`)**, **`EG_NEARR 64` (LARGER-D T8: with `EG_LOCK`, the lock's start-side room is the right one; the far-side
+bolt)**. none = 0 · open passage = LINK · closed door =
 LINK|DOOR · open door = LINK|DOOR|OPEN · locked / sealed = LINK|DOOR|LOCK(|LOCKC) / SEAL. **T4: `level_gen` sets
 `EG_LOCK | EG_DOOR` (+ `EG_LOCKC`) on 1–2 bridge edges per level** (larger_depths.md §2.1 rev 3; rendered by the
-existing `T_DOOR_LOCK` plank path, bank3.asm; `door_open` refuses it; key pickup / unlock / plate colours = T8).
+existing `T_DOOR_LOCK` plank path, bank3.asm; `door_open` refuses it; key pickup / unlock / plate colours = T8:
+"LARGER-D T8 ledger").
 **Vertical connections have no table** (no doors on them): `RDX_U`/`RDX_D` +
 the shaft cols of both rooms. Door cells (concept §3.1): cols 0–1 / 30–31 of
 the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
@@ -1695,7 +1697,7 @@ the exit storey, lintel row `9s` WALL, arch `9s+1`, planks `9s+2..9s+7`
 | `$6E85` / `$6E86` | `LVL_ATTR_FLOOR` / `LVL_ATTR_WALL` | game.md §1.2 |
 | `$6E87`..`$6E8A` | `LVL_START`, `LVL_LAIR`, `LVL_KEYROOM`, `LVL_SANCTUM` | room ids (`ROOM_NONE` `$FF`); **T4: `LVL_KEYROOM` = the colour-0 (cyan) key room, written by `attempt` (the D0 tutorial keeps its own room B); the colour-1 room is `LVL_KEYROOM2` `$6EAE`** |
 | `$6E8B` | `LVL_NROOMS` | 10..12 (LARGER-D T4; D8 11..12 with the Sanctum) |
-| `$6E8C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, `LF_KEY_TAKEN 2`, `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`), **`LF_PROVOKED 32`** (3F-T8: the hero's damage reached the lair boss, deal_hit `.mon`; cleared by `lp_post` when the boss is placed). **3F-T8: `level_gen` writes 0 (the grate SHUT); `grate_open` sets `LF_GRATE_OPEN`; `LF_GATE_HINT` now remembers the first-entry line `THE GATE IS BARRED`** |
+| `$6E8C` | `LVL_FLAGS` | `LF_GRATE_OPEN 1`, (bit 1 free: `LF_KEY_TAKEN` retired by T8), `LF_SEAL_OPEN 4`, `LF_GATE_HINT 8` (B12: the lair's gate hint was logged this level; `lair_hint`, reset by `level_gen` rewriting the byte), `LF_UNIQUE 16` (3E-T11: the boss unique dropped this level, `mon_drop`), **`LF_PROVOKED 32`** (3F-T8: the hero's damage reached the lair boss, deal_hit `.mon`; cleared by `lp_post` when the boss is placed), **`LF_KEYC 64` / `LF_KEYM 128`** (LARGER-D T8: the cyan / magenta key is held). **3F-T8: `level_gen` writes 0 (the grate SHUT); `grate_open` sets `LF_GRATE_OPEN`; `LF_GATE_HINT` now remembers the first-entry line `THE GATE IS BARRED`** |
 | `$6E8D` | `FLOOR_N` | floor-list entries used |
 | `$6E8E` | `MASTER_SEED` | word, per game |
 
@@ -3242,7 +3244,7 @@ Design: game.md §1.5, §7, §8, §8.5, §8.7–§8.9; user rulings 2026-10-19/2
 |---|---|---|
 | 0 | `IT_NONE` | free slot / no pin / grey quick slot |
 | 1 | `IT_POTION` | **legacy** 3B floor potion → `E_POT` (retired by T11, then reserved) |
-| 2..4 | counters `IT_CNT_*` (never in the bag) | `IT_DAGGER` 2, `IT_ARROW` 3 (`IT_AMMO_*`; ids kept from D3-7), `IT_KEY` 4 (→ `LF_KEY_TAKEN`) |
+| 2..4 | counters `IT_CNT_*` (never in the bag) | `IT_DAGGER` 2, `IT_ARROW` 3 (`IT_AMMO_*`; ids kept from D3-7), `IT_KEY` 4 (never an item; LARGER-D T8: held mask `LF_KEYC` / `LF_KEYM`) |
 | 5..9 | food `IT_FOOD_*` | Carrot, Apple, Pear, Cheese, Meat (ascending FOOD: quick slot = lowest id) |
 | 10..12 | potions `IT_POT_*` | Heal, Mana, Cure (quick priority order) |
 | 13..16 | scrolls `IT_SCR_*` | Teleport, Fear, Sleep, Enchant (tie order) |
@@ -7308,3 +7310,39 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
 - **lp_enter mean (lp.py A2 / A7):** x1.5 density took it to 22,500 T (> 22,000). `lp_spawn` slot clear 8 B a pass, `lp_cmap` clear 6 B a pass (REPT; +18 B bank 3), `tier_row` direct index (R6 +17 B) -> **A2 21,549 / A7 21,598 T**; worst A2 45,145 T (d8 `$3CD2` r3: the R0 boss path = lp_place's 8 tries + the fallback; <= 46,000), A8 lp_transition 62,739, roommem see the T5 report.
 - **TURN_COUNTER** is a word (`$BF03`); the end card TURNS prints 0..65535 (`ec_num`): no change needed.
 - **Free after T5 + T4 (release `-DDEBUG_KIT=0`):** B0_CODE2 **55 B** (ANIM_TRACE build 42), bank 3 free-to-AY **35 B**, R6 **57 B**, bank 7 **53 B**, low RAM `LOWRAM_SPARE` **391 B**, bank 1 65, TUT0 `BLOB_RES` 33.
+
+## LARGER-D T8 ledger (`feat/larger-d-t8`, 2026-11-16; larger_depths.md §2.1 rev 2 / rev 3, §6; user decisions in the task)
+
+- **State (all level state: `level_gen` resets it, new level / new game):** `LVL_FLAGS` bit 6 `LF_KEYC` / bit 7 `LF_KEYM` =
+  the key HELD (bit 1, the never-set `LF_KEY_TAKEN`, retired); "taken" = `LVL_KEYROOM` / `LVL_KEYROOM2` := `ROOM_NONE` at
+  pickup (runtime writes, after level_gen; levelgen_z80 compares at generation only); `EG_LOCK` cleared on unlock / bolt.
+  **`EG_NEARR` `$40`** (EDGE_TAB bit 6, was free): set by `level_gen` (`lgkey3.asm lk_edge`, +8 B; `tools/levelgen.py` same,
+  bit-exact) when the lock's near (start-side) room is the right one; `levelcheck` K12 checks it.
+- **Code** (`src/lockl.asm`, low-RAM cold block, 283 B): `key_find` (from `lair_hint`, every room entry incl. teleport;
+  `LVL_DEPTH` 0 = D0 tutorial / PROTO: nothing, the tutorial keeps its own B-room key), `key_door` (from `hero_door` when
+  `door_open` refuses: sealed -> locked line; matching key -> key used, `EG_LOCK` off, `door_open.op`, `YOU UNLOCK THE DOOR`,
+  1 turn; no key + far side (dx vs `EG_NEARR`) -> bolt, ordinary open, no line, 1 turn; else `THE DOOR IS LOCKED`, 0 turns,
+  `LOCK_SHOWN` latch as before), the three log lines as plain ASCII streams (`log_push`; the text block had 22 B, 8 in
+  F3_GEN=0), `lk_stamp` / `dr_edge` / `dr_tab`, `lk_cell`, `lk_shadow`. Monsters: unchanged (`door_open` refuses any lock;
+  key_door is hero-only), lock8 K6.
+- **Plates:** a closed LOCKED door draws `T_DOOR_R` + ONE `T_DOOR_LOCK` cell (plank row `DOOR_PLATE_DY` 3 = row 9s+5,
+  plank-R col 1 / 31); a SEALED door keeps the whole lock column (`TILE_ATTRS` $06). No free tile id, so the colour is per
+  cell: `build_room_map` (bank 3, +5 B) stores the edge (`dr_edge`) and tail-jumps `lk_stamp` (the plate cell, `dr_tab[side]`
+  = $45 / $43, else $06); `fi_cells` (+5 B, +17 T a cell; room_show + every scroll strip) calls `lk_cell` on a
+  `T_DOOR_LOCK` cell -> its screen attr; `room_show` / `room_shadow` call `lk_shadow` (bank 7 paged: the plate's screen attr
+  -> the attr shadow, so `erase_rect` keeps it). Ink only, paper 0: no clash (lock8 K7). Unlock -> `door_paint` /
+  `shadow_rect` restore $06. Models: `tests/room_model.py` (render + `plate_cells` for every screen==map check),
+  `tools/tut0_level.py` (D0's B-C plate: cyan, the tutorial clears its lock after the build).
+- **Panel** (30, 19): `item_depth` (HOT, +3 B) far6s **`key_pan`** (`src/key6.asm`, R6 54 B): attr `$45` / `$43` / both
+  `ATTR_KEY_CM` `$EB` (FLASH) / none 0; the 8x8 `label_key` glyph (copied bytes) drawn when a key is held (invisible at attr 0
+  afterwards; goldens unchanged: the cell stays empty until a key); `pmark_rect` 2 x 2. Pickup / unlock set `PD_DEPTH`.
+  No timed "new key" flash beyond `$EB` for two keys (spec rev 2 panel row).
+- **Bag:** `page_ovl.asm` picks the held keys, bank-1 `pg_key` (`src/keyui1.asm`, 42 B: the strings + print6 + stamp_rect)
+  prints `CYAN KEY` / `MAGENTA KEY` at col 23, rows 1 then 3 (`PG_KEY_*`).
+- **Reclaim:** the dead `items.txt` stem `key_found` (R6 −22 B; `tests/itemtab.py` fx 242 -> 220).
+- **Free (release `-DDEBUG_KIT=0`, before -> after):** low RAM `LOWRAM_SPARE` 391 -> **84** (stubs at `LOWRAM_END_3B` need
+  <= 43); bank 3 35 -> **22**; R6 57 -> **25**; bank 1 65 -> **23**; HOT_COPY spare 40 -> **43**; B0_CODE2 55 -> **53** (page
+  overlay stream +2); bank 7 53, text headroom 22 (F3_GEN=0: 8), TUT0 `BLOB_RES` 33: unchanged.
+- **Tests:** `tests/lock8.py` K0-K8 (pickup both keys + lines + panel + bag, bump without / wrong key 0 turns, unlock 1 turn,
+  far-side bolt, Goblin refused both sides, plate attr screen + shadow via room_show and the B -> C scroll, generated D1/D2
+  `EG_NEARR` vs a flood, descend clears the keys).

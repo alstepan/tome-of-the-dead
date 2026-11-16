@@ -361,8 +361,8 @@ item_hp_far:
                 jp   farb
 
 ;------------------------------------------------------------------------------
-; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1; the
-; key icon at (30, 19) arrives with the key in 3F). HL = PANEL_DIRTY.  ~1k T
+; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1) + LARGER-D T8
+; the key cell (30, 19) (key_pan: held colour / both FLASH / blank). HL = PANEL_DIRTY.  ~1.5k T
 ;------------------------------------------------------------------------------
 item_depth:
                 res  PD_DEPTH_BIT, (hl)
@@ -382,9 +382,8 @@ item_depth:
                 ld   e, DEPTH_COL * 8
                 call print6
                 ASSERT ((DEPTH_COL * 8) & 7) == 0 && DEPTH_COL * 8 + 6 * 2 <= 256     ; print6 x rule
-                ld   bc, (ICON_ROW << 8) | DEPTH_COL
-                ld   de, (2 << 8) | 1
-                jp   pmark_rect
+                ld   hl, key_pan               ; LARGER-D T8 (R6 key6.asm): the key cell, then
+                jp   far6                      ; pmark_rect of the 2 x 2 depth / key cells
 
 ;------------------------------------------------------------------------------
 ; dn_mbit — DNUM-SPRITE-FIX (bank-2 dnum2.asm dn_cel; here: HOT_COPY's spare,

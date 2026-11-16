@@ -13,4 +13,5 @@
                 INCLUDE "info1.asm"
                 INCLUDE "stat1.asm"            ; D3-8: the hero's status icons (row 21)
                 INCLUDE "menu1.asm"
+                INCLUDE "keyui1.asm"           ; LARGER-D T8: pg_key (the bag key lines)
                 INCLUDE "ui1_vars.asm"

@@ -20,7 +20,7 @@ EG = {k: S["EG_" + k] for k in ("LINK", "DOOR", "OPEN", "LOCK", "SEAL")}
 TF = {k: S["TF_" + k] for k in ("SOLID", "FLOOR", "HOLE", "LADDER", "DOOR", "LOCK", "ATTACK", "ANIM")}
 CLOSE_SLOT, WIDTHS = 24, (1, 5, 5, 5, 5, 4)
 HERO_W = 3
-LF = {k: S["LF_" + k] for k in ("GRATE_OPEN", "SEAL_OPEN", "KEY_TAKEN", "GATE_HINT")}
+LF = {k: S["LF_" + k] for k in ("GRATE_OPEN", "SEAL_OPEN", "KEYC", "KEYM", "GATE_HINT")}
 FOOD_ITEMS = range(IT["F_CARROT"], IT["F_MEAT"] + 1)
 # icon slots (0-based). Warrior: 1 Power Strike, 2 Whirlwind, 3 Daggers, 4 Bow. Mage: 1..5 Spark Firebolt
 # Frost Drain Lightning.  7/8/9/10 (index 6..9): food, potion, scroll, bag (both heroes).

@@ -190,6 +190,8 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
         if len(p2) == nn: v.append(f"K1/K10: lock {a}-{c} is not a bridge of the final graph (an optional loop crosses it)")
         sides[e] = (a, c) if a in p2 else (c, a)
         colour[e] = col
+        if bool(b[OFF_EDGE + hedge(a)] & G.EG_NEARR) != (sides[e][0] == c):    # LARGER-D T8: hero_door's bolt
+            v.append(f"K12: lock {a}-{c} EG_NEARR != its start side")
         if c != a + 1 or a % GW == GW - 1: v.append(f"K1: lock {a}-{c} not horizontal")
         if depth == 8 and sanct != D["ROOM_NONE"] and sanct in e: v.append("K7: Sanctum door locked")
     m = len(locks)
@@ -386,7 +388,7 @@ def check(b, stats=None):
         r = gy * GW + gx
         eb = b[OFF_EDGE + e]
         linked = r in pset and (r + 1) in adj.get(r, ())
-        if eb & ~(D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"] | G.EG_LOCKC): v.append(f"edge {e} unexpected bits")
+        if eb & ~(D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"] | G.EG_LOCKC | G.EG_NEARR): v.append(f"edge {e} unexpected bits")
         if bool(eb & D["EG_LINK"]) != linked: v.append(f"edge {e} LINK vs exits")
         if eb & D["EG_DOOR"] and not eb & D["EG_LINK"]: v.append(f"edge {e} door w/o link")
     nedges = sum(len(a) for a in adj.values()) // 2
