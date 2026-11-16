@@ -176,7 +176,7 @@ Room build time: `decor_room` measures **~120k T** on D1 (W13 profile, DI, conte
 room build that runs during `GS_TRANSITION` (the `NEXT_MAP` build before the scroll).
 
 Useful facts for placing code:
-- `ROOM_MAP` / `NEXT_MAP` (`$6000` / `$6300`), `ROOM_DESC` (`$6D60`), `LVL_DEPTH`, `xs_core`
+- `ROOM_MAP` / `NEXT_MAP` (`$6000` / `$6300`), `ROOM_DESC` (`$6D40`, 12 rooms; LARGER-D T2, was `$6D60` for 9), `LVL_DEPTH`, `xs_core`
   (bank 2) and levelgen's `rnd_mod` / `hla` (low RAM) are all visible whatever is paged at `$C000`.
   So decor **planning** can run from any `$C000` bank.
 - `dg_obj` / `dg_ring` / `dg_bad` (and the records) live in bank 3, so **placement** must stay
@@ -205,8 +205,9 @@ Split the deriver into a **planner** and an **executor**.
 
 - **Planner `dg_plan`** goes in **R6** (bank 6, uncontended, `far6` from `decor_room`, 3 B call
   site). It reads only low RAM (descriptor, map, depth) and writes a **plan**: ≤ 5 entries ×
-  (record index, row, col, pair flag) + a count. The plan goes into the **ROOM_DESC spare
-  `$6DF0..$6DFF`** (16 B, level_defs.asm "spare"; always visible). It also needs a per-depth
+  (record index, row, col, pair flag) + a count. The plan goes into **`DG_PLAN` `$6EB0..$6EBF`**
+  (16 B, level_defs.asm; always visible; LARGER-D T2 moved it from the ROOM_DESC spare `$6DF0`, which the 12-room
+  `ROOM_DESC` now fills; `level_gen` zeroes it per attempt, harmless as per-build scratch). It also needs a per-depth
   light / centrepiece table (~24 B). R6 growth: **+1 page (`R6_GROW` 15 → 16), paid from the pool
   slack 384 → 128 B**.
 - **Executor** stays in bank 3: a loop that feeds each plan entry to `dg_obj` with a fixed row / col
@@ -464,7 +465,7 @@ Not affected: menu / select / page / endcard hashes (no room decor). The `test` 
 |---|---|
 | `docs/design/concept-screen.md` §3.3 | New section "Decor placement (DECOR2)" superseding "Decor placement (D1)" pass order: moods / compositions / pools / anchored textures / fill. Amend the patch rules (≥ 1 per room kept, now light- or wall-anchored, no 1×1 speckle), the cobweb pass (odds by storey and mood, cap 3 in DARK), moss (2/3 strips), the ring (3-col halo for fill mount / floor), cols 3..28 for mount / ceiling / floor, and the pit jump-zone veto. |
 | `docs/design/game.md` §1.1 "In-room" row | "rules in concept-screen §3.3" → add "(DECOR2: moods by room role)". §1.2: no id or colour change; note that DECOR2 adds no tile ids. |
-| `docs/memory-map.md` | `R6_GROW` 15 → 16 (`dg_plan` + its table), pool slack 384 → 128, **plan buffer at ROOM_DESC spare `$6DF0..$6DFF`** (claimed), bank-3 ledger (executor vs reclaims), `dg_bad` unchanged. |
+| `docs/memory-map.md` | `R6_GROW` 15 → 16 (`dg_plan` + its table), pool slack 384 → 128, **plan buffer `DG_PLAN` `$6EB0..$6EBF`** (claimed; was the ROOM_DESC spare `$6DF0..$6DFF` before LARGER-D T2), bank-3 ledger (executor vs reclaims), `dg_bad` unchanged. |
 | `tools/decorgen.py` docstring, `src/decor_gen.asm` header | Algorithm text, pass order, RNG call order, measured T-states. |
 | `docs/design/tutorial_d0.md`, `docs/design/tut0_split.md` | D0 rooms follow DECOR2 at DEPTH 1 (the start-room CALM rule applies to room A). The seed search is re-run. Lit moods are effectively unavailable under the 10-id cap. |
 | `docs/plan.md` | Tasks: DECOR2-1 Python model + metrics + PNGs (junior), user review, DECOR2-2 P1 Z80 (junior / Sonnet), DECOR2-3 planner (R6) + executor (staff), rebaseline + tut0 re-search (junior). |

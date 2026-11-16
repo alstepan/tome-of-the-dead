@@ -104,7 +104,8 @@ ic_blit:        push af                        ; [attr]
                 ret
                 ASSERT ICONS16_BYTES == 32 && ICONS16_COUNT * ICONS16_BYTES < $10000
                 ASSERT ICONS16_PH == IT_COUNT - IT_BAG_LO && ICONS16_AMMO_DAGGER == ICONS16_PH + WORN_SLOTS
-                ASSERT ICONS16_AMMO_ARROW == ICONS16_AMMO_DAGGER + 1 && ICONS16_COUNT == ICONS16_AMMO_ARROW + 1
+                ASSERT ICONS16_AMMO_ARROW == ICONS16_AMMO_DAGGER + 1 && ICONS16_KEY == ICONS16_AMMO_ARROW + 1 && ICONS16_COUNT == ICONS16_KEY + 1
+                ASSERT ICONS16_KEY == IT_KEY - IT_DAGGER + ICONS16_AMMO_DAGGER   ; fi_slot: IT_KEY -> the key icon
                 ASSERT PG_SLOT_WORN == BAG_SLOTS && WORN == BAG + BAG_SLOTS * IR_STRIDE && (BAG & $FF) == 0
                 ASSERT (BAG_SLOTS + WORN_SLOTS) * IR_STRIDE <= 256 && ATTR_STRIDE == 32
 
@@ -167,7 +168,7 @@ it_tab:         ITB  IC_NONE, 0                ; IT_NONE
                 ITB  IC_FLASK, $42             ; IT_POTION (legacy / PROTO)
                 ITB  IC_AMMO, $47              ; dagger
                 ITB  IC_AMMO, $46              ; arrow
-                ITB  IC_NONE, 0                ; key (no floor entry)
+                ITB  IC_NONE, ATTR_KEY_C       ; key (KEY-POLISH: a floor item in its key room; magenta: key_ink)
                 ITB  IC_FOOD, $06              ; carrot
                 ITB  IC_FOOD, $44              ; apple
                 ITB  IC_FOOD, $04              ; pear

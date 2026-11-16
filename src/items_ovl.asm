@@ -235,9 +235,15 @@ ig_main:
                 ld   a, IT_BOW
                 call ig_t1
                 call ig_app
+                ; 6b. KEY-POLISH: the level keys on the floor of their key rooms (cyan, then
+                ;     magenta; no draw), before the traps so no trap lands under a key
+.traps:         ld   hl, LVL_KEYROOM
+                call ig_key
+                ld   hl, LVL_KEYROOM2
+                call ig_key
                 ; 7. traps (§1.5): type rnd(pool), then <= 8 tries (room of the
                 ;    eligible NL rooms without a trap, storey, t = 6 + rnd(20))
-.traps:         ld   a, (ig_d)
+                ld   a, (ig_d)
                 ld   hl, ig_tcnt - 1
                 call hla
                 ld   b, (hl)
@@ -411,6 +417,23 @@ ig_t1:          ld   (ig_t), a
                 ld   a, 1
                 ld   (ig_q), a
                 ret
+
+; ig_key — KEY-POLISH: HL = LVL_KEYROOM / LVL_KEYROOM2: unless ROOM_NONE, that room's key (IT_KEY,
+; qty 1) appended at the first free legal cell of the room (ig_scan over [room]: storey 0 then 1,
+; col 2..28, the footprint legal, no entry within c-1..c+1; the room cap does not apply, ig_cap);
+; none (unreachable, items_model asserts it): storey 1, col 2 — never dropped. No draw.
+; Clobbers A, BC, DE, HL, IX.
+ig_key:         ld   a, (hl)
+                cp   ROOM_NONE
+                ret  z
+                ld   (ig_st + 1), a            ; the 1-room pool (the start's use ended at the D1 book)
+                ld   a, IT_KEY
+                call ig_t1
+                ld   hl, ig_st
+                call ig_scan
+                jr   nc, ig_app
+                ld   e, ITEM_COL_LO            ; (the full scan left D = room | storey 1)
+                jr   ig_app
 
 ; ig_add1 — A = type, HL = pool: qty 1, place, append (or drop: rolls consumed).
 ; Clobbers A, BC, DE, HL, IX.
@@ -599,8 +622,12 @@ ig_occ:         ld   a, (ig_n)
                 ret
 
 ; ig_cap — D = room | storey << 7: CF = entries 0..ig_n-1 of the room (both
-; storeys) number ITEM_ROOM_CAP already. Keeps DE. Clobbers A, BC, HL.
-ig_cap:         ld   a, (ig_n)
+; storeys) number ITEM_ROOM_CAP already (KEY-POLISH: never for the key, ig_t = IT_KEY: ig_key).
+; Keeps DE. Clobbers A, BC, HL.
+ig_cap:         ld   a, (ig_t)
+                cp   IT_KEY
+                ret  z                         ; (NC: equal)
+                ld   a, (ig_n)
                 or   a
                 ret  z
                 ld   b, a

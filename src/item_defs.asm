@@ -35,7 +35,8 @@ IT_POTION       EQU 1               ; legacy (see above); E_POT migration: memor
 ; counters (floor-only types: pickup adds to a counter, never a bag slot)
 IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, cap DAGGERS_MAX (FLOOR1 icon 44)
 IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, cap ARROWS_MAX (FLOOR1 icon 45)
-IT_KEY          EQU 4               ; level key: never an item (LARGER-D T8: held mask LF_KEYC / LF_KEYM in LVL_FLAGS)
+IT_KEY          EQU 4               ; level key: KEY-POLISH a FLOOR item only (items_ovl ig_key: one in each key room,
+                                    ; icon ICONS16_KEY); pickup = key_take -> the held mask LF_KEYC / LF_KEYM (LVL_FLAGS)
 ; food, ascending FOOD value (game.md §7 table), so the quick slot's
 ; "smallest FOOD first" (§8) = the lowest food type present
 IT_F_CARROT     EQU 5               ; +10

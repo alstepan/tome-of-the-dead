@@ -1074,7 +1074,7 @@ def trickle_arm(p):
     p.wmem(S["ROOM_VISITS"], [0] * 12)
     p.wb(S["ROOM_VISITS"] + p.rb("CUR_ROOM"), 1)
     now = (p.rw("TURN_COUNTER") >> 2) & 255
-    for r in range(9):
+    for r in range(S["GRID_CELLS"]):                 # all 12 room slots (T7: was 9): rsp_w's worst case is every record eligible
         p.wb(S["ROOM_DESC"] + 16 * r + 15, (now - 60) & 255)
     TRK["n"] = TRK.get("n", 0) + 1
     p.wmem(S["RNG_STATE"], [(TRK_SEED + 37 * TRK["n"]) & 255 or 1, (TRK["n"] * 91) & 255])

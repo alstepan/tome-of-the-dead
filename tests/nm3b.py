@@ -8,7 +8,9 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
      gap 3 / 4, the other storey, the hero mid-ladder: stays perched; through ai_monster: a perched far one
      does not move, an awake one flies; any HP loss (deal_hit) wakes it, a missed bump (do_attack, eva 99)
      wakes it, a POISON tick wakes it; a perched EF_WALKIN (ALARM wave) body still walks in (materialise); the rest
-     pose (anim_entity): perched = garg_perch, awake = garg_alert (T10b art pass)
+     pose (anim_entity): perched = garg_perch, awake = the fly cycle (GARG-FLY 2026-11-16: garg_fly 4 / garg_fly2 4
+     on TICK_COUNTER while hovering; the attack = windup, a hit = garg_hurt then the cycle again, death = hurt then
+     garg_dead; re-perched (RCD_AWAKE clear) = the statue again)
   R  re-perch on room re-entry (stub lp_transition, as do_exit): an awake Gargoyle left behind comes back
      perched (parked slot restored: RCD_SUMMON cleared), hp kept; a perched one is never a follow candidate,
      an awake one is (follow_select), and place_follower keeps it awake
@@ -78,7 +80,7 @@ STRIDE = S["P_ENT_STRIDE"]
 ENT = S["P_ENTITIES"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 EF = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",
-                               "SEQL", "SEQH", "MSG", "GOLD", "REACT")}
+                               "SEQL", "SEQH", "MSG", "GOLD", "REACT", "REACTAT", "TMR")}
 KG, KA, KK = S["K_GARGOYLE"], S["K_ALIAS"], S["K_KNIGHT"]
 AWAKE = S["RCD_AWAKE"]
 SPENT = 1 << S["RCD_SPENT_BIT"]
@@ -281,14 +283,72 @@ def part_w(p, w):
     check("W a perched EF_WALKIN wave Gargoyle materialises and walks in (M_MOVE from px 0), still perched",
           not w.e(4, "FLAGS") & S["EF_PENDING"] and w.e(4, "MODE") == S["M_MOVE"] and w.e(4, "PX") == 0
           and not w.e(4, "POT") & AWAKE, (w.e(4, "FLAGS"), w.e(4, "MODE"), w.e(4, "PX"), w.e(4, "POT")))
-    # the rest pose
-    for awake, fid in ((0, "FID_garg_perch"), (1, "FID_garg_alert")):
+    # the rest pose (ANIM_FREEZE: phase 0 = the cycle's first frame)
+    for awake, fid in ((0, "FID_garg_perch"), (1, "FID_garg_fly")):
         w.clear()
         w.put(3, KG, 20, gy, rcd=1 | (AWAKE if awake else 0))
         p.wb("ANIM_FREEZE", 1)
         ingame(p, [0xDD, 0x21] + w16(ENT + 3 * STRIDE) + [0x3E, 3, 0x32] + w16(S["ANIM_SLOT"]) +
                [0xCD] + w16(S["anim_entity"]) + [0x32] + w16(RES))
         check(f"W rest pose {'awake' if awake else 'perched'} = {fid[4:]}", p.rb(RES) == S[fid], p.rb(RES))
+    part_fly(p, w, gy)
+
+
+def anim_n(p, n, tick=True, pre_=()):
+    """n anim_entity calls on slot 3 (TICK_COUNTER + 1 before each when tick) -> the n fids."""
+    out = RES - n
+    body = list(pre_)
+    for i in range(n):
+        if tick:
+            body += [0x21] + w16(S["TICK_COUNTER"]) + [0x34]                      # ld hl, TICK_COUNTER; inc (hl)
+        body += ([0xDD, 0x21] + w16(ENT + 3 * STRIDE) + [0x3E, 3, 0x32] + w16(S["ANIM_SLOT"]) +
+                 [0xCD] + w16(S["anim_entity"]) + [0x32] + w16(out + i))
+    ingame(p, body)
+    return list(p.z.read_memory(out, n))
+
+
+def part_fly(p, w, gy):
+    """GARG-FLY (user 2026-11-16): an awake Gargoyle hovering at rest plays garg_fly / garg_fly2 (4 ticks each,
+    phase = TICK_COUNTER + 5 * slot) for N ticks; the attack = windup; a hit = garg_hurt x3 then the cycle again;
+    death = garg_hurt x3 then garg_dead; re-perched (RCD_AWAKE clear) = the statue."""
+    F1, F2 = S["FID_garg_fly"], S["FID_garg_fly2"]
+    p.wb("ANIM_FREEZE", 0)
+    w.clear()
+    w.put(3, KG, 20, gy, rcd=1 | AWAKE)
+    t0 = p.rb("TICK_COUNTER")
+    n = 24
+    got = anim_n(p, n)
+    want = [F1 if ((t0 + 1 + i + 15) & 7) < 4 else F2 for i in range(n)]
+    check(f"GF awake hovering {n} ticks: garg_fly / garg_fly2 alternate every 4 ticks", got == want, (got, want))
+    # attack: KS_ATTACK started (as rg_pose / do_attack): windup for 2 ticks (stop before the claw's impact)
+    pre_ = ([0xDD, 0x21] + w16(ENT + 3 * STRIDE) + [0xCD] + w16(S["kind_seq_ptr"]) + [0x11] + w16(S["KS_ATTACK"]) +
+            [0x19, 0x7E, 0x23, 0x66, 0x6F, 0xCD] + w16(S["start_seq"]))
+    got = anim_n(p, 2, pre_=pre_)
+    check("GF attack: garg_windup x2", got == [S["FID_garg_windup"]] * 2, got)
+    # a hit (RC_HURT reaction): hurt 3 ticks, then the fly cycle again
+    for rc, tag in ((S["RC_HURT"], "hit"), (S["RC_DEATH"], "death")):
+        w.clear()
+        w.put(3, KG, 20, gy, rcd=1 | AWAKE)
+        b = ENT + 3 * STRIDE
+        p.wb(b + EF["REACT"], rc)
+        p.wb(b + EF["REACTAT"], 0)
+        p.wb("TURN_PHASE", 1)
+        p.wb("TURN_TICK", 5)
+        got = anim_n(p, 5)
+        p.wb("TURN_PHASE", 0)
+        p.wb("TURN_TICK", 0)
+        H = S["FID_garg_hurt"]
+        if tag == "hit":
+            ok = got[:3] == [H] * 3 and got[3] in (F1, F2) and got[4] in (F1, F2)
+        else:
+            ok = got == [H] * 3 + [S["FID_garg_dead"]] * 2
+        check(f"GF {tag}: garg_hurt x3 then " + ("the fly cycle" if tag == "hit" else "garg_dead"), ok, got)
+    # sits back (RCD_AWAKE cleared, as lp re-perch): the statue for every tick
+    w.clear()
+    w.put(3, KG, 20, gy, rcd=1)
+    got = anim_n(p, 8)
+    check("GF re-perched: garg_perch on every tick", got == [S["FID_garg_perch"]] * 8, got)
+    p.wb("ANIM_FREEZE", 1)
 
 
 def GI_bank3(p, addr):

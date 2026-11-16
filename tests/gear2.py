@@ -249,8 +249,8 @@ def run(h, p, check):
           gp(1, M.HERO_WARRIOR) == [I("A_LEATHER"), I("H_HELM")] and
           gp(3, M.HERO_MAGE) == [I(n) for n in ("W_IRON", "A_ROBE", "H_HOOD", "C_MIGHT", "C_WARD", "C_FIRE",
                                                 "C_MANA")] + [I("C_PLENTY")], (gp(1, M.HERO_WARRIOR), gp(3, M.HERO_MAGE)))
-    check("G2-9 pool sizes Warrior D1 2 D2 6 D3 9 D4 10 D6 11; Mage D1 2 D2 6 D3 8 D4 9",
-          [len(gp(d, M.HERO_WARRIOR)) for d in (1, 2, 3, 4, 6)] == [2, 6, 9, 10, 11] and
+    check("G2-9 pool sizes Warrior D1 2 D2 6 D3 9 D4 10 D6 12 (the D5+ Frost Charm, NEW-MON3); Mage D1 2 D2 6 D3 8 D4 9",
+          [len(gp(d, M.HERO_WARRIOR)) for d in (1, 2, 3, 4, 6)] == [2, 6, 9, 10, 12] and
           [len(gp(d, M.HERO_MAGE)) for d in (1, 2, 3, 4)] == [2, 6, 8, 9])
 
     # ---- G2-10: the decode on every ISTATE value (a worn Long Sword; the page shows v) -----------

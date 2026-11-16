@@ -20,6 +20,8 @@ ARROWS_MAX      EQU 24
 ;     "YOU PICK UP n DAGGERS / ARROW(S)" when n > 0; an emptied entry ->
 ;     FL_EMPTY, a remainder stays (FL_QTY -= n) and prints "QUIVER FULL"
 ;     (also when n = 0) (ap_take);
+;   IT_KEY (KEY-POLISH, either hero): key_take (low RAM: the held bit, "YOU FIND A CYAN /
+;     MAGENTA KEY", the panel key cell), then pp_take (SFX_PICKUP); never refused;
 ;   every other type (3E-T11: potions incl. the legacy IT_POTION = Heal,
 ;     food, scrolls, book, bow, gear): pu_add (R6) -> BAG; taken ->
 ;     "YOU PICK UP <name>", the cell re-stamped; bag full -> it stays,
@@ -109,20 +111,26 @@ floor_pickup:
                 ld   a, b
                 call z, ap_take                ; A = 0 daggers / 1 arrows
                 jr   .nx
-.bag:           inc  l
+.bag:           cp   IT_KEY - IT_DAGGER
+                jr   z, .key
+                inc  l
                 ld   d, (hl)                   ; GEAR2: FL_QTY -> pu_add (DE passes through far6; the loop's
                 dec  l                         ; D / E come back from the stack below)
                 ld   a, (hl)
                 ld   hl, pu_add                ; R6: bag_add + the line; L = 1 taken
                 call far6                      ; / 0 refused (bag full)
                 dec  l
-                pop  hl
+.tk:            pop  hl
                 pop  de
                 push de
                 push hl                        ; HL = &FL_ITEM, D = w, E = the FL_ROOM byte
                 jr   nz, .full
                 call pp_take
                 jr   .nx
+.key:           ld   a, (CUR_ROOM)             ; KEY-POLISH: the floor key (lockl.asm key_take: the
+                call key_take                  ; held bit, the line, the panel), then taken like a
+                xor  a                         ; bag item (Z: pp_take = FL_EMPTY, SFX_PICKUP, re-stamp)
+                jr   .tk
 .full:          dec  l
                 ld   a, (hl)                   ; its col
                 inc  a
@@ -145,7 +153,7 @@ floor_pickup:
                 ASSERT FL_ROOM == 0 && FL_COL == 1 && FL_ITEM == 2 && FL_QTY == 3 && FL_S1 == $80
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == 128 && FL_STRIDE == 4   ; PERF-GHOST: the L-ended walks
                 ASSERT ((FL_EMPTY & (FL_ROOM_MASK | FL_S1)) & FL_ROOM_MASK) >= GRID_CELLS
-                ASSERT IT_ARROW == IT_DAGGER + 1 && K_KNIGHT == 0
+                ASSERT IT_ARROW == IT_DAGGER + 1 && K_KNIGHT == 0 && IT_KEY == IT_ARROW + 1
 
 ; pp_take — a bag item taken (pu_add): HL = its &FL_ITEM, E = the FL_ROOM
 ; byte. The entry -> FL_EMPTY, its POTIONS_TAKEN bit (entry index 0..7: "entry

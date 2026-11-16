@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""icons16.py — IC1: the 46 true 16x16 item icons -> raw DEFB table + review page.
+"""icons16.py — IC1: the 47 true 16x16 item icons -> raw DEFB table + review page.
 
 Source (the single source of truth, hand-authored, deterministic):
   assets/gfx/icons/<name>.grid   16 rows x 16 chars, '#' ink, '.' paper ('# ' lines = comments).
@@ -20,7 +20,7 @@ page cursor = paper blue); placeholders ink $05.
 
 Validation (exit 1 on any failure): every grid 16x16 of '#'/'.' only; the 1-px margin (row 0,
 row 15, col 0, col 15) is paper; no empty icon; the 44 bitmaps pairwise distinct; the index map
-matches src/item_defs.asm (type - IT_BAG_LO, IT_COUNT - IT_BAG_LO = 40 bag types; ammo 44/45);
+matches src/item_defs.asm (type - IT_BAG_LO, IT_COUNT - IT_BAG_LO = 40 bag types; ammo 44/45, the floor key 46);
 each ink is a
 legal non-black, non-blue ink on black paper and on blue cursor paper; attribute clash: every
 8x8 cell of every icon uses exactly that one ink + paper (true by construction: 1 bit, 1 attr);
@@ -50,8 +50,9 @@ PH_INK = 0x05                                # §8.11 Q5: placeholder ink, dim c
 CURSOR_PAPER = 1                             # §8.11 Q3: page cursor = paper blue
 N_BAG = 40                                   # bag types IT_BAG_LO..IT_COUNT-1 (NEW-MON3: + IT_C_FROST)
 PH_NAMES = ["ph_weapon", "ph_armour", "ph_helmet", "ph_charm"]   # index N_BAG + worn slot
-AMMO_NAMES = [("ammo_dagger", "IT_DAGGER"), ("ammo_arrow", "IT_ARROW")]  # index 44, 45 (FLOOR1)
-N_ICONS = N_BAG + len(PH_NAMES) + len(AMMO_NAMES)                  # 46 logical indices
+AMMO_NAMES = [("ammo_dagger", "IT_DAGGER"), ("ammo_arrow", "IT_ARROW"),   # index 44, 45 (FLOOR1)
+              ("floor_key", "IT_KEY")]                                    # 46 (KEY-POLISH: the floor key)
+N_ICONS = N_BAG + len(PH_NAMES) + len(AMMO_NAMES)                  # 47 logical indices
 # FLOOR1 (user 2026-10-27): the 3 potions share ONE shape (p_heal's), told apart by their ink
 # (it_tab: Heal $42 red, Mana $45 cyan, Cure $44 green); p_mana / p_cure keep their grids
 # (review page) but get no table entry: logical 6 / 7 -> physical 5 (icons6.asm ic_addr)
@@ -87,7 +88,7 @@ def zx_hex(c: int, bright: bool) -> str:
 
 # ------------------------------------------------------------------------------ model
 def index_map():
-    """[(idx, grid name, IT_ name or None, ink attr)] for idx 0..45, from item_defs + ITEM_INK."""
+    """[(idx, grid name, IT_ name or None, ink attr)] for idx 0..46, from item_defs + ITEM_INK."""
     lo, cnt = IM.D["IT_BAG_LO"], IM.D["IT_COUNT"]
     by_id = {v: k for k, v in IM.T.items() if k.startswith("IT_") and k not in
              ("IT_BAD", "IT_COUNT") and not k.endswith(("_LO", "_HI"))}
@@ -270,7 +271,7 @@ def emit_asm(model, packed) -> str:
          "; OR) into 2x2 byte-aligned cells.",
          "; Index = type - IT_BAG_LO (0..39); 40 + worn slot = empty-slot placeholders",
          "; (weapon, armour, helmet, charm); 44 / 45 = floor ammo (IT_DAGGER, IT_ARROW;",
-         "; counters, never in the bag). Raw: icons16 + index * 32 (reference only, below).",
+         "; counters, never in the bag); 46 = the floor key (IT_KEY, KEY-POLISH). Raw: icons16 + index * 32 (reference only, below).",
          "; Ink per icon = it_tab (src/lowram.asm; source tools/items_model.py ITEM_INK) with",
          "; paper black (cursor: paper blue); placeholders ink $05; ammo = ITEM_INK. Ink per icon",
          "; is listed below for reference only; the draw takes it from it_tab.",
@@ -279,7 +280,7 @@ def emit_asm(model, packed) -> str:
          "ICONS16_W       EQU %d" % W,
          "ICONS16_H       EQU %d" % H,
          "ICONS16_BYTES   EQU %d              ; per icon" % ICON_BYTES,
-         "ICONS16_COUNT   EQU %d              ; logical: 40 bag types + 4 placeholders + 2 ammo"
+         "ICONS16_COUNT   EQU %d              ; logical: 40 bag types + 4 placeholders + 2 ammo + the key"
          % N_ICONS,
          "ICONS16_PHYS    EQU %d              ; in this table: the 3 potions share one shape" % len(packed),
          "ICONS16_SHARE_LO EQU 6             ; logical 6 / 7 (Mana, Cure) -> physical 5 (Heal's shape)",
@@ -288,9 +289,10 @@ def emit_asm(model, packed) -> str:
          % (N_BAG),
          "ICONS16_AMMO_DAGGER EQU %d          ; floor ammo IT_DAGGER" % (N_BAG + len(PH_NAMES)),
          "ICONS16_AMMO_ARROW  EQU %d          ; floor ammo IT_ARROW" % (N_BAG + 1 + len(PH_NAMES)),
+         "ICONS16_KEY     EQU %d              ; KEY-POLISH: the floor key IT_KEY (fi_slot: IT_KEY -> 46)" % (N_BAG + 2 + len(PH_NAMES)),
          "ICONS16_INK_PH  EQU $%02X             ; placeholder ink (dim cyan)" % PH_INK,
          "ICONS16_PK_K    EQU %d              ; MEM-RECLAIM w2c: icpk_idx delta base (B per icon)" % PK_K,
-         "                ASSERT ICONS16_COUNT == 46 && ICONS16_AMMO_ARROW == ICONS16_COUNT - 1",
+         "                ASSERT ICONS16_COUNT == 47 && ICONS16_KEY == ICONS16_COUNT - 1 && ICONS16_AMMO_ARROW == ICONS16_KEY - 1",
          "                ASSERT ICONS16_PHYS == ICONS16_COUNT - ICONS16_SHARE_N",
          "",
          "; The RAW table: the reference the tests compare the screen against (tests/game_lib.py",
@@ -510,7 +512,7 @@ def main() -> int:
         pm, pp = physical(model, packed)
         if back != pp or [unpack(b) for b in back] != [bm[m[1]] for m in pm]:
             raise Fail("round-trip: emitted DEFB != grids")
-        if len(pp) * ICON_BYTES != (N_ICONS - len(SHARED)) * ICON_BYTES or N_ICONS != 46:
+        if len(pp) * ICON_BYTES != (N_ICONS - len(SHARED)) * ICON_BYTES or N_ICONS != 47:
             raise Fail("table size %d != %d" % (len(pp) * ICON_BYTES, (N_ICONS - len(SHARED)) * ICON_BYTES))
         inks = [m[3] for m in model if m[1] in ("p_heal",) + SHARED]
         if len(set(inks)) != len(inks):
