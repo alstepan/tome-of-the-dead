@@ -46,6 +46,9 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   K3 the goal line (row 20 cols 0-23, attr $45, its beat's text) sampled after every turn / hold, hidden (info attrs back) in
   the fight and after D1; K4 the nudge at off-task turns 6 / 18 (L75 + the goal, FLASH that turn only), none after;
   K5 B12's hold: no FLASH in row 20 cols 24-31, the ROW20 rect 24 wide
+  MORROW-SPEAK (tutorial_d0.md s15): S1 the balloon / log-ink sampler at every turn / hold of each full run (bal_check);
+  S2 both facings in front of him, PNGs build/morrow_speak_face_{left,right}.png; S3 static (balloon bytes, the lectern
+  copy); S4 room change / off-screen (scen_speak); C27 also il_go + the lectern ids restored
 
 Usage: ZRCP_PORT=10778 WZ_BUILD_DIR=<dir>/build python3 tests/tut0.py [--update-golden] [--only C3,C5]
 Output: one line per check, then `tut0: N failed of M: ids`.
@@ -179,11 +182,13 @@ class TP(Proto):
                     r = self.z.cmd("get-registers")
                     hl = int(re.search(r"HL=([0-9a-fA-F]{4})", r).group(1), 16)
                     self.LOG.append(dec(self.z.read_memory(hl, 40)))
+                    self.LOGM.append(hl == S["TV_BUF"])          # MORROW-SPEAK: tt_line pushes from TV_BUF only
                     continue
                 break
 
     def arm_log(self):
         self.LOG = []
+        self.LOGM = []
         self.extra_probes = {S["log_push"]}
         self.z.cmd("set-breakpoint 20 PC=%d" % S["log_push"])
 
@@ -581,6 +586,8 @@ class Run:
         self.grate, self.grate_post, self.exit_mark, self.used_heal, self.blocked = [], [], 0, False, []
         self.ptr_bad, self.ptr_seen, self.ptr_cells = [], set(), 0
         self.wake_mark = None
+        self.bal = dict(n=0, bad=[], side=set(), front=0, back=0, ink=0, room=None, nlog=0, hid=0, eng=0)
+        self.png, self.png_done = False, {}                      # MORROW-SPEAK: the facing PNGs (one run saves them)
         self.goal_seen, self.goal_bad, self.goal_n, self.hide_n, self.k5_bad = set(), [], 0, 0, []
         p.run = self
         self.note()
@@ -630,6 +637,7 @@ class Run:
     def note(self):
         self.ptr_check()
         self.goal_check()
+        bal_check(self)
         b = tv(self.p, "TV_BEAT")
         if not self.beats or self.beats[-1] != b:
             self.beats.append(b)
@@ -645,6 +653,137 @@ class Run:
             if blob_bytes(self.p) != BLOB_IMAGE:
                 self.blob_bad.append(tag)
             self.blob_n = getattr(self, "blob_n", 0) + 1
+
+
+# --- MORROW-SPEAK (tutorial_d0.md s15): his log ink + the speech balloon ------------------------------
+def _defb(path, n):
+    """The first n DEFB bytes of an asm file (8 per line), as a list of 8-B glyphs."""
+    out = []
+    for l in open(os.path.join(REPO, path)):
+        m = re.match(r"\s*DEFB\s+(\$[0-9A-Fa-f]{2}(?:\s*,\s*\$[0-9A-Fa-f]{2}){7})", l)
+        if m:
+            out.append(bytes(int(x.strip()[1:], 16) for x in m.group(1).split(",")))
+        if len(out) == n:
+            break
+    return out
+
+
+REV = bytes(int(f"{b:08b}"[::-1], 2) for b in range(256))
+BAL_R = _defb("assets/gfx/mentor/balloon.asm", 4)                # TL TR BL BR as drawn (his right side, tail lower left)
+BAL_L = [bytes(REV[b] for b in BAL_R[k ^ 1]) for k in range(4)]  # mirrored (his left side)
+BAL_ALL = set(BAL_R + BAL_L) - {bytes(8)}
+LECT = _defb("assets/gfx/tiles/tiles_common.asm", 32)[S["T_LECT_TL"]:S["T_LECT_TL"] + 4]   # ids 15..18 as boot loads them
+BAL_ID = range(S["T_LECT_TL"], S["T_LECT_TL"] + 4)
+MOR_INK, LOG_INK = 0x05, 0x07                                    # ink + paper (BRIGHT / FLASH masked: the hold pulse)
+
+
+def lect_ok(p):
+    """The borrowed ids are the lectern again (glyphs, attrs $43 $43 $06 $06, flags SOLID | ATTACK)."""
+    gl = [bytes(p.z.read_memory(S["TILE_GLYPHS"] + 8 * i, 8)) for i in BAL_ID]
+    at = list(p.z.read_memory(S["TILE_ATTRS"] + BAL_ID[0], 4))
+    fl = list(p.z.read_memory(S["tile_flags"] + BAL_ID[0], 4))
+    return gl == LECT and at == [S["ATTR_LECT_TOP"]] * 2 + [S["ATTR_LECT_FOOT"]] * 2 and fl == [S["TF_SOLID"] | S["TF_ATTACK"]] * 4
+
+
+def bal_png(p, name):
+    path = os.path.join(G.BUILD_DIR, name)
+    G.frame_png(p.frame(), path)
+    return path
+
+
+def bal_check(run):
+    """S1 sampler (every note: each turn, inside each hold after its drain). The balloon's ids are in ROOM_MAP
+    exactly at (TV_BCOL, TV_BROW) (none when 0); shown only with his line the newest (TV_BSAY); its 4 DISPLAYED cells ==
+    the glyphs of the side it is on (tail toward him: as drawn on his right, mirrored on his left) with attr $07 (no
+    clash) unless a body / flying number covers the cell; no balloon glyph anywhere else on the play area; once the log
+    is drained, row 23's ink = the newest line's owner (cyan $x5 his / white $x7), row 22's the one before; after an
+    engine line or a room change (no line of his since) nothing is shown. The screen lags a change by <= 2 ticks (a
+    hide's restore lands at the next render, a line / placement at the next present): a sample with a display problem is
+    taken again 3 ticks later (no input) and only a persisting one counts."""
+    p, B = run.p, run.bal
+    if p.mturn or p.rb("GAME_STATE") != GS_PLAYING or w2(p, S["pl_et"] + 1) != S["ts_turn"] or page_is_open(p) or p.LOGM is None:
+        return
+    bad, st_ = _bal_eval(run)
+    if bad:
+        p.tick(3)
+        if p.rb("GAME_STATE") != GS_PLAYING or page_is_open(p):
+            return
+        bad, st_ = _bal_eval(run)
+    B["bad"] += bad
+    for k in ("n", "front", "back", "ink", "hid", "eng"):
+        B[k] += st_[k]
+    B["side"] |= st_["side"]
+    if st_["png"] and run.png and st_["png"] not in run.png_done:
+        run.png_done[st_["png"]] = bal_png(p, f"morrow_speak_{st_['png']}.png")
+    B["room"], B["nlog"] = p.rb("CUR_ROOM"), len(p.LOGM)
+
+
+def _bal_eval(run):
+    p, B = run.p, run.bal
+    bad, st_ = [], dict(n=0, front=0, back=0, ink=0, hid=0, eng=0, side=set(), png=None)
+    fr = p.frame()
+    mp = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * G.PLAY_ROWS))
+    col, row, say, b, room = tv(p, "TV_BCOL"), tv(p, "TV_BROW"), tv(p, "TV_BSAY"), tv(p, "TV_BEAT"), p.rb("CUR_ROOM")
+    want = {} if not col else {32 * (row + k // 2) + col + k % 2: BAL_ID[k] for k in range(4)}
+    got = {i: t for i, t in enumerate(mp) if t in BAL_ID}
+    if got != want:
+        bad.append(("map", b, room, col, row, got))
+    covered = set(p.dn_cells())
+    for s_ in range(S["P_MAX_ENT"]):
+        e = p.ent(s_)
+        if e["FLAGS"] & G.EF_ACTIVE:
+            covered |= {(c, r) for c in range(e["X"] - 1, e["X"] + 5) for r in range(e["Y"], e["Y"] + 6)}
+    rect = set()
+    if col:
+        st_["n"] = 1
+        rect = {(col + k % 2, row + k // 2) for k in range(4)}
+        box = mentor_box(p)
+        if not say:
+            bad.append(("shown without his line", b, room))
+        if box is None:
+            bad.append(("shown without him", b, room))
+        else:
+            left = col < box[0]
+            face_left = bool(tv(p, "TV_IMG") & 1)
+            st_["side"].add("L" if left else "R")
+            front = left == face_left
+            st_["front" if front else "back"] = 1
+            exp = BAL_L if left else BAL_R
+            for k in range(4):
+                c, r = col + k % 2, row + k // 2
+                if (c, r) in covered:
+                    continue
+                if G.cell_bytes(fr, c, r) != exp[k] or G.attr_at(fr, c, r) != 0x07:
+                    bad.append(("cell", b, room, (c, r), G.cell_bytes(fr, c, r).hex(), hex(G.attr_at(fr, c, r))))
+                    break
+            if front and not (rect & covered) and p.rb("LOG_QN") == 0:
+                st_["png"] = "face_left" if face_left else "face_right"
+    stale = [(c, r) for r in range(G.PLAY_ROWS) for c in range(32)
+             if (c, r) not in rect and (c, r) not in covered and G.cell_bytes(fr, c, r) in BAL_ALL]
+    if stale:
+        bad.append(("stale glyph", b, room, stale[:3]))
+    if p.rb("LOG_QN") == 0 and not p.rb("PANEL_DIRTY") & S["PD_LOG"] and len(p.LOGM) >= 2:
+        a23, a22 = G.attr_at(fr, 0, 23) & 0x3F, G.attr_at(fr, 0, 22) & 0x3F
+        e23, e22 = MOR_INK if p.LOGM[-1] else LOG_INK, MOR_INK if p.LOGM[-2] else LOG_INK
+        st_["ink"] = 1
+        if (a23, a22) != (e23, e22):
+            bad.append(("log ink", b, p.LOG[-2:], hex(a22), hex(a23)))
+        st_["eng"] = int(not p.LOGM[-1])
+        if not p.LOGM[-1] and (say or col):
+            bad.append(("kept after an engine line", b, p.LOG[-1]))
+    if B["room"] is not None and room != B["room"] and not any(p.LOGM[B["nlog"]:]):
+        st_["hid"] = 1
+        if say or col:
+            bad.append(("kept over a room change", b, room))
+    return bad, st_
+
+
+def bal_report(run, tag):
+    B = run.bal
+    check("S1", f"{tag}: balloon invariants at every sample ({B['n']} shown: sides {sorted(B['side'])}, {B['front']} in front of "
+          f"him / {B['back']} behind; {B['ink']} log-ink samples, {B['eng']} with an engine line newest, {B['hid']} room changes): ids only at TV_BCOL, his line newest, "
+          "displayed glyphs of its side + attr $07 (no clash), no stale glyph, log rows 22/23 in the owner's ink, hidden after an "
+          "engine line / a room change", not B["bad"] and B["n"] > 0 and B["ink"] > 0, B["bad"][:4])
 
 
 def storey(p):
@@ -993,6 +1132,7 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     p.page_via = via
     p.scroll_via = "bag" if (hero == 1 and scheme == "keys") else "icon"    # R2 C21: run B = the bag page
     run = Run(p)
+    run.png = final                                              # MORROW-SPEAK: the Warrior run saves the facing PNGs
     tag = f"{name} run"
     check("C10", f"{tag}: blob bytes == the image at the D0 start", blob_bytes(p) == BLOB_IMAGE)
     p.tick(3)
@@ -1085,6 +1225,10 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
         check("C6", "completed D0 -> D1 -> game over -> menu START: straight to D1, the tutorial is not offered again",
               ok and ok2 and not shows_choice and w2(p, S["pl_et"] + 1) == S["end_turn"] and p.rb("LVL_DEPTH") == 1,
               (ok, ok2, shows_choice, hex(w2(p, S["pl_et"] + 1))))
+    bal_report(run, tag)
+    if final:
+        check("S2", f"{tag}: Morrow speaking, both facings, balloon in front of him, saved: {sorted(run.png_done.values())}",
+              set(run.png_done) == {"face_left", "face_right"}, sorted(run.png_done))
     if scheme == "kemp":
         check("C11", f"{tag}: Kempston only (JOY_MODE 1, no key down at any time): bag READ, quick FOOD / SCROLL / POTION, the "
               "fight and the grate all completed; every hold dismissed by the stick's FIRE", p.rb("JOY_MODE") == 1 and p.dismissed >= 8
@@ -1098,6 +1242,52 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     print(f"[time] {name} run {time.monotonic() - t0:.0f}s, {len(p.LOG)} log lines, {p.dismissed} holds dismissed", flush=True)
     return p
 
+
+
+def scen_speak(h):
+    """S4 (MORROW-SPEAK): the balloon over a room change and off-screen. The short route to room B (his B7 lines:
+    the balloon shown beside him at B1), then back up the shaft into A (no line of his: hidden at once, ids out of the
+    map, no glyph on screen; he is in B, so nothing while the hero waits in A), then down into B again (still nothing
+    until he speaks). The S1 sampler runs at every turn."""
+    p = start(h, 0)
+    run = Run(p)
+    settle_holds(p)
+    to_floor(p, 0)
+    leg(p, run, 12)
+    to_floor(p, 1)
+    leg(p, run, 5)
+    inb = to_floor(p, 1, room=4)
+    to_floor(p, 0)
+    shown = [tv(p, "TV_BCOL")]
+    for _ in range(3):
+        if shown[-1]:
+            break
+        T(p, "WAIT")                                             # the Repeat near him re-shows his group
+        shown.append(tv(p, "TV_BCOL"))
+    fr_b = bal_png(p, "morrow_speak_room_b.png")
+    up = False
+    for _ in range(20):
+        if p.rb("CUR_ROOM") == 1:
+            up = True
+            break
+        T(p, "K")
+    p.tick(3)
+    mp = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * G.PLAY_ROWS))
+    fr = p.frame()
+    glyph = [(c, r) for r in range(G.PLAY_ROWS) for c in range(32) if G.cell_bytes(fr, c, r) in BAL_ALL]
+    st_a = (tv(p, "TV_BSAY"), tv(p, "TV_BCOL"), [t for t in mp if t in BAL_ID], glyph)
+    waits = []
+    for _ in range(3):
+        T(p, "WAIT")
+        waits.append(tv(p, "TV_BCOL"))
+    down_ok = to_floor(p, 1, room=4)
+    st_b = (tv(p, "TV_BSAY"), tv(p, "TV_BCOL"), p.LOGM[-1] if p.LOGM else None)
+    check("S4", "the balloon beside him in room B with his line newest; up the shaft into A: hidden at once (TV_BSAY 0, "
+          "TV_BCOL 0, no balloon id in the map, no balloon glyph on screen), none while waiting in A (he is in B); back in B: "
+          "none until he speaks again",
+          inb and any(shown) and up and st_a == (0, 0, [], []) and not any(waits) and down_ok
+          and (st_b[1] == 0 or st_b[2]), (inb, shown, up, st_a, waits, down_ok, st_b, fr_b))
+    bal_report(run, "S4 route")
 
 def menu_kempston(p):
     """The menu's CONTROLS item (key 3) cycles KEYS -> KEMPSTON."""
@@ -1439,6 +1629,14 @@ def scen_static():
     check("C16", f"L05 decodes to '{l05}' from the blob image; no tutorial string names ALDOUS / SEXTON; the choice line is "
           f"'{ss[S['TS_CHOICE3']]}'", l05 == "I AM BROTHER MORROW, LONG DEAD" and not bad
           and ss[S["TS_CHOICE3"]] == "BROTHER MORROW WILL TEACH YOU", (l05, bad))
+    bl = BLOB_IMAGE[S["bal_lect"] - S["BLOB_ORG"]:][:32]
+    bi = BLOB_IMAGE[S["balloon"] - S["BLOB_ORG"]:][:32]
+    grid = [l.rstrip("\n") for l in open(os.path.join(REPO, "assets/gfx/mentor/balloon.grid")) if l.startswith("#   ")]
+    gb = [bytes(int(grid[8 * (k // 2) + y][4 + 8 * (k % 2):12 + 8 * (k % 2)].replace("#", "1").replace(".", "0"), 2)
+                for y in range(8)) for k in range(4)] if len(grid) == 16 else None
+    check("S3", "MORROW-SPEAK static: the blob's lectern copy (bal_lect) == tiles_common ids 15..18; the blob's balloon == "
+          "balloon.asm == the approved 16x16 picture in balloon.grid", bl == b"".join(LECT) and bi == b"".join(BAL_R)
+          and gb == BAL_R, (bl.hex(), bi.hex(), gb))
     free = S["BLOB_RES"] - S["BLOB_LEN"]
     check("C28", f"blob BLOB_LEN <= BLOB_RES with >= 8 B free ({free}; C+TUT0: BLOB_ORG $E1B4 moved up into the old 444 B reserve, "
           f"user decision; the in-place delta no longer binds); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
@@ -1446,7 +1644,8 @@ def scen_static():
 
 
 def hooks_off(p):
-    return w2(p, S["pi_ic"] + 1) == S["intent_icon7"] and w2(p, S["pl_et"] + 1) == S["end_turn"]
+    return (w2(p, S["pi_ic"] + 1) == S["intent_icon7"] and w2(p, S["pl_et"] + 1) == S["end_turn"]
+            and w2(p, S["il_go"] + 1) == S["item_log0"] and p.rb(S["il_go"] + 4) == S["BANK_TEXT"] and lect_ok(p))
 
 
 def scen_tour(h, hero, scheme="keys"):
@@ -1788,6 +1987,7 @@ def main():
         scen_tour(h, 0, scheme="kemp")
         scen_left(h)
         scen_keys(h)
+        scen_speak(h)
     fails = sorted({c for c, ok, _ in CHECKS if not ok})
     nbad = sum(1 for c in CHECKS if not c[1])
     print(f"tut0: {nbad} failed of {len(CHECKS)}" + (f": {fails}" if fails else "") + f"  ({time.monotonic() - t0:.0f}s)", flush=True)

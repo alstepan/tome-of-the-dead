@@ -1,0 +1,62 @@
+# Tome of the Dead — MORROW-SPEAK speech balloon (user 2026-11-16, option D, approved on the
+# Design canvas board TUT1). 16x16, 1 bit, no mask, white on black; shown above Brother Morrow
+# while his line is the newest log line. Drawn as he faces RIGHT (tail lower-left, toward him);
+# mirrored at stamp time when he faces left (tut_turn.asm tt_bshow). Packed by tools/gfx_convert.py
+# --mode tile into balloon.asm (4 tiles: TL, TR, BL, BR). The whole picture:
+#
+#   ................
+#   ...##########...
+#   ..############..
+#   .##############.
+#   .##############.
+#   .###..#..#..###.
+#   .###..#..#..###.
+#   .##############.
+#   .##############.
+#   ..############..
+#   ...###.#######..
+#   ....#.#.........
+#   ....##..........
+#   ....#...........
+#   ................
+#   ................
+#
+=== bal_tl ink:white paper:black
+........
+...#####
+..######
+.#######
+.#######
+.###..#.
+.###..#.
+.#######
+
+=== bal_tr ink:white paper:black
+........
+#####...
+######..
+#######.
+#######.
+.#..###.
+.#..###.
+#######.
+
+=== bal_bl ink:white paper:black
+.#######
+..######
+...###.#
+....#.#.
+....##..
+....#...
+........
+........
+
+=== bal_br ink:white paper:black
+#######.
+######..
+######..
+........
+........
+........
+........
+........

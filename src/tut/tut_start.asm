@@ -40,11 +40,9 @@ TD_A_NAME       EQU $46
 ; Out (START only): C = hero.  Clobbers: all.
 ;------------------------------------------------------------------------------
 blob_choice:
-                ld   hl, end_turn
-                ld   (pl_et + 1), hl           ; SMC target (main.asm play_loop): undo FIRST
-                ld   hl, intent_icon7
-                ld   (pi_ic + 1), hl           ; SMC target (io.asm intent_tick, TUT0-R2): undo FIRST
                 push af                        ; the hero
+                call tt_unhook                 ; pl_et, pi_ic (TUT0-R2), il_go + the lectern ids
+                                               ; (MORROW-SPEAK) back FIRST
                 xor  a
                 call clear_screen              ; bank 5, shown (enter_select's show_bank5)
                 call tsp_install
@@ -314,6 +312,7 @@ tut_d0:
                 ld   (pl_et + 1), hl           ; SMC target: end_turn -> the turn stub
                 ld   hl, ts_icon
                 ld   (pi_ic + 1), hl           ; SMC target: intent_icon7 -> the icon stub (R2)
+                call tt_hook                   ; MORROW-SPEAK: item_log -> blob_log
                 call play_go
                 ld   sp, WORKSTORE_TOP
                 ld   hl, play_loop
