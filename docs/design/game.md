@@ -32,8 +32,8 @@
 
 | Item | Decision | Why |
 |---|---|---|
-| Levels | **8** (D1–D8), each freshly generated, one way down | user wants it longer: ~65 rooms, **~60–65 min**; one level resident at a time |
-| Level | **3×3 grid of room cells, 7–9 rooms** | ~1 KB of level state (budget §6) |
+| Levels | **8** (D1–D8), each freshly generated, one way down | user wants it longer: ~89 rooms, **~82–89 min** (LARGER-D, 2026-11-16; was ~65 rooms, 60–65 min); one level resident at a time |
+| Level | **3×4 grid of room cells (3 wide × 4 tall), 10–12 rooms** (LARGER-D, `docs/design/larger_depths.md`; was 3×3, 7–9) | 12 room slots of level state (budget §6, memory-map LARGER-D T2) |
 | Room | one screen, **2 storeys of 9 rows** (8 air + 1 floor) + 6-row panel (§2.1) | user decision; 2 jump rows |
 | Going back up | **no**; the arrival shaft top is rubble | the previous level is discarded with its pool |
 | Save | **none; permadeath**. Death → death screen (`KILLED BY … ON D5, TURN n`) → main menu | user |
@@ -46,14 +46,15 @@
 
 | Step | Rule |
 |---|---|
-| Tree | random DFS spanning tree over the 3×3 cells from a random start, 7–9 rooms, + 0–1 extra edge (a loop). Leaves = **dead-end rooms** |
+| Tree | random DFS spanning tree over the **3×4** cells (LARGER-D; ids 0–11) from a random start, **10–12 rooms** (D8 10–11 + the Sanctum), + 0–1 extra edge (a loop). Leaves = **dead-end rooms**. Rev 3: the DFS may branch back to `stack[2]` (`BRANCH_ODDS` 4, pass 2: 2) |
 | Edges | horizontal: open edge on storey `s ∈ {0,1}`; **1 in 3 carry a door** (§2.3). Vertical: up-exit `{c,0}` below + down-exit hole `{c,2}` above, same `c` |
 | Start | the DFS root, **on the top grid row (L1, 2026-10-05)**, 0 monsters. D2–D8: arrival shaft from above, rubble-capped |
 | Lair | **on the bottom grid row (L1, 2026-10-05; tiers in the L1 rules row)**, the farthest leaf (BFS) with a horizontal tree edge: boss + **level exit** = down-shaft `{c,2}` under a **GRATE** that opens when the boss dies. **The grate is SHUT (`T_GRATE_SHUT`, solid) while the boss lives; this is the rule (BOSS-GUARD 2026-10-29; the §1.4 "always open" row was the 3B stand-in only).** The boss is posted on the grate and guards it (§9.2 "Boss guard") |
-| Key room | the farthest other leaf (else the farthest non-start room): holds the **level key** (rev 2026-10-20: found on first entry, no floor item, §8.11 Q1). The lair edge is a **locked door** |
+| Key room | **SUPERSEDED by LARGER-D level keys (rev 3, as built T3b/T4/T8, 2026-11-16; `larger_depths.md` §2.1):** 1 lock on D1–D3, up to 2 on D4–D8 when `n ≥ 11`; each lock is a horizontal tree **bridge** of the room graph with a **coloured key** (colour 0 cyan `$45`, colour 1 magenta `$43`) in a room of its own start side (dead end preferred, never start/lair/Sanctum), chosen by route coverage `F ≥ n − 4` (`LVL_KEYROOM`, `LVL_KEYROOM2`). The key is found on **first entry** into its key room (no floor item, §8.11 Q1; `YOU FIND A CYAN KEY` / `YOU FIND A MAGENTA KEY`). A locked door is a wall to every monster; bump without the key = 0 turns `THE DOOR IS LOCKED`; with it 1 turn `YOU UNLOCK THE DOOR`, key used, the door stays unlocked for the level; from its far side the door opens with no key (bolt). Plate: the one `T_DOOR_LOCK` cell is drawn `$45` / `$43` on both sides of the door. Panel (30, 19): key glyph `$45` / `$43`, both held `$EB` (FLASH); the bag shows `CYAN KEY` / `MAGENTA KEY`. The old rule (farthest leaf, lock always on the lair door) is history |
 | D8 Sanctum | an extra leaf off the lair behind a **sealed door** (opens on the Archmage's death); holds the Tome. **D8 keeps its exit** (WIN2, user 2026-11-01): the lair's grate over the down-shaft stays shut through the Archmage's death and opens only when the Tome is destroyed; leaving through it = `GS_WIN` |
-| **Level shape (L1, user 2026-10-05)** | The level exit (lair) is **always on the bottom grid row** (ids 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
-| L1 rules (designer decision 2026-10-05) | Grid id `r = 3·row + col`, row 0 = top. **(1) Start = top row:** `start = rnd(3)` (replaces `rnd(9)`), so nothing can be above it; the start room has no up-exit; its row-0 horizontal neighbours are allowed (they are beside it, not above). Arrival shaft D2+ unchanged (storey 0 of the start room, rubble-capped). **(2) Room count:** `n = 7 + rnd(3)`; **D8: `n = min(7 + rnd(3), 8)`** (the Sanctum cell is reserved, see (5)). **(3) DFS growth:** the random DFS from `start` runs `while stack and not done`, where `done` = `|visited| ≥ n` **and** two horizontally adjacent bottom-row cells (6–7 or 7–8) are visited. A full DFS reaches all 9 cells, so `done` is always reachable; the room count stays 7–9. **(4) Bottom-row horizontal edge:** after the tree, if no tree edge joins two bottom-row rooms, the loop edge becomes **mandatory** and is drawn with `rnd(len)` from the unlinked present bottom-row pairs (the `LOOP_EDGE_ODDS` roll is skipped); otherwise the loop step is unchanged. Still 0–1 extra edges. **(5) D8 Sanctum:** before the DFS, reserve `S = 6 + 2·rnd(2)` (bottom-row end cell); the DFS never enters `S`; `done` additionally needs cell 7 and the other bottom end visited. The lair is then always cell 7 (the only bottom room next to the free `S`); the Sanctum hangs off its free side behind the sealed door. **(6) Lair tiers (replace F6 gap (1) tiers):** (a) farthest (BFS) **bottom-row** non-start leaf with a horizontal edge; (b) farthest bottom-row room with a horizontal edge (a through-room lair is fine; the boss never follows); ties = lowest id; D8 also needs `sanctum_ok`. (3)+(4) guarantee tier (b) exists, so **lair reseeds must be 0**; the reseed path (seed+1, ≤ 16) stays as a safety net only. Levelcheck asserts over the seed sweep: start on row 0 (so no room above it), lair on row 2, room count 7–9, lair has a horizontal edge, D8 lair = 7 with `S` free, lair-reseed count = 0; the junior reports Restart counts (feature/potion) before vs after. **(7) Lair door:** the lair's horizontal edge toward its BFS parent if horizontal, else its lowest-id horizontal edge, is the lair door (key gating only matters from 3F; the grate gates the exit). **(8)** Key room, vertical links, edges, door odds, shaft cols: unchanged |
+| **Level shape (L1, user 2026-10-05; LARGER-D: bottom row ids 9–11)** | The level exit (lair) is **always on the bottom grid row** (ids 9–11; was 6–8), and **no room is above the entry room**: the hero always heads down into the dungeon |
+| **L1 rules, LARGER-D 3×4 (as built T2/T4, 2026-11-16; `larger_depths.md` §2 + §2.1 rev 3)** | Grid `GRID_W` 3 × `GRID_H` 4, `r = 3·row + col`, ids 0–11, bottom row **9–11**. **(1)** `start = rnd(3)`, unchanged. **(2)** `n = 10 + rnd(3)`; **D8 `n = min(10 + rnd(3), 11)`**. **(3)** DFS `done` = `|visited| ≥ n` and a bottom pair (9–10 or 10–11) visited, with the rev-3 branch draw `b = rnd(BRANCH_ODDS)` at `len(stack) ≥ 4` (Warnsdorff dropped). **(4)** mandatory bottom loop over pairs (9,10)/(10,11). **(5)** D8 Sanctum `S = 9 + 2·rnd(2)`, lair **10**, `LVL_NROOMS` 11–12; the optional loop (5c) may not cross a lock. **(6)** lair tiers on the bottom row (3), reseeds 0. **(7)** lair door: an ordinary door unless the lock selection locks it (§1.1 Key room row). L2 caps: **≤ 3** mid-blocks and **≤ 3** wide pits per level. Levelcheck (all 65,536 seeds × D1–D8): start row 0, lair row 3, `n` 10–12, K6 no softlock, K1 every lock needed, keyless 0. The row below is the 3×3 history |
+| L1 rules, 3×3 history (designer decision 2026-10-05; superseded by the row above) | Grid id `r = 3·row + col`, row 0 = top. **(1) Start = top row:** `start = rnd(3)` (replaces `rnd(9)`), so nothing can be above it; the start room has no up-exit; its row-0 horizontal neighbours are allowed (they are beside it, not above). Arrival shaft D2+ unchanged (storey 0 of the start room, rubble-capped). **(2) Room count:** `n = 7 + rnd(3)`; **D8: `n = min(7 + rnd(3), 8)`** (the Sanctum cell is reserved, see (5)). **(3) DFS growth:** the random DFS from `start` runs `while stack and not done`, where `done` = `|visited| ≥ n` **and** two horizontally adjacent bottom-row cells (6–7 or 7–8) are visited. A full DFS reaches all 9 cells, so `done` is always reachable; the room count stays 7–9. **(4) Bottom-row horizontal edge:** after the tree, if no tree edge joins two bottom-row rooms, the loop edge becomes **mandatory** and is drawn with `rnd(len)` from the unlinked present bottom-row pairs (the `LOOP_EDGE_ODDS` roll is skipped); otherwise the loop step is unchanged. Still 0–1 extra edges. **(5) D8 Sanctum:** before the DFS, reserve `S = 6 + 2·rnd(2)` (bottom-row end cell); the DFS never enters `S`; `done` additionally needs cell 7 and the other bottom end visited. The lair is then always cell 7 (the only bottom room next to the free `S`); the Sanctum hangs off its free side behind the sealed door. **(6) Lair tiers (replace F6 gap (1) tiers):** (a) farthest (BFS) **bottom-row** non-start leaf with a horizontal edge; (b) farthest bottom-row room with a horizontal edge (a through-room lair is fine; the boss never follows); ties = lowest id; D8 also needs `sanctum_ok`. (3)+(4) guarantee tier (b) exists, so **lair reseeds must be 0**; the reseed path (seed+1, ≤ 16) stays as a safety net only. Levelcheck asserts over the seed sweep: start on row 0 (so no room above it), lair on row 2, room count 7–9, lair has a horizontal edge, D8 lair = 7 with `S` free, lair-reseed count = 0; the junior reports Restart counts (feature/potion) before vs after. **(7) Lair door:** the lair's horizontal edge toward its BFS parent if horizontal, else its lowest-id horizontal edge, is the lair door (key gating only matters from 3F; the grate gates the exit). **(8)** Key room, vertical links, edges, door odds, shaft cols: unchanged |
 | In-room | 1–2 internal ladders `{c,1}`, `c ∈ 3..26`, ≥ 4 cols from ladders/pits · optional **pit** (3 cols, storey-0 floor, ≥ 3 clear cols on each side) · optional **dead-end block** (2–3 wall cols at an exitless edge, rubble at its foot) · decor **re-derived from the room seed** (never stored; rules in concept-screen §3.3) |
 | Ladder/pit placement (designer decision 2026-10-03) | **Internal ladders are in addition to the exit shafts** (up-exit `{c,0}`, down-exit `{c,2}`, the D2+ arrival shaft). **A shaft col is never an internal-ladder col** (no continuous 2-segment ladders: keeps one ladder segment per col and no "stand over a hole with ladders both ways" state). Every ladder, shaft and pit is a **3-col footprint `c … c+2`, `c` = its left col** (pit: the 3 hole cols; caps at `c−1`/`c+3` are floor). Two footprints that touch the same storey (storey 0: up-exit, internal-ladder hole in row 8, pit; storey 1: internal ladder, down-exit hole in row 17) keep **≥ 4 clear cols between them: `|c1 − c2| ≥ 7`**. Placement order: exits → 1st internal ladder → pit → 2nd internal ladder → dead-end block; an optional feature that finds no legal `c` in 8 seeded tries is dropped (deterministic) |
 | Pit geometry (designer decision 2026-10-03) | **(1) Pit col `p ∈ 5..24`** (same range as shaft cols). Why: jump take-off/landing bodies are fully on floor, so a crossing is `x = p−3 → p+3` (or back); both `x` must lie in 2..27 (col 1/28 door-arch cells excluded from the swept box), giving `p−3 ≥ 2` and `p+3 ≤ 27`. Pits at `p<5` or `p>24` are illegal. **(2) Storey-0 clear zones:** cols `p−4 … p−1` and `p+3 … p+6` hold no ladder/shaft/hole footprint and no block (this is exactly what `\|c1−c2\| ≥ 7` already guarantees against footprints; the generator additionally checks blocks). **(3) Dead-end block + pit in one room:** allowed only if the block's inner face keeps the jump zone clear: left block of width `w` (2–3) needs `p ≥ w+4`; right block needs `p ≤ 25−w`; else the block is dropped (it is placed last). **(4) Storey-1 landing:** a fall lands body `p … p+2` on storey 1, which must be plain solid floor with ≥ 1 clear col each side: every storey-1 footprint (internal ladder, down-exit hole, arrival shaft if on storey 1) has `\|c−p\| ≥ 7`, and any storey-1 block keeps ≥ 1 clear col from `p … p+2` (same formulas as (3)). **(5) Reachability:** with (1)–(4) the pit is always jumpable both ways AND the fall lands on walkable storey-1 floor, which spans the room to a ladder, so the hero is never cut off. Levelcheck must model the jump as exactly `p−3 ↔ p+3` and fail otherwise |
@@ -64,7 +65,7 @@
 | Shaft cols (designer decision 2026-10-03) | Exit shafts (up-exit, down-exit, arrival, level exit) use left col **`c ∈ 5..24`** (footprint cols 5..26), a subset of the internal-ladder range 3..26. Why: door cells occupy cols 0–1 / 30–31, and a hero arriving through a horizontal exit stands at x = 1 (cols 1..3) or x = 28 (cols 28..30); `c ≥ 5` / `c+2 ≤ 26` leaves ≥ 1 solid-floor col (4 / 27) so arrival never overlaps a hole. The ≥ 4-clear-cols (`\|c1−c2\| ≥ 7`) rule applies unchanged between shafts and internal ladders/pits on the same storey |
 | Generator gaps (designer decision 2026-10-03) | **(1) Lair tiers** (superseded by the L1 rules row, 2026-10-05: both tiers are restricted to the bottom row; the D8 Sanctum cell is reserved up front)**:** (a) farthest non-start leaf with a horizontal edge; else (b) farthest non-start room with a horizontal edge (it keeps its other exits; the boss never follows, so a through-room lair is fine; on D8 the Sanctum leaf needs a free horizontal neighbour cell, else tier fails); there is **no tier (c)**: if neither exists, the generator **reseeds** (seed+1, ≤ 16 tries). The lair edge must be horizontal so the lair has its door. Key room (§1.4: unused in 3B) follows the same fallback. **(2) Potions: minimum 2** per level (≥ 1 Heal); up to 32 seeded placement tries each for the first two, the 3rd is optional and dropped after 8 tries. **(3) Dead-end block:** only in rooms that are **not start, lair or Sanctum**, and only at an edge with no exit. **(4) Start:** hero begins in the DFS-root room on **storey 0** (top); D1 x = col 14, D2+ x = arrival-shaft `c+1`; if x falls on a pit/ladder/shaft footprint, move to the nearest solid-floor col with ≥ 1 clear col. **Designer clarification 2026-10-03:** the arrival shaft is a storey-0 feature (it descends from above into the start room's storey 0, rubble-capped overhead), so the hero arrives on **storey 0, standing on solid floor at x = `c+1`, not mid-climb** (option a). The footprint-move rule **does not apply to the arrival shaft itself**; it applies only to the *other* footprints (pit, internal ladder, up/down-exit), and since placement already keeps those ≥ 4 clear cols (`\|c1−c2\| ≥ 7`) from the arrival shaft, in practice the move rule can only trigger on D1 (x = 14). **(5) 3B level block** needs nothing beyond the descriptors, floor-item list and hero start; population is the fixed per-room stand-in table keyed by room id and depth, not stored |
 | Traps (3E) | placed **last**, after the floor items, so every earlier generator output stays byte-identical to B3B-7 (Python == Z80). Rules §1.5. **Rev 2026-10-20:** 3E items and traps run on the separate `ITEM_RNG` after the whole `GEN_RNG` pass (§8.11 Q8) |
-| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 6 × 2 B, §1.5)**, the **population budget + 9 room records (~100 B, §9.4.1–9.4.2, user 2026-10-06)**; the 16 entity slots hold only the current room. Population §9.4, items §8.5 |
+| Stored per level | room descriptors (exits, ladders, pits, blocks, door/grate bits), the floor-item list, the **trap list (≤ 8 × 2 B, §1.5; was 6)**, the **population budget + 12 room records (§9.4.1–9.4.2; was 9)**; the 16 entity slots hold only the current room. Population §9.4, items §8.5 |
 
 **TUT0 (2026-11-09):** D0 is **hand-made** (`tools/tut0_level.py` emits a fixed level block), not generated: it is exempt from the generator / levelcheck seed sweep, but its rooms keep the geometry rules of §2.1. **Deviation (staff):** room C is grid cell 5, a middle-row cell, so the level exit is not on the bottom row. The blob takes the grate step from C (try_climb's open-grate step into cell 8, `EX_DOWN`) as the D0 exit; the sandbox reset runs there, not in `level_descend`.
 
@@ -174,7 +175,7 @@ attrs (`lect_norm`, tail of `level_patch7w`), so a new game / a new D8 starts wi
 | Floor items | **potions only** | §8.5 |
 | Population | a **fixed per-room table** using today's (prototype) kinds | §9.4 **lazy population** (user 2026-10-06; plan task LP): budget + per-room records, spawned on room entry (§9.4.1–9.4.3) |
 | Lair | **SUPERSEDED in 3F (BOSS-GUARD 2026-10-29): shut until the boss dies, §1.1 / §9.2 "Boss guard".** 3B stand-in was: the **grate is always open** (boss death not required), but drawn as the distinct raised-portcullis frame (id 26, ink `$46`, concept-screen §3.3 B3B-8 #4) with a first-entry hint `A GATE GLEAMS. THE WAY DOWN.` (designer decision 2026-10-04, B12); ordinary down-exit holes stay plain | §1.1, §8.6 |
-| Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03) | §1.1 |
+| Key / locked door | no key exists (potions only), so the lair door is an **ordinary unlocked door** (designer decision 2026-10-03). **SUPERSEDED by LARGER-D level keys** (T8, 2026-11-16) | §1.1 Key room row |
 | D8 | D8 gets a lair exit like D1–D7; **descending from D8 = `GS_WIN`** (F3_GEN 0: the Archmage's death opens it) | §1.3 (WIN2: the Tome's destruction opens it, descending = `GS_WIN`) |
 | Close door | keyboard key **`C`** (1 turn, §2.3 legality; not redefinable, not on joystick) until the 3C icon bar adds FIRE on the melee icon (designer decision 2026-10-03: the key) | §3.1 |
 | Start kit (3D, D3-7 debug; designer decision 2026-10-12) | Behind a debug build flag only, never in a release tape. **Mage:** all 5 spells rank 1, MP 40/40. **Warrior:** Power Strike + Whirlwind rank 1, bow in the bag, **ARROWS 20, DAGGERS 8**, MP 20/20. The near-cap ammo lets the D1 floor stacks trigger `QUIVER FULL.` 3E additions: §8.11 Q10. **Infinite lives (DBG-1, user 2026-10-31; debug flag only):** the hero cannot die from any source (hits, Drain, traps, falls, the Tome's aura; poison and hunger never kill anyway): every death reaches the end-of-turn death check, which revives him there at **HP 1** (EF_DYING off, standing pose); the lethal hit, its DEATH reaction, the damage and the log lines play as usual, no `YOU DIED`, never `GS_DEAD`; that turn's hunger step is skipped | §4 start kit (3E) |
@@ -245,7 +246,8 @@ not `GEN_RNG`, §8.11 Q8).**
 
 | Depth | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 |
 |---|---|---|---|---|---|---|---|---|
-| Traps | 1 | 2 | 2 | 3 | 3 | 3 | 4 | 4 |
+| Traps (LARGER-D T6: ×4/3 rounded, cap 8) | 1 | 3 | 3 | 4 | 4 | 4 | 5 | 5 |
+| *History (3×3)* | 1 | 2 | 2 | 3 | 3 | 3 | 4 | 4 |
 | Type pool (uniform) | DART | DART, GAS | DART, GAS, TELEPORT | + STUN | + ALARM | all 5 | all 5 | all 5 |
 
 (STUN1 rev 2026-10-26: pool order DART, GAS, TELEPORT, STUN, ALARM; pool length 1, 2, 3, 4,
@@ -260,7 +262,7 @@ not `GEN_RNG`, §8.11 Q8).**
   to a dead-end block or its rubble col. On storey 1, `t ∉ [p−1, p+3]` (pit landing zone).
   D1: not within the hero start body ±1.
 - Not on a floor-item cell.
-- Storage: **trap list ≤ 6 entries × 2 B**: room (4 bits), storey (1), col (5), type (**3**,
+- Storage: **trap list ≤ 8 entries × 2 B** (`TRAP_MAX` 8, LARGER-D T2; was 6): room (4 bits), storey (1), col (5), type (**3**,
   STUN1: widened into the old `TR_B1` bit 7 spare), known (1), 2 bits spare
   (`TR_B0` bits 6-7; the old `spent` bit is retired by TRAP2).
 
@@ -1070,7 +1072,7 @@ because the next evaluation sees their effect.
 | HP / MP at start | 24 / 6 | 16 / 12 (10 + Robe 2) |
 | atk / eva / DEF | 3 / 2 / 1 (Leather) | 1 / 1 / 0 |
 | Melee | Short Sword 1d6, reach 1 | Oak Staff 1d4, reach 1, own **STAFF_SWING** frame. Never greys out (the 0-MP fallback) |
-| MP regen (B20, designer 2026-10-19) | every **8** turns: +1 + `MAXMP` div 16 | every **6** turns (was 5): +1 + `MAXMP` div 16 |
+| MP regen (B20, designer 2026-10-19; LARGER-D package 3) | every **8** turns: +1 + `MAXMP` div 16 | every **5** turns (LARGER-D T5; B20 had 6): +1 + `MAXMP` div 16; Mana / Scarab ½ = 2.5 turns via quarter-turn counting |
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
@@ -1179,7 +1181,8 @@ Pharaoh 65 · High Necromancer 80 · **Death Knight 90** · Archmage 0. (Tier XP
 
 | Level | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
 |---|---|---|---|---|---|---|---|---|
-| `XP_NEXT` | 40 | 100 | 200 | 340 | 500 | 700 | 920 | 1,150 |
+| `XP_NEXT` (LARGER-D package 3, T5; ×1.1) | 44 | 110 | 220 | 374 | 550 | 770 | 1,012 | 1,265 |
+| *History (pre-LARGER-D)* | 40 | 100 | 200 | 340 | 500 | 700 | 920 | 1,150 |
 
 Expected XP at depth entry (E, full clear incl. tiers and ~3 respawns per level; MORE-MON
 counts 2026-11-04, designer estimate, not measured): D2 ~53, D3 ~126, D4 ~261, D5 ~423, D6
@@ -1894,7 +1897,7 @@ distinct stages, each name ≤ 6 chars:**
 
 | Stage (panel word) | FOOD | Effects | Bar + word attr |
 |---|---|---|---|
-| **FED** | 50–100 | **HP +1 per 12 turns** (user: agreed) | `$44` |
+| **FED** | 50–100 | **HP +(1 + `MAXHP` div 40) per 12 turns** (LARGER-D package 3, T5; was flat +1, user: agreed; Mage 16 → 1, Warrior 70 → 2) | `$44` |
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
 | **HUNGRY** | 10–24 | atk −1, MP regen halved (= regen **period ×2**, 3E, confirmed 2026-10-20 §8.11) | `$42` |
 | **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42`; line on entry (`YOU ARE WEAK WITH HUNGER.`); **faints** after 50 WEAK turns, then every 30 (§7.1) |
@@ -1924,7 +1927,7 @@ counts; the Mummy WEAK **status** never causes a faint.
 **Numbers (normal burn, −1 FOOD / 6 turns):** WEAK warning line at FOOD 9 → first faint 50
 turns later → faints at +80, +110, +140 … while unfed. Any food ends it (Carrot: FOOD 0 → 10 =
 HUNGRY; it falls back into WEAK after 6 turns, which restarts the 50-turn grace: a Carrot buys
-≈ 56 faint-free turns). **Expected cost:** a level holds 3–4 floor food items plus drops
+≈ 56 faint-free turns). **Expected cost:** a level holds 4–5 floor food items (LARGER-D; was 3–4) plus drops
 (≈ one find per 110–150 exploring turns, §8.11 (2)), so a hero who turns WEAK with an empty bag
 typically finds food within 60–75 WEAK turns: **0–1 faints**; a bad case (no food left on the
 level, 150 WEAK turns to the next level's first item) is **4 faints**. Per faint: 5 lost turns
@@ -2032,7 +2035,7 @@ is not a pause: music and SFX keep playing** (no `SND_HOLD`). Engineering detail
 
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
-Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
+**LARGER-D (T6, as built 2026-11-16): food 4–5 · potions 3 + rnd(2) = 3–4 (≥ 1 Heal) · scrolls 2 · arrows `1d4+6` · traps ×4/3 (§1.5).** The line below is the 3×3 history. Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
 slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) + 1 more with 1 in 2 on D4–D7
 (rev 5, §5) · ~~other-class book 0–1~~ (cut, user 2026-10-20) ·
 key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entries on
@@ -2041,7 +2044,7 @@ key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entr
 | Item | Per level | Notes |
 |---|---|---|
 | **Dagger stack** | **1 stack of 2–3** (`1d2+1`) on D1–D7; none on D8 | placed in a random non-start, non-lair room |
-| **Arrow stack** | **1 stack of 5–8** (`1d4+4`) on D1–D7; D8 none | same |
+| **Arrow stack** | **1 stack of 7–10** (`1d4+6`, LARGER-D T6; was 5–8 `1d4+4`) on D1–D7; D8 none | same |
 | **Bow (user 2026-10-04; Warrior runs only)** | **Exactly 1 on D2**: a floor-list entry in a random non-start, non-lair room, **plus a 6-arrow bundle placed in the same cell** (extra to D2's normal 5–8 stack; the two merge on pickup per the one-stack-per-cell rule, capped 24). Generated regardless of RNG; never on other depths. If the bow is discarded (§8.11: DISCARD destroys) or lost (pit fall) it is gone, and the run continues melee/daggers only | Pre-bow arrows (D1 stack) are picked up and kept; the bow icon stays greyed until the bow is in the bag |
 | Skeleton Archer drop | Arrows ×3, 1/2 | D4, D5 (§9.1; D7 dropped by H1, §9.8) |
 | Thrown-and-recovered | per §6.3 | not a placement; uses floor-list slots |
@@ -2320,7 +2323,7 @@ comes from the item-type table; gear BUC tint `$45`/`$42` and unique shimmer ove
   60..63 item lies in the lair or Sanctum**: the generator skips them and any drop there
   whose glyph is 60..63 is lost (AMMO/PAGES are common and allowed).
 - **Key: no floor glyph and no floor entry.** The key is found automatically on the **first
-  entry into the key room** (`LF_KEY_TAKEN`, panel key icon; `YOU FIND THE LAIR KEY.` 22).
+  entry into the key room** (LARGER-D T8: held colour bits `LF_KEYC` / `LF_KEYM`, panel key glyph, bag lines; `YOU FIND A CYAN KEY` / `YOU FIND A MAGENTA KEY`; was `YOU FIND THE LAIR KEY.`).
 - Id 10 = `T_TRAP` as §1.5. **TRAP-OR (user playtest + ruling 2026-11-05):** the plate is OR-composited
   over whatever its cell holds (a floor object's bottom row keeps its pixels; the decor of the room
   never changes when a trap becomes known; the find blink's "off" shows the decor alone), and the cell
@@ -3197,16 +3200,16 @@ arrival, and it makes descending a valid escape.
 
 **Kinds by depth (user 2026-11-12): D1–D2 4 kinds, D3–D4 5, D5–D8 6, + the boss.** Earlier kinds return deep, so nobody lost a depth. `LP_KINDS` is an **8-slot** list: slots 0..n−1 are the distinct kinds in fallback order, the rest are duplicates that set the draw weight (draw = count / 8). The same list for both heroes. The counts below are the slot counts (the tuned preset `tools/balance_nm3.json`, user 2026-11-13).
 
-| Depth | Kinds (slots of 8) | Monsters (incl. boss) | Boss |
+| Depth | Kinds (slots of 8) | Monsters (incl. boss; LARGER-D package 3 x1.5, T5) | Boss |
 |---|---|---|---|
-| D1 | Rat 2, Bat 2, Slime 2, Goblin 2 | 13 | Golden Goblin King |
-| D2 | Goblin 2, Spider 2, Bat 2, Rat 2 | 14 | Golden Spider Queen |
-| D3 | Skeleton 1, Vampire 2, Ghost 3, Bat 1, **Goblin 1** | 14 | Golden Vampire Lord |
-| D4 | Orc 2, Rat 2, Spider 1, Skeleton Archer 2, **Fire Imp 1** | 15 | **Ogre Warlord** |
-| D5 | Mummy 2, Spider 1, Skeleton 1, Skeleton Archer 2, **Gargoyle 1**, **Frost Wraith 1** | 16 | Golden Pharaoh |
-| D6 | Vampire 2, **Gargoyle 1**, **Fire Imp 1**, Ghost 1, Necromancer 1, Orc 2 | 15 | Golden High Necromancer |
-| D7 | Orc 1, Ghost 1, Necromancer 3, **Frost Wraith 1**, **Mummy 1**, **Spider 1** | 15 | **Death Knight** |
-| D8 | Necromancer 3, Skeleton 1, Ghost 1, Vampire 1, **Orc 1**, **Frost Wraith 1** | 11 + Archmage (+ ≤ 2 summons) | Archmage |
+| D1 | Rat 2, Bat 2, Slime 2, Goblin 2 | **20** (was 13) | Golden Goblin King |
+| D2 | Goblin 2, Spider 2, Bat 2, Rat 2 | **21** (was 14) | Golden Spider Queen |
+| D3 | Skeleton 1, Vampire 2, Ghost 3, Bat 1, **Goblin 1** | **21** (was 14) | Golden Vampire Lord |
+| D4 | Orc 2, Rat 2, Spider 1, Skeleton Archer 2, **Fire Imp 1** | **23** (was 15) | **Ogre Warlord** |
+| D5 | Mummy 2, Spider 1, Skeleton 1, Skeleton Archer 2, **Gargoyle 1**, **Frost Wraith 1** | **24** (was 16) | Golden Pharaoh |
+| D6 | Vampire 2, **Gargoyle 1**, **Fire Imp 1**, Ghost 1, Necromancer 1, Orc 2 | **23** (was 15) | Golden High Necromancer |
+| D7 | Orc 1, Ghost 1, Necromancer 3, **Frost Wraith 1**, **Mummy 1**, **Spider 1** | **23** (was 15) | **Death Knight** |
+| D8 | Necromancer 3, Skeleton 1, Ghost 1, Vampire 1, **Orc 1**, **Frost Wraith 1** | **17** + Archmage (+ ≤ 2 summons) (was 11 + Archmage) | Archmage |
 
 Bold = joins or returns. **Alias rule:** the Imp (D4, D6) and the Wraith (D5, D7, D8) never share a depth (kind row 31, §11.2); the Gargoyle is D5, D6. The Archer stays off D7/D8 (ARCHER-DEPTHS H1, §9.8). Every depth from D4 has melee, ranged (Archer / Imp / Necromancer), a flyer and a climber.
 
@@ -3547,6 +3550,8 @@ on leave stays rejected (the heal and reroll exploits, §9.4.2).
 yield and swap → (c)2 shove. (a) needs no work.
 
 ### 9.5 Respawn trickle
+
+**LARGER-D (T5, as built 2026-11-16; `larger_depths.md` §3.2): respawns are progress-tied on D1–D8.** On each **first entry** of a room (not the start room) one respawn event fires with probability **0.75** (`RSP_CHANCE` 192 of 256), placed by `rsp_run` (low-RAM cold block) in a random unvisited room, else a visited room ≥ 2 rooms away unseen ≥ 150 turns, else skipped; cap **`RESPAWN_MAX` 6** live respawns per level. **The time trickle below (period 48, chance 96) now runs only on D0** (`trk_run` stays for D0 and the model tests; `end_turn` no longer counts `TRK_PHASE`). Tiers, `F_RESPAWN` and `RESPAWN_XP_DIV` are unchanged. The constants table below is the pre-LARGER-D time trickle.
 
 Implemented in 3F. Tags: **U** = user 2026-10-03, **D** = designer decision 2026-10-03.
 
@@ -4144,6 +4149,8 @@ the per-fight budget, refill 48–84 turns, §4.0).
 event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) plus position
 (TELEPORT) and ~1 extra wave (ALARM, D5+); tiers raise threat by ~10 % (D2) to ~25 % (D8) of
 monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
+
+**LARGER-D package 3 (user 2026-11-15; as built T5):** monsters per level incl. boss now **20/21/21/23/24/23/23/18** (§9.4 `lp_dtab`; the MORE-MON counts below are history), `XP_NEXT` ×1.1 (§4.1), FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns. balance_sim (`--ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5** (target 20–30 %, even W/M, accepted by the user).
 
 **MORE-MON (user 2026-11-04, `docs/design/more_monsters.md` MEDIUM).** Monsters per level
 D1..D8 = 13/14/14/15/16/15/15/12 (was 11/12/12/13/13/14/14/11) and `ROOM_MAX` 3 at every
