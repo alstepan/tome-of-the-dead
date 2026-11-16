@@ -321,7 +321,7 @@ end_items       "ITEMS"
 # UX-POLISH §6 (ux0.asm ux_pick): the first book picked up in a game (not in D0)
 hint_book       "READ IT IN THE BAG"
 # ITEM-INFO §5 (ux0.asm mn_ptr, menu1.asm menu_static): main-menu row 10 while the tutorial is offered
-mn_tut          "NEW HERE? START > 1 TUTORIAL"
+mn_tut          "NEW? START > TUTORIAL"
 # ITEM-INFO §3 (ux0.asm ie_line, the bag page's row 19): effect phrases, then the two gate phrases;
 # ie_* <= 40 chars (textpack IE_MAX); KEEP THIS ORDER (ie_map indexes TX_IE_CURE + k); the digits
 # 6 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
