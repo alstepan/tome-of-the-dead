@@ -297,11 +297,8 @@ level_show:
 ; room). Low RAM, not do_exit itself: bank 2 has a 4-B kind_tab ALIGN pad.
 ; Keeps A. Clobbers: F, BC, DE, HL.   ~60 T, the one logging entry ~0.4k T + log_push
 ;------------------------------------------------------------------------------
-lair_hint:
-                push af                        ; LARGER-D T8: a key room's first entry
-                call key_find                  ; takes its key (lockl.asm)
-                pop  af
-                ld   hl, LVL_LAIR
+lair_hint:                                     ; (KEY-POLISH: no key grant here any more: the key
+                ld   hl, LVL_LAIR              ; is a floor item, lockl.asm key_take)
                 cp   (hl)
                 ret  nz
                 ld   hl, LVL_FLAGS
@@ -475,8 +472,10 @@ fi_cells:
                 or   c
                 ld   l, a                      ; HL = the map cell (B, C)
 .c:             ld   a, (hl)
-                cp   T_DOOR_LOCK               ; LARGER-D T8: a lock plate's colour (lockl.asm;
-                call z, lk_cell                ; A = 0 out); +17 T a plain cell
+                sub  T_DOOR_L                  ; KEY-POLISH: a closed plank (T_DOOR_L / _R / _LOCK)
+                cp   T_DOOR_LOCK - T_DOOR_L + 1  ; takes its door's colour (lockl.asm lk_cell,
+                call c, lk_cell                ; A = 0 out); +31 T a plain cell (was 17)
+                add  a, T_DOOR_L
                 cp   T_ITEM0
                 call nc, fi_cell
                 inc  l
@@ -1175,6 +1174,8 @@ hero_door:
                 or   a
                 ret  nz                        ; CF = 0
                 inc  (hl)
+                ld   a, SFX_LAND               ; KEY-POLISH: a dull thud on the locked bump (keeps A)
+                call sfx_req
                 ld   a, TX_LOCKED
                 call msg_push                  ; B3B-11: queued (panel_tick)
                 or   a

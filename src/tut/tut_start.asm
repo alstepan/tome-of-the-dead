@@ -15,11 +15,14 @@ MENTOR_ATTR     EQU $05                 ; F1: the mentor's tile attr (cyan on bl
 MENTOR_IMG_LEN  EQU 144                 ; one image: 18 cells x 8 B (aldous34.asm)
 MENTOR_LEFT     EQU 1                   ; image index = 2 x frame + MENTOR_LEFT
 ; choice screen / card layout (menu font, 8x16: 2 cell rows per line)
-TC_ROW1         EQU 8
-TC_ROW2         EQU 11
-TC_ROW3         EQU 15
-TC_COL          EQU 5                   ; "1  TUTORIAL (DEPTH 0)" (21 chars)
-TC_COL3         EQU 2                   ; "BROTHER MORROW WILL TEACH YOU" (29, R2), cols 2..30
+; Centred block (rows 9..14 of 24): item 1 (rows 9-10), its small-font sub-line directly
+; below (row 11, 8x8 ROM font, 1 cell row), one blank row, item 2 (rows 13-14).
+TC_ROW1         EQU 9
+TC_ROW3         EQU 11
+TC_ROW2         EQU 13
+TC_COL          EQU 5                   ; "1  TUTORIAL - DEPTH 0" (20 chars), cols 5..24: glyph centre x=124 = the sub-line's
+TC_COL3         EQU 1                   ; "BROTHER MORROW WILL TEACH YOU" (29, R2, small font), cols 1..29
+TC_LEN3         EQU 29                  ; its attr run
 TD_ROW1         EQU 10                  ; "DEPTH 0": level_card's col 12
 TD_COL1         EQU 12
 TD_ROW2         EQU 13                  ; "THE OLD CRYPT" (13 chars), centred
@@ -53,10 +56,15 @@ blob_choice:
                 ld   a, TS_CHOICE2
                 ld   de, (TC_ROW2 << 8) | TC_COL
                 call tut_line
-                ld   bc, (MENU_A_SUB << 8) | MENU_A_SUB
+                ld   bc, MENU_A_SUB            ; B = 0: tsp draws the small 8x8 ROM font (C = attr)
                 ld   a, TS_CHOICE3
                 ld   de, (TC_ROW3 << 8) | TC_COL3
-                call tut_line
+                call tut_line                  ; (print_char draws the bitmap only)
+                ld   hl, SCREEN_ATTR + TC_ROW3 * 32 + TC_COL3
+                ld   de, SCREEN_ATTR + TC_ROW3 * 32 + TC_COL3 + 1
+                ld   bc, TC_LEN3 - 1
+                ld   (hl), MENU_A_SUB
+                ldir
                 xor  a
                 ld   (TSP_REL), a
 .w:             call menu_frame                ; frame wait + select_tick probe + input
@@ -464,7 +472,7 @@ tut_stamp:
 
 ;------------------------------------------------------------------------------
 ; tut_line — A = TS_/TL_ id, D = row, E = col, C = the first char's attr, B =
-; the rest's: the decoded string in the menu font (tsp, PF_RAM; tsp_install
+; the rest's (B = 0: the small 8x8 ROM font, bitmap only): the decoded string in the menu font (tsp, PF_RAM; tsp_install
 ; first). Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 tut_line:
@@ -521,16 +529,18 @@ tsp:            ld   (TSP_POS), de
                 inc  de
                 or   a
                 jr   nz, .d
+                ld   hl, TX_DEC
+                ld   a, (TSP_A + 1)
+                or   a
+                jr   z, .sm                    ; rest attr 0 = small font (below, falls into .x)
                 ld   a, BANK_UI1
                 call page_bank
-                ld   hl, TX_DEC
                 ld   a, (hl)
                 or   a
                 jr   z, .x
                 inc  hl
                 push hl
-                ld   bc, (TSP_A)
-                ld   e, c
+                ld   de, (TSP_A)               ; E = the first char's attr (D is dead in mf_char)
                 ld   bc, (TSP_POS)             ; C = col, B = row
                 call mf_char
                 ld   a, (TSP_A + 1)
@@ -544,6 +554,8 @@ tsp:            ld   (TSP_POS), de
                 call mf_char_e
                 pop  hl
                 jr   .n
+.sm:            ld   bc, (TSP_POS)             ; ROM glyphs: no bank needed
+                call print_str                 ; bitmap only (the caller sets the attrs)
 .x:             ld   a, (TSP_SH)
                 jp   restore_page
 TSP_POS:        DW   0

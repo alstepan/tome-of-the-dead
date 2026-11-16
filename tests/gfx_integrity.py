@@ -287,7 +287,7 @@ def screen_check(p, check, tag, depth):
         if e["DVIS"] & 1:
             covered |= {(c, r) for c in range(e["DCOL"], e["DCOL"] + e["DCOLS"])
                         for r in range(e["DROW"], e["DROW"] + e["DROWS"])}
-    items = room_model.floor_cells(p.z.read_memory(S["FLOOR_LIST"], 128), p.rb("CUR_ROOM"))
+    items = room_model.floor_cells(p.z.read_memory(S["FLOOR_LIST"], 128), p.rb("CUR_ROOM"), k2=p.rb("LVL_KEYROOM2"))
     bad, n, ni = [], 0, 0
     for i, t in enumerate(m):
         c, r = i % 32, i // 32
@@ -414,7 +414,7 @@ def scroll_ink(p, stats):
     else:
         dr = k - S["PLAY_ROWS"]
     stats["steps"] += 1
-    for (c, r), (g, a) in room_model.floor_cells(fl, dest).items():
+    for (c, r), (g, a) in room_model.floor_cells(fl, dest, k2=p.rb("LVL_KEYROOM2")).items():
         row, col = r + dr, c + dc
         if 0 <= row < S["PLAY_ROWS"] and 0 <= col < 32:
             stats["cells"] += 1

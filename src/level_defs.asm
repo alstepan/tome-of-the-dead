@@ -189,10 +189,11 @@ DOOR_ARCH_DY    EQU 1
 DOOR_PLANK_DY   EQU 2
 DOOR_PLANK_H    EQU 6
 ; LARGER-D T8 (larger_depths.md §2.1 rev 2 "Coloured keys"): a LOCKED closed door shows ONE plate cell
-; (T_DOOR_LOCK, plank-R col, plank row DOOR_PLATE_DY of the 6) in its key colour, the other planks are
-; T_DOOR_R $06; a SEALED door (D8) keeps the whole T_DOOR_LOCK column at TILE_ATTRS $06. The colour is per
-; cell (no free tile id): build_room_map -> lk_stamp records it per side (LK_TAB), fi_cells -> lk_cell puts it
-; on the screen (room draw + scroll strips), lk_shadow copies it into the bank-7 attr shadow.
+; (T_DOOR_LOCK, plank-R col, plank row DOOR_PLATE_DY of the 6), the other planks T_DOOR_L / T_DOOR_R;
+; KEY-POLISH (user playtest 2026-11-16): ALL 12 plank cells take its key colour (ink on paper 0); a SEALED
+; door (D8) keeps the whole T_DOOR_LOCK column, every other door $06. The colour is per door side (no free
+; tile id): build_room_map -> lk_stamp records it (dr_tab), fi_cells -> lk_cell puts it on every plank cell
+; of the screen (room draw + scroll strips), lk_shadow copies it into the bank-7 attr shadow.
 DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
 ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
 ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)
@@ -454,8 +455,8 @@ LF_UNIQUE_BIT   EQU 4
 LF_PROVOKED     EQU %00100000       ; 3F-T8 (§9.2 G2 PROVOKED): the hero's damage reached the lair boss;
 LF_PROVOKED_BIT EQU 5               ; cleared when lp_post places the boss (every lair entry). ONE bit:
                                     ; one boss a level (the per-entity choice of the spec, engineer's call)
-LF_KEYC         EQU %01000000       ; LARGER-D T8: the cyan (colour 0) key is HELD (found on the first entry
-LF_KEYM         EQU %10000000       ; into LVL_KEYROOM / LVL_KEYROOM2, cleared when it unlocks its door).
+LF_KEYC         EQU %01000000       ; LARGER-D T8: the cyan (colour 0) key is HELD (KEY-POLISH: picked up from
+LF_KEYM         EQU %10000000       ; its floor entry in LVL_KEYROOM / LVL_KEYROOM2, cleared when it unlocks its door).
                                     ; Taken = LVL_KEYROOM(2) := ROOM_NONE at pickup. Per level (level_gen
                                     ; rewrites LVL_FLAGS). Panel / bag index = LVL_FLAGS rlca rlca & 3
 
