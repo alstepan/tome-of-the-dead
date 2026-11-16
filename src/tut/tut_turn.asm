@@ -63,7 +63,13 @@ TV_ISLOT        EQU TUT_RAM + 69        ; TUT0-R2 icon tour: the cursor slot of 
 TV_IREST        EQU TV_ISLOT + 1        ;   hook calls resting on it (saturates at REST_T)
 TV_ISAID        EQU TV_ISLOT + 2        ;   2 B: bit 0 entry pair said, bit s+1 slot s's line said,
                                         ;   bits 11 / 12 the B3 / B9 bag target held once (test-observable)
-TUT_RAM_END     EQU TV_ISAID + 2
+TV_LMOR         EQU TV_ISAID + 2        ; MORROW-SPEAK: bit s = LOG_TXT slot s holds his pending line (tt_line / blob_log)
+TV_BSAY         EQU TV_LMOR + 1         ;   != 0: his line is the newest drawn (row 23)  (test-observable)
+TV_BCOL         EQU TV_BSAY + 1         ;   the balloon's left col (0 = none placed)    (test-observable)
+TV_BROW         EQU TV_BCOL + 1         ;   its top row
+TV_BKEY         EQU TV_BROW + 1         ;   placed for: TV_SPOT | facing left << 7
+TV_BGLY         EQU TV_BKEY + 1         ;   glyphs in ids 15..18: 0 none (tt_init), 1 his left side's, 2 his right side's
+TUT_RAM_END     EQU TV_BGLY + 1
 TUT_RAM_LEN     EQU TUT_RAM_END - TUT_RAM
                 ASSERT TUT_RAM >= ABIL_TGT + 2 + 15 && TUT_RAM_END <= PF_ROWF   ; KIT_LIST (15 B, kit builds) below
 TFB_MERCY       EQU 0                   ; mercy healed this turn (A = 1): its group next (A = 0)
@@ -189,10 +195,7 @@ tt_mercy:
 tt_reset:
                 ld   hl, start_game
                 ld   (es_go + 1), hl           ; SMC target (main.asm enter_select): no more offers
-                ld   hl, end_turn
-                ld   (pl_et + 1), hl           ; SMC target (main.asm play_loop)
-                ld   hl, intent_icon7
-                ld   (pi_ic + 1), hl           ; SMC target (io.asm intent_tick, TUT0-R2)
+                call tt_unhook                 ; pl_et, pi_ic, il_go back; the lectern ids (MORROW-SPEAK)
                 call show_bank5
                 ld   a, (HERO_KIND)
                 ld   c, a
@@ -238,6 +241,7 @@ tt_after:
                 and  (hl)                      ; pointer (+ the panel drain) are done inside the
                 jr   nz, .hq                   ; hold (tt_holdm): frames, not this tick's work
                 call tt_mentor                 ; (B5 G0 was 131.8k, the B5 eat 127k before it)
+                call tt_bal                    ; MORROW-SPEAK: the balloon follows a move / facing change
                 call tt_ptr_re
 .hq:            ld   hl, TV_CUR
                 ld   de, TV_PRV
@@ -500,6 +504,8 @@ tt_glob:
                 ld   c, a
                 xor  a
                 ld   (TV_STAMP), a
+                ld   (TV_BSAY), a              ; MORROW-SPEAK: a room change hides the balloon (the
+                ld   (TV_BCOL), a              ; map was rebuilt without it)
                 ld   a, c
                 cp   TUT0_ROOM_B
                 jr   nz, .nb
@@ -1350,7 +1356,16 @@ tt_line:
                 call tt_frame                  ; ring full: let the panel draw one
                 jr   .dr
 .ok:            ld   hl, TV_BUF
-                jp   log_push
+                call log_push                  ; (never dropped: the ring had room) DE = its terminator,
+                ld   a, e                      ; in the slot it filled: slot = E >> 6
+                rlca
+                rlca
+                and  LOG_SLOTS - 1
+                call tt_lbit
+                or   (hl)
+                ld   (hl), a                   ; MORROW-SPEAK: the slot holds his line (blob_log)
+                ret
+                ASSERT LOG_SLOT_LEN == 64 && (LOG_TXT & $FF) == 0
 tt_exp:
                 cp   TUT_CP
                 jr   c, .p
@@ -1710,6 +1725,7 @@ tt_mentor:
                 cp   d
                 jr   z, .pose
                 push de
+                call tt_bhide                  ; MORROW-SPEAK: he blinks away: the balloon first
                 ld   a, (TV_STAMP)
                 or   a
                 jr   z, .bn                    ; not drawn: no fade-out

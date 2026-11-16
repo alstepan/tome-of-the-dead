@@ -20,6 +20,11 @@ item_log:
 .go:            ld   hl, item_log0             ; NEW-MON3 T1: the line itself is bank 0 (nm3_b0.asm), which
                 ld   c, BANK_TEXT              ; calls log_scroll directly: this FARB0 replaces the old
                 jp   farb                      ; FARB0 log_scroll (T ~ unchanged; -62 B bank 2)
+                                               ; SMC: MORROW-SPEAK — while D0 runs (il_go + 1) = blob_log and
+                                               ; (il_go + 4) = BANK_BLOB (the blob draws the line through
+                                               ; item_log0 + Morrow's ink + the balloon); tut_d0 sets both,
+                                               ; tt_unhook (blob_choice / tt_reset) puts them back
+il_go           EQU item_log.go                ; MORROW-SPEAK: the SMC site's global name (blob / tests)
 
 ; item_icons: C3-3, icons.asm.
 

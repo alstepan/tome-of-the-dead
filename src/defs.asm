@@ -197,10 +197,11 @@ BANK_BLOB       EQU BANK_POOL1      ; 4
 BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
 BOOT4_ORG       EQU BANK_WINDOW + $100
 INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
-BLOB_ORG        EQU $E1B2           ; (UX1: tt_ptr's FARB0 ux_ptr +8 B, ITEM-INFO's dictionary -38 B: fits, unmoved); B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
+BLOB_ORG        EQU $DF37           ; MORROW-SPEAK: $E1B2 -> $DF37 (raw blob 7,750 -> 8,385 B + 8 B tail; the D0 pool top $D460 and
+                                    ; boot4_end stay far below, ASSERTed). (UX1: tt_ptr's FARB0 ux_ptr +8 B, ITEM-INFO's dictionary -38 B: fits, unmoved); B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
                                     ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES
                                     ; and BLOB_TAIL >= 8). Frees 436 B below it for the pool (POOL_START / B0_FREE grow).
-BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 7,756: the raw image (no in-place delta since BOOT4)
+BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 8,393: the raw image (no in-place delta since BOOT4)
                 ASSERT BLOB_ORG + BLOB_RES == $10000
 BLOB_CHOICE     EQU BLOB_ORG + 0    ; entry table (tut_blob.asm): A = menu hero kind -> C = hero
 BLOB_TURN       EQU BLOB_ORG + 3    ;   A = 1 before end_turn, 0 after
