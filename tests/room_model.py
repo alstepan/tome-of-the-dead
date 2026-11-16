@@ -151,11 +151,12 @@ def plate_cells(rmap, glyphs, edges, room):
     """LARGER-D T8 / KEY-POLISH: {(c, r): (glyph, attr)} of the room's locked doors (merge into
     expected_cell's `ink`). A locked door = a T_DOOR_LOCK plate in the plank-R col (1 / 31) with T_DOOR_R
     above it (a sealed door keeps the whole lock column: TILE_ATTRS); EVERY plank cell of that door
-    (cols c-1, c, the DOOR_PLANK_H plank rows) takes its key colour: magenta if its edge has EG_LOCKC,
-    else cyan (lockl.asm lk_stamp / lk_cell: the colour as built, so a lock cleared after the build keeps
-    its colour); the glyph stays its tile's."""
+    (cols c-1, c, the DOOR_PLANK_H plank rows) and, DOOR-FRAME, its 2 arch cells (the row above) take its
+    key colour: magenta if its edge has EG_LOCKC, else cyan (lockl.asm lk_stamp / lk_cell: the colour as
+    built, so a lock cleared after the build keeps its colour); the lintel (T_BRICK) keeps its tile's
+    attr; the glyph stays its tile's."""
     out = {}
-    planks = (T["T_DOOR_L"], T["T_DOOR_R"], T["T_DOOR_LOCK"])
+    planks = (T["T_DOOR_ARCH_L"], T["T_DOOR_ARCH_R"], T["T_DOOR_L"], T["T_DOOR_R"], T["T_DOOR_LOCK"])
     for c, side in ((1, "L"), (31, "R")):
         if (side == "L" and room % 3 == 0) or (side == "R" and room % 3 == 2):
             continue
@@ -164,7 +165,7 @@ def plate_cells(rmap, glyphs, edges, room):
             if rmap[r * 32 + c] == T["T_DOOR_LOCK"] and rmap[(r - 1) * 32 + c] == T["T_DOOR_R"]:
                 at = S["ATTR_KEY_M"] if eb & S["EG_LOCKC"] else S["ATTR_KEY_C"]
                 top = r - S["DOOR_PLATE_DY"]
-                for rr in range(top, top + S["DOOR_PLANK_H"]):
+                for rr in range(top - 1, top + S["DOOR_PLANK_H"]):   # DOOR-FRAME: the arch row too
                     for cc in (c - 1, c):
                         t = rmap[rr * 32 + cc]
                         if t in planks:

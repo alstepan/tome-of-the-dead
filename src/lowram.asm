@@ -472,10 +472,10 @@ fi_cells:
                 or   c
                 ld   l, a                      ; HL = the map cell (B, C)
 .c:             ld   a, (hl)
-                sub  T_DOOR_L                  ; KEY-POLISH: a closed plank (T_DOOR_L / _R / _LOCK)
-                cp   T_DOOR_LOCK - T_DOOR_L + 1  ; takes its door's colour (lockl.asm lk_cell,
-                call c, lk_cell                ; A = 0 out); +31 T a plain cell (was 17)
-                add  a, T_DOOR_L
+                sub  T_DOOR_ARCH_L             ; KEY-POLISH / DOOR-FRAME: the arch + a closed plank
+                cp   T_DOOR_LOCK - T_DOOR_ARCH_L + 1  ; (T_DOOR_ARCH_L .. T_DOOR_LOCK) takes its door's
+                call c, lk_cell                ; colour (lockl.asm lk_cell, A = 0 out); +31 T a plain cell
+                add  a, T_DOOR_ARCH_L
                 cp   T_ITEM0
                 call nc, fi_cell
                 inc  l
@@ -1063,8 +1063,9 @@ door_find:
 ; door_paint — the planks of the door at cols C, C+1, rows B .. B+5: A = 0
 ; open (jambs T_DOOR_JAMB_L / _R, non-solid) / else closed (T_DOOR_L / T_DOOR_R: never called on a locked
 ; door). ROOM_MAP, the bank-7 attr shadow (shadow_rect), then
-; PEND_DMG so the next render restores the 2 x 6 cells (the potion-pickup
-; path; a closed door's cells are free of bodies, an opened one's too).
+; PEND_DMG so the next render restores the 2 x 7 cells, the arch row B-1 included (DOOR-FRAME: a door
+; opened after its lock went (key, far-side bolt, D0's B-C) drops the arch's key colour). (The potion-
+; pickup path; a closed door's plank cells are free of bodies, an opened one's too.)
 ; Clobbers: all but IX.   ~7k T (measured: tests/world.py W5)
 ;------------------------------------------------------------------------------
 door_paint:
@@ -1084,7 +1085,8 @@ door_paint:
                 dec  a
                 jr   nz, .r
                 pop  bc
-                ld   de, (DOOR_COLS << 8) | DOOR_PLANK_H
+                dec  b                         ; DOOR-FRAME: the arch row too (an unlocked door's arch
+                ld   de, (DOOR_COLS << 8) | (DOOR_PLANK_H + 1)   ; leaves its key colour: TILE_ATTRS)
 ; rect_repaint — 3F-T8 entry (bank-7 grate_open): ROOM_MAP cells of rect C,B,D,E
 ; changed -> the bank-7 attr shadow + a queued restore (PEND_DMG); the caller's
 ; $C000 bank back. Clobbers: all but IX.
