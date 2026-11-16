@@ -139,6 +139,8 @@ PARAMS = {
     "ESCORT_FOLLOW_GAP": 2,
     # LARGER-D knobs (docs/design/larger_depths.md sec 3 / 3.1; defaults = today's game, the --larger-d preset sets them)
     "MANA_AMULET": 0,                   # 1 = the Mage wears the Amulet of Mana from D2 on (user-play stand-in; granted, never swapped out)
+    "AVG_V1": 0,                        # 1 = the old average bot (no charm_food scoring, no rest_fed); 0 = BALANCE-V2 average
+    "FED_STEP": 12, "FED_REGEN_K_W": None,   # BALANCE-V2: step period of the K / L regen (HP_REG_FED); Warrior-only k override (null = same k)
     "FED_REGEN_K": None,                # null = flat +1 per FED_REGEN turns; k = +(1 + MAXHP div k) per 12 turns
     # LARGER-D re-sweep (user 2026-11-15): even regen + progress-driven respawns.  Defaults = today.
     "FED_REGEN_L": None,                # k wins if both set; L = +(1 + LVL div L) per 12 turns (the same for both heroes)
@@ -489,6 +491,8 @@ def parse_set(pairs):
             ov.setdefault("kx", {}).setdefault(parts[1], {})[parts[2]] = val
         elif parts[0] == "kind":
             ov.setdefault("kind", {}).setdefault(parts[1], {})[parts[2]] = val
+        elif parts[0] == "gear":
+            ov.setdefault("gear", {}).setdefault(parts[1], {})[parts[2]] = val
         elif parts[0] == "param":
             ov.setdefault("param", {})[parts[1]] = val
         else:
@@ -566,6 +570,9 @@ class Game:
         self.D, self.P = D, D.params
         self.hero, self.pol, self.rng = hero, POLICIES[policy], rng
         self.G = D.gear
+        if policy == "average" and not self.P["AVG_V1"]:
+            # BALANCE-V2 (user 2026-11-16): a sensible average player wears Plenty / Scarab when found and eats up to FED before resting
+            self.pol = dict(self.pol, charm_food=1, rest_fed=1)
         self.jumped = False
         self.committed = False
         self.tier_food_bases = {D.id(n) for n in ("BAT", "SPIDER", "SKELETON", "GHOST")}   # Screech / Black Widow / Skel Guard+Knight / Poltergeist
@@ -750,11 +757,13 @@ class Game:
                 h.weak = max(0, h.weak - c)
             st = self.hunger_stage()
             if st == 0 and h.hp < h.maxhp:
-                if P["FED_REGEN_K"] is None and P["FED_REGEN_L"]:
-                    h.hp = min(h.maxhp, h.hp + (1 + h.lvl // P["FED_REGEN_L"]) * (t1 // 12 - t0 // 12))
-                elif P["FED_REGEN_K"]:
-                    # sec 3.1: the game steps every 12 turns by 1 + MAXHP div k
-                    h.hp = min(h.maxhp, h.hp + (1 + h.maxhp // P["FED_REGEN_K"]) * (t1 // 12 - t0 // 12))
+                fs = P["FED_STEP"]             # the K / L regen step period (12 = the game's HP_REG_FED today)
+                kk = P["FED_REGEN_K_W"] if (self.hero == "W" and P["FED_REGEN_K_W"]) else P["FED_REGEN_K"]
+                if kk is None and P["FED_REGEN_L"]:
+                    h.hp = min(h.maxhp, h.hp + (1 + h.lvl // P["FED_REGEN_L"]) * (t1 // fs - t0 // fs))
+                elif kk:
+                    # sec 3.1: the game steps every FED_STEP turns by 1 + MAXHP div k
+                    h.hp = min(h.maxhp, h.hp + (1 + h.maxhp // kk) * (t1 // fs - t0 // fs))
                 else:
                     h.hp = min(h.maxhp, h.hp + t1 // P["FED_REGEN"] - t0 // P["FED_REGEN"])
             if h.mp < h.maxmp and st < 3 and not h.weak:
@@ -1084,6 +1093,13 @@ class Game:
         if self.G[g]["slot"] in ("w", "a", "h") and len(self.h.bag_gear) < BAG_GEAR_MAX:
             self.h.bag_gear.append((g, q, m))
 
+    @staticmethod
+    def regen_val(d, gain, loss):
+        """Gear score of an MP-regen multiplier: x1/2 (the Scarab / Amulet of Mana) = +gain, x2 = -loss, linear between (was exact-match
+        0.5 / 2.0, which silently changed the bot's charm choice for any swept value)."""
+        r = d.get("regen", 1.0)
+        return gain * (1.0 - r) / 0.5 if r < 1.0 else -loss * (r - 1.0)
+
     def gear_score(self, g, q=0, m=0):
         if not g:
             return -1
@@ -1098,16 +1114,18 @@ class Game:
         mp = d.get("mp", 0) + (v if "df" not in d and "mp" in d else 0)
         s = df * 3 + d.get("eva", 0) * 2 + d.get("poison", 0) * 1
         if self.hero == "M":
-            s += mp * 1.5 + (4 if d.get("regen") == 0.5 else 0) - (6 if d.get("regen") == 2.0 else 0)
+            s += mp * 1.5 + self.regen_val(d, 4, 6)
             s += d.get("atk", 0) * 0.2
             if g == "Ring of the Grave":
                 s += 3
         else:
-            s += d.get("atk", 0) * 3 + mp * 0.3 - (1 if d.get("regen") == 2.0 else 0) + (3 if d.get("regen") == 0.5 else 0)
-        if d.get("food"):
-            s += 2
+            s += d.get("atk", 0) * 3 + mp * 0.3 + self.regen_val(d, 3, 1)
+        if d.get("food", 1.0) < 1.0:
+            # linear in the saving: the old x1/2 gives +2 (+ CHARM_FOOD_BONUS for the expert); x3/4 half of that (BALANCE-V2 sweeps)
+            sv = (1.0 - d["food"]) / 0.5
+            s += 2 * sv
             if self.pol.get("charm_food") and self.depth >= 3:
-                s += self.P["CHARM_FOOD_BONUS"]
+                s += self.P["CHARM_FOOD_BONUS"] * sv
         if d.get("mirror"):
             s += 6
         if d.get("res"):
@@ -2540,6 +2558,28 @@ LARGER_D = {"param": {
     "FOOD_N": [4, 5], "POT_N": [3, 4], "SCR_N": [2, 2], "ARR_BASE": 7, "TRAP_MULT": 4 / 3,
     "XPN": [44, 110, 220, 374, 550, 770, 1012, 1265],
     "FED_REGEN_K": 40, "MAGE_REGEN": 5, "RESP_MODE": "progress", "RESP_P": 0.75}}
+# NEW-MON3 on (BALANCE-V2 step 0): --ld-pkg used to omit param.NEWMON3, i.e. measured a game without Gargoyle / Fire Imp / Frost Wraith.
+# The shipped monsters' knobs live in tools/balance_nm3.json; `--set param.NEWMON3=0` restores the old (pre-2026-11-16) preset.
+def _nm3():
+    return json.load(open(os.path.join(REPO, "tools", "balance_nm3.json")))
+
+
+# PACKAGE 4 (BALANCE-V2, docs/design/balance_v2.md sec 5): the retune that the user's 2026-11-16 targets asked for, over package 3 + NEWMON3.
+# Filled in by the sweep; empty = package 3.
+PKG4 = {
+    "param": {"FED_STEP": 16, "FOOD_N": [3, 5], "RESP_MODE": "progress+time", "MAGE_REGEN": 7, "M_LVL_HP": 2, "W_LVL_HP": 6},
+    "gear": {"Scarab": {"regen": 0.625}},
+    "kx": {"Ghost": {"SHOCK": "R"}, "Poltergeist": {"SHOCK": "R"}, "Archmage": {"SHOCK": "R"}, "Vampire": {"FIRE": "N"},
+           "Gargoyle": {"FIRE": "R", "COLD": "N"}, "Necro": {"COLD": "N"}, "Bone_Caller": {"COLD": "N"}},
+    "ab_rank": {"Firebolt": {"1": {"effect": 3}, "2": {"effect": 3}, "3": {"effect": 133}}},
+}
+
+
+def ld_preset(pkg4=False):
+    o = merge(LARGER_D, _nm3())
+    return merge(o, PKG4) if pkg4 else o
+
+
 # knob ladder of sec 3.1, cumulative, in the spec's order (the regen divisor is the sweep axis itself)
 LD_KNOBS = [("XP_NEXT x1.25", {"XPN": [50, 125, 250, 425, 625, 875, 1150, 1440]}),
             ("potions min 4", {"POT_N": [4, 4]}),
@@ -2662,6 +2702,7 @@ def main(argv=None):
     ap.add_argument("--ld-k", default="16,24,32", help="FED regen divisors for --larger-d")
     ap.add_argument("--ld-steps", type=int, default=len(LD_KNOBS), help="--larger-d: sec 3.1 knobs to apply after the plain sec 3 step")
     ap.add_argument("--ld-pkg", action="store_true", help="run the shipped LARGER-D preset (LARGER_D, package 3) under any overrides")
+    ap.add_argument("--ld-pkg4", action="store_true", help="package 4 (BALANCE-V2 retune) = --ld-pkg + PKG4, under any overrides")
     ap.add_argument("--ld-bal", action="store_true", help="LARGER-D re-sweep: regen x respawn x density grid (--bal-*)")
     ap.add_argument("--bal-regen", default="flat,level:4,level:6")
     ap.add_argument("--bal-resp", default="time,prog:0.75:8,progtime:0.75:8")
@@ -2675,8 +2716,8 @@ def main(argv=None):
         ov = merge(ov, json.load(open(f)))
     if a.sets:
         ov = merge(ov, parse_set(a.sets))
-    if a.ld_pkg:
-        ov = merge(LARGER_D, ov)
+    if a.ld_pkg or a.ld_pkg4:
+        ov = merge(ld_preset(a.ld_pkg4), ov)
     if a.larger_d:
         return larger_d_sweep(a, ov)
     if a.ld_bal:
