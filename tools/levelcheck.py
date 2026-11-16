@@ -190,6 +190,8 @@ def check_keys(b, adj, start, lair, n, depth, v, stats):
         if len(p2) == nn: v.append(f"K1/K10: lock {a}-{c} is not a bridge of the final graph (an optional loop crosses it)")
         sides[e] = (a, c) if a in p2 else (c, a)
         colour[e] = col
+        if bool(b[OFF_EDGE + hedge(a)] & G.EG_NEARR) != (sides[e][0] == c):    # LARGER-D T8: hero_door's bolt
+            v.append(f"K12: lock {a}-{c} EG_NEARR != its start side")
         if c != a + 1 or a % GW == GW - 1: v.append(f"K1: lock {a}-{c} not horizontal")
         if depth == 8 and sanct != D["ROOM_NONE"] and sanct in e: v.append("K7: Sanctum door locked")
     m = len(locks)

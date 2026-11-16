@@ -2631,7 +2631,7 @@ page_run:
                 INCLUDE "rsp0.asm"             ; LARGER-D T5: the progress respawn rsp_run / rsp_w (cold, once per
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
-                INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates, panel)
+                INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with
