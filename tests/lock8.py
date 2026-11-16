@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
-"""LARGER-D T8: the level-key runtime (larger_depths.md §2.1 rev 2 / rev 3, §6; src/lockl.asm).
+"""LARGER-D T8 + KEY-POLISH: the level-key runtime (larger_depths.md §2.1 rev 2 / rev 3, §6; src/lockl.asm).
 PROTO rooms A-D (LVL_DEPTH poked to 1 where the engine pickup must run), plus one generated game.
 
-  K1  first entry into LVL_KEYROOM (B): LF_KEYC, LVL_KEYROOM := ROOM_NONE, "YOU FIND A CYAN KEY",
-      panel key cell (30, 19) attr $45 + the key glyph; a re-entry gives nothing
-  K2  first entry into LVL_KEYROOM2 (A): LF_KEYM, "YOU FIND A MAGENTA KEY", panel $EB (both held);
-      the bag page: CYAN KEY (row 1, $45) and MAGENTA KEY (row 3, $43) at col 23
-  K3  bump a locked door without its key: 0 turns, THE DOOR IS LOCKED; the other colour's key = no key
+  K1  KEY-POLISH floor key: an IT_KEY entry in LVL_KEYROOM (B) is drawn on entry (key icon, $45) and the
+      entry grants NOTHING; standing on it picks it up: LF_KEYC, LVL_KEYROOM := ROOM_NONE, the entry
+      FL_EMPTY, the cell no longer a marker, "YOU FIND A CYAN KEY", SFX_PICKUP, panel key cell (30, 19)
+      attr $45 + the key glyph; a re-entry gives nothing
+  K2  the IT_KEY entry in LVL_KEYROOM2 (A) is magenta ($43); its pickup: LF_KEYM, "YOU FIND A MAGENTA KEY",
+      panel $EB (both held); the bag page: CYAN KEY ($45) at col 6 and MAGENTA KEY ($43) at col 16 on
+      row 3, each once; row 1 (the counters, ARROWS 12) holds no key text (the T8 "2 CYAN KEYS" bug: the
+      key line sat right of "ARROWS 12" and read as a count)
+  K3  bump a locked door without its key: 0 turns, THE DOOR IS LOCKED, SFX_LAND; the other colour's key = no key
   K4  bump with the key: 1 turn, EG_LOCK cleared + open (jambs), the key used up, YOU UNLOCK THE DOOR,
-      panel attr back to 0
+      panel attr back to 0, the bag page shows no key line any more
   K5  far-side bolt (EG_NEARR: the near room is the other one): 1 turn, opens keyless, no line,
       keys untouched; a near-side bump of the same lock stays locked (K3)
   K6  monsters: an opener (Goblin) is refused by a locked door from either side (try_step)
-  K7  plate: a locked closed door = 1 T_DOOR_LOCK cell (plank row DOOR_PLATE_DY) in its key colour on
-      the screen AND in the bank-7 attr shadow, room_show (cyan / magenta) and through a vertical
-      scroll (B -> C, the D|C door magenta); the room map == room_model; ink only (paper 0: no clash)
-  K8  generated D1 (fixed seed): every lock's EG_NEARR == its start side (flood of G without it);
-      after keys are held, level_enter (descend) clears LF_KEYC / LF_KEYM and the panel key cell
+  K7  KEY-POLISH: a locked closed door = 1 T_DOOR_LOCK plate cell (plank row DOOR_PLATE_DY) and ALL its
+      12 plank cells in its key colour on the screen AND in the bank-7 attr shadow, room_show (cyan /
+      magenta) and through a vertical scroll (B -> C, the D|C door magenta); an ordinary door $06;
+      the room map == room_model; ink only (paper 0: no clash)
+  K8  generated D1 (fixed seed): every lock's EG_NEARR == its start side (flood of G without it); each
+      key room holds one IT_KEY floor entry and no key is held at the start; after keys are held,
+      level_enter (descend) clears LF_KEYC / LF_KEYM and the panel key cell
 Run: ZRCP_PORT=<port> python3 tests/lock8.py [K1 ...]
 """
 import os
@@ -42,6 +48,11 @@ KEY_GLY = bytes([0x00, 0x60, 0x90, 0x9F, 0x65, 0x00, 0x00, 0x00])   # panel_icon
 PLATE_ROW1 = S["STOREY_ROWS"] + 2 + S["DOOR_PLATE_DY"]               # storey-1 plate row (14)
 SLOT_GOBLIN = 3
 NOWHERE = 7
+KEY_COL = 10                                                        # the PROTO floor keys' col (storey 1)
+KEY_SLOT = S["FLOOR_MAX"] - 1                                        # their FLOOR_LIST entry (B: 31, A: 30)
+SPY = S["LOWRAM_END_3B"] + 48                                        # the sfx_req spy (past the stubs' bytes)
+SPY_REC = SPY + 12
+PLANK_TOP1 = S["STOREY_ROWS"] + S["DOOR_PLANK_DY"]                   # storey-1 plank rows 11..16
 
 
 def want(tag):
@@ -80,6 +91,40 @@ def main():
             ingame([0x3E, S["TX_DESCEND"], 0xCD] + w16(S["msg_push"]), "marker")
             drain()
 
+        def spy_on():
+            """KEY-POLISH: sfx_req -> jp SPY (ld (SPY_REC), a; the 3 bytes it replaced; jp sfx_req + 3)."""
+            a = S["sfx_req"]
+            org = list(p.z.read_memory(a, 3))
+            p.wmem(SPY, [0x32] + w16(SPY_REC) + org + [0xC3] + w16(a + 3))
+            p.wb(SPY_REC, 0)
+            p.wmem(a, [0xC3] + w16(SPY))
+            return org
+
+        def spy_off(org):
+            p.wmem(S["sfx_req"], org)
+
+        def floor_key(slot, room, col=KEY_COL):
+            p.wmem(S["FLOOR_LIST"] + slot * S["FL_STRIDE"], [room | S["FL_S1"], col, S["IT_KEY"], 1])
+
+        def key_icon_ok(fr, at, col=KEY_COL):
+            cells = [(bytes(cell_bytes(fr, col + h, PLATE_ROW1 + 1 + r)), attr_at(fr, col + h, PLATE_ROW1 + 1 + r))
+                     for h in (0, 1) for r in (0, 1)]
+            want_ = [(room_model.icon_cell(S["IT_KEY"], h, r), at) for h in (0, 1) for r in (0, 1)]
+            return cells == want_, cells
+
+        def bag_rows():
+            p.hold("I")
+            for _ in range(60):
+                p.tick()
+                if p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"]:
+                    break
+            p.release()
+            p.tick(6)
+            fr = p.frame()
+            p.tap("I")
+            p.tick(10)
+            return fr
+
         p.boot(K_KNIGHT)
         kw, kh = game.body(p, K_KNIGHT)
         y1 = stand_y(1, kh)
@@ -103,7 +148,7 @@ def main():
         def key_cell(fr):
             return attr_at(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1), bytes(cell_bytes(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1))
 
-        # ---------------- K1 / K2 pickup + panel + bag ----------------------
+        # ---------------- K1 / K2 floor key pickup + panel + bag -------------
         if want("K1") or want("K2"):
             p.boot(K_KNIGHT)
             p.isolate()
@@ -113,12 +158,27 @@ def main():
             p.wb("LVL_DEPTH", 1)
             p.wb("LVL_KEYROOM", 1)
             p.wb("LVL_KEYROOM2", 0xFF)
+            floor_key(KEY_SLOT, 1)
             a_to_b()
             fr = p.composed_frame()
-            check("K1 entry into B: LF_KEYC, LVL_KEYROOM := ROOM_NONE",
-                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM")) == (KEYC, 0xFF),
-                  (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM")))
+            ok, cells = key_icon_ok(fr, S["ATTR_KEY_C"])
+            check("K1 entry into B: no key granted (flags, LVL_KEYROOM unchanged), the floor key drawn: icon, $45",
+                  ok and p.rb("LVL_FLAGS") & (KEYC | KEYM) == 0 and p.rb("LVL_KEYROOM") == 1,
+                  (cells[:1], hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM")))
+            org = spy_on()
+            p.place(0, KEY_COL - 1, y1, flags=HERO_R)
+            p.turn("WAIT")
+            sfx = p.rb(SPY_REC)
+            drain()
+            spy_off(org)
+            fr = p.composed_frame()
+            ent = p.z.read_memory(S["FLOOR_LIST"] + KEY_SLOT * 4, 1)[0]
+            mk = p.z.read_memory(S["ROOM_MAP"] + (PLATE_ROW1 + 2) * 32 + KEY_COL, 1)[0]
+            check("K1 standing on it: LF_KEYC, LVL_KEYROOM := ROOM_NONE, entry FL_EMPTY, no marker left",
+                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM"), ent, mk < S["T_ITEM0"]) == (KEYC, 0xFF, 0xFF, True),
+                  (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM"), ent, mk))
             check("K1 log: YOU FIND A CYAN KEY", log_row(fr, 23) == text6("YOU FIND A CYAN KEY"), "")
+            check("K1 the pickup sound: SFX_PICKUP", sfx == S["SFX_PICKUP"], hex(sfx))
             check("K1 panel key cell: glyph, attr $45 (composed + displayed)",
                   key_cell(fr) == (S["ATTR_KEY_C"], KEY_GLY) and key_cell(p.frame()) == key_cell(fr),
                   (key_cell(fr), key_cell(p.frame())))
@@ -129,30 +189,32 @@ def main():
                   newest() == text6(dict(world.STRINGS)["descend"]) and p.rb("LVL_FLAGS") & (KEYC | KEYM) == KEYC,
                   hex(p.rb("LVL_FLAGS")))
             p.wb("LVL_KEYROOM2", 0)
+            floor_key(KEY_SLOT - 1, 0)
             b_to_a()
+            ok, cells = key_icon_ok(p.composed_frame(), S["ATTR_KEY_M"])
+            check("K2 entry into A (LVL_KEYROOM2): the floor key magenta ($43), nothing granted",
+                  ok and p.rb("LVL_FLAGS") & (KEYC | KEYM) == KEYC, (cells[:1], hex(p.rb("LVL_FLAGS"))))
+            p.place(0, KEY_COL - 1, y1, flags=HERO_R)
+            p.turn("WAIT")
+            drain()
             fr = p.composed_frame()
-            check("K2 entry into A (LVL_KEYROOM2): LF_KEYM too, LVL_KEYROOM2 := ROOM_NONE",
+            check("K2 its pickup: LF_KEYM too, LVL_KEYROOM2 := ROOM_NONE",
                   (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM2")) == (KEYC | KEYM, 0xFF),
                   (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM2")))
             check("K2 log: YOU FIND A MAGENTA KEY", log_row(fr, 23) == text6("YOU FIND A MAGENTA KEY"), "")
             check("K2 panel key cell: both held = $EB (FLASH)", key_cell(fr) == (S["ATTR_KEY_CM"], KEY_GLY), key_cell(fr))
-            # the bag page (I): one line per held key at col 23, rows 1 / 3, in its colour
-            p.hold("I")
-            for _ in range(60):
-                p.tick()
-                if p.rb("PAGE_OPEN") == 1 and p.pc() == S["select_tick"]:
-                    break
-            p.release()
-            p.tick(6)
-            fr = p.frame()
-            x0 = S["PG_KEY_COL"] * 8
-            cy = log_row(fr, 1, S["PG_KEY_COL"], 9) == text6("CYAN KEY", 0, 9)
-            mg = log_row(fr, 3, S["PG_KEY_COL"], 9) == text6("MAGENTA KEY", 0, 9)
-            at = (attr_at(fr, S["PG_KEY_COL"], 1), attr_at(fr, S["PG_KEY_COL"], 3))
-            check(f"K2 bag: CYAN KEY row 1 / MAGENTA KEY row 3 at x {x0}, attrs $45 / $43",
+            # the bag page (I): row 3, CYAN KEY col 6 / MAGENTA KEY col 16, each once; row 1 = counters only
+            p.wb("ARROWS", 12)
+            fr = bag_rows()
+            c0, c1 = S["PG_KEY_COL"], S["PG_KEY_COL"] + S["PG_KEY_W"] + 1
+            cy = log_row(fr, 3, c0, 9) == text6("CYAN KEY", 0, 9)
+            mg = log_row(fr, 3, c1, 9) == text6("MAGENTA KEY", 0, 9)
+            at = (attr_at(fr, c0, 3), attr_at(fr, c1, 3))
+            r1 = [bytes(cell_bytes(fr, c, 1)) for c in range(22, 32)]
+            check(f"K2 bag: CYAN KEY (col {c0}) / MAGENTA KEY (col {c1}) on row 3, attrs $45 / $43",
                   cy and mg and at == (S["ATTR_KEY_C"], S["ATTR_KEY_M"]), (cy, mg, at))
-            p.tap("I")
-            p.tick(10)
+            check("K2 bag (2-key regression): row 1 right of ARROWS 12 is empty (no key line beside a count)",
+                  all(x == bytes(8) for x in r1), [i + 22 for i, x in enumerate(r1) if x != bytes(8)])
 
         # ---------------- K3 / K4 / K5 / K6 bump --------------------------
         if any(want(k) for k in ("K3", "K4", "K5", "K6")):
@@ -163,8 +225,12 @@ def main():
             p.wb(E_AB, LINK | DOOR | LOCK)               # cyan, near = A (the hero's room)
             p.wb("LVL_FLAGS", (p.rb("LVL_FLAGS") & 0x3F) | KEYM)   # only the other colour
             marker()
+            org = spy_on()
             check("K3 locked (cyan), magenta key only: no turn", p.no_turn("L"), "")
+            sfx = p.rb(SPY_REC)
+            spy_off(org)
             drain()
+            check("K3 the bump sound: SFX_LAND", sfx == S["SFX_LAND"], hex(sfx))
             check("K3 THE DOOR IS LOCKED, door + keys unchanged",
                   newest() == text6("THE DOOR IS LOCKED") and p.rb(E_AB) == LINK | DOOR | LOCK
                   and p.rb("LVL_FLAGS") & (KEYC | KEYM) == KEYM, (p.rb(E_AB), hex(p.rb("LVL_FLAGS"))))
@@ -187,6 +253,9 @@ def main():
                   and key_cell(p.composed_frame())[0] == 0, (hex(p.rb("LVL_FLAGS")), key_cell(p.composed_frame())))
             sh = bank7(p, S["SHADOW_ATTR"] + PLATE_ROW1 * 32 + 31, 1)[0]
             check("K4 the old plate cell's shadow attr = plank $06", sh == S["ATTR_PLANK"], hex(sh))
+            fr = bag_rows()
+            r3 = [bytes(cell_bytes(fr, c, 3)) for c in range(S["PG_KEY_COL"], S["PG_KEY_COL"] + 2 * S["PG_KEY_W"] + 1)]
+            check("K4 the used key is gone from the bag page (row 3 empty)", all(x == bytes(8) for x in r3), "")
             # K5: far-side bolt
             p.turn("C")
             p.wb(E_AB, LINK | DOOR | LOCK | LOCKC | NEARR)   # magenta, near = B: A is the far side
@@ -225,13 +294,17 @@ def main():
                 want_col = [S["T_DOOR_R"]] * 6
                 want_col[S["DOOR_PLATE_DY"]] = S["T_DOOR_LOCK"]
                 fr, fc = p.frame(), p.composed_frame()
-                sh = bank7(p, S["SHADOW_ATTR"] + PLATE_ROW1 * 32 + 31, 1)[0]
-                others = {attr_at(fc, 31, r) for r in range(S["STOREY_ROWS"] + 2, S["STOREY_ROWS"] + 8) if r != PLATE_ROW1}
+                cells = [(c, r) for r in range(PLANK_TOP1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (30, 31)]
+                sh = bank7(p, S["SHADOW_ATTR"], 768)
+                got = {(attr_at(fr, c, r), attr_at(fc, c, r), sh[r * 32 + c]) for c, r in cells}
                 check(f"K7 {tag} (room_show A): one plate cell, map == room_model",
                       col == want_col and map_structure(p, 0) == [], (col, map_structure(p, 0)[:3]))
-                check(f"K7 {tag}: plate attr {at:#x} on both screens + the shadow, other planks $06, paper 0",
-                      (attr_at(fr, 31, PLATE_ROW1), attr_at(fc, 31, PLATE_ROW1), sh, others) == (at, at, at, {S["ATTR_PLANK"]})
-                      and at & 0x38 == 0, (attr_at(fr, 31, PLATE_ROW1), attr_at(fc, 31, PLATE_ROW1), sh, others))
+                check(f"K7 {tag}: all 12 plank cells attr {at:#x} on both screens + the shadow, paper 0",
+                      got == {(at, at, at)} and at & 0x38 == 0, got)
+                mm = p.z.read_memory(S["ROOM_MAP"], 576)
+                left = {attr_at(fc, c, r) for r in range(S["PLAY_ROWS"]) for c in (0, 1)
+                        if mm[r * 32 + c] in (S["T_DOOR_L"], S["T_DOOR_R"])}
+                check(f"K7 {tag}: any other closed door keeps $06", left <= {S["ATTR_PLANK"]}, left)
                 bad = p.screen_vs_map(f"K7 {tag}")
                 check(f"K7 {tag}: screens == ROOM_MAP (room_model.plate_cells: the plate's own attr)", not bad, bad[:3])
             # through the vertical scroll: the D|C door (C's left door, storey 1) magenta
@@ -244,12 +317,14 @@ def main():
             p.place(0, 24, y1, flags=HERO_R)
             walk("J", 4)
             fr, fc = p.frame(), p.composed_frame()
-            sh = bank7(p, S["SHADOW_ATTR"] + PLATE_ROW1 * 32 + 1, 1)[0]
+            sh = bank7(p, S["SHADOW_ATTR"], 768)
             m = p.z.read_memory(S["ROOM_MAP"], 576)
-            check("K7 scroll B -> C: C's left door plate (1, 14) magenta on both screens + shadow, map == model",
-                  (attr_at(fr, 1, PLATE_ROW1), attr_at(fc, 1, PLATE_ROW1), sh, m[PLATE_ROW1 * 32 + 1]) ==
-                  (S["ATTR_KEY_M"],) * 3 + (S["T_DOOR_LOCK"],) and map_structure(p, 4) == [],
-                  (attr_at(fr, 1, PLATE_ROW1), attr_at(fc, 1, PLATE_ROW1), sh, m[PLATE_ROW1 * 32 + 1], map_structure(p, 4)[:3]))
+            cells = [(c, r) for r in range(PLANK_TOP1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (0, 1)]
+            got = {(attr_at(fr, c, r), attr_at(fc, c, r), sh[r * 32 + c]) for c, r in cells}
+            check("K7 scroll B -> C: C's left door (plate (1, 14) + all 12 planks) magenta on both screens + shadow, "
+                  "map == model",
+                  got == {(S["ATTR_KEY_M"],) * 3} and m[PLATE_ROW1 * 32 + 1] == S["T_DOOR_LOCK"] and map_structure(p, 4) == [],
+                  (got, m[PLATE_ROW1 * 32 + 1], map_structure(p, 4)[:3]))
 
         # ---------------- K8 generated level: EG_NEARR + descend reset -------
         if want("K8"):
@@ -269,6 +344,12 @@ def main():
                     bad = nearr_errors(blk)
                     nl = sum(1 for e in range(S["EDGES_H"]) if blk[S["EDGE_TAB"] - room_model.BASE + e] & LOCK)
                     check(f"K8 D{d}: {nl} lock(s), each EG_NEARR == its start side", nl >= 1 and not bad, bad)
+                    fl = p.z.read_memory(S["FLOOR_LIST"], 128)
+                    kr = [k for k in (p.rb("LVL_KEYROOM"), p.rb("LVL_KEYROOM2")) if k != 0xFF]
+                    keys = sorted(fl[4 * i] & 15 for i in range(32) if fl[4 * i] != 0xFF and fl[4 * i + 2] == S["IT_KEY"])
+                    check(f"K8 D{d}: one IT_KEY floor entry per key room {kr}, none held",
+                          keys == sorted(kr) and len(kr) == nl and p.rb("LVL_FLAGS") & (KEYC | KEYM) == 0,
+                          (keys, kr, hex(p.rb("LVL_FLAGS"))))
                     p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | KEYC | KEYM)
                     p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | 0x80)
                     drain()

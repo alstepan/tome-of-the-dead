@@ -222,7 +222,7 @@ class T(Proto):
     def bg_tables(self):
         """(ROOM_MAP, TILE_GLYPHS, TILE_ATTRS, ORN_GLYPHS, the CUR_ROOM floor inks) from memory."""
         z = self.z
-        ink = room_model.floor_inks(z.read_memory(S["FLOOR_LIST"], 128), self.rb("CUR_ROOM"))
+        ink = room_model.floor_inks(z.read_memory(S["FLOOR_LIST"], 128), self.rb("CUR_ROOM"), k2=self.rb("LVL_KEYROOM2"))
         rmap, gly = z.read_memory(S["ROOM_MAP"], MAP_LEN), z.read_memory(S["TILE_GLYPHS"], S["TILE_IDS"] * 8)
         ink.update(room_model.plate_cells(rmap, gly, z.read_memory(S["EDGE_TAB"], S["EDGE_SLOTS"]),
                                           self.rb("CUR_ROOM")))   # LARGER-D T8: lock plates

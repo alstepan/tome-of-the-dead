@@ -2724,7 +2724,7 @@ def run_gen_suites(p, check):
                 check(f"W11 D{d} r{r}: no AIR in row 17 (pits are storey-0 only)", not pit_air, pit_air[:3])
                 comp, disp = p.composed_frame(), p.frame()
                 tabs = p.bg_tables()[:4] + (room_model.floor_inks(        # 3E-T6: room r's inks
-                    p.z.read_memory(S["FLOOR_LIST"], 128), r),)
+                    p.z.read_memory(S["FLOOR_LIST"], 128), r, k2=p.rb("LVL_KEYROOM2")),)
                 tabs[4].update(room_model.plate_cells(tabs[0], tabs[1],    # LARGER-D T8: lock plates
                                                       p.z.read_memory(S["EDGE_TAB"], S["EDGE_SLOTS"]), r))
                 badc, bada = [], []

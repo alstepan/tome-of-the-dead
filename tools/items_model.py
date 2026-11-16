@@ -43,7 +43,9 @@ is dropped (counted, not an error).
     first legal wins; none -> dropped.
  8. GEAR2 q pass (gear_rules.md 2.3; Z80: items_ovl.asm, step 8): after the traps, one
     rnd(8) per gear entry in list order -> numeric gear's FL_QTY = 1 + (q & 7).
-The key has no floor entry (8.11 Q1); LVL_KEYROOM stays whatever level_gen set.
+6b. KEY-POLISH (before the traps, no draw): each level key (LVL_KEYROOM cyan, then LVL_KEYROOM2
+    magenta, unless ROOM_NONE) -> an IT_KEY qty-1 entry at key_place (the first free legal cell of its
+    key room, the room cap off). LVL_KEYROOM / LVL_KEYROOM2 stay whatever level_gen set.
 
 GEAR2 (docs/design/gear_rules.md 1.3 / 2.3): the gear pool is class-gated per row
 (Robe / Hood Mage, Leather / Chain / Plate / Helm Warrior; 2 new rows), and a q pass runs
@@ -80,6 +82,7 @@ HERO_WARRIOR, HERO_MAGE = "warrior", "mage"
 # --- tunables / rulings (every one a named constant) -------------------------------
 PLACE_TRIES = 2 * D["FEAT_TRIES"]           # FLOOR1: 16 col tries per new item (was 8; potions use 32/8 in GEN_RNG)
 TRAP_TRIES = 8                              # 1.5 "each trap <= 8 seeded tries"
+ROOM_NONE = D["ROOM_NONE"]
 FLOOR_CAP = 31                              # 8.11 Q11: >= 1 entry stays free for a boss unique
 COL_LO, COL_SPAN = 2, 28                    # item col = 2 + rnd(28)  (same as the 3B potions)
 # FLOOR1 (game.md 8.11 Q1 rev 2026-10-26): an item covers cols c..c+1 (rows 9s+6..9s+7):
@@ -189,6 +192,7 @@ def glyph(typ):
 # items3e.tiles headers, game.md 8.11 Q1 + "3E simplification" item 2). Keyed by type id.
 _INK_BY_NAME = {
     "IT_DAGGER": 0x47, "IT_ARROW": 0x46,                                   # AMMO
+    "IT_KEY": 0x45,                                                        # KEY-POLISH: the floor key, cyan (magenta: key_ink, by room)
     "IT_F_CARROT": 0x06, "IT_F_APPLE": 0x44, "IT_F_PEAR": 0x04,           # FOOD
     "IT_F_CHEESE": 0x46, "IT_F_MEAT": 0x42,
     "IT_P_HEAL": 0x42, "IT_P_MANA": 0x45, "IT_P_CURE": 0x44,              # FLASK
@@ -297,6 +301,20 @@ def scan_place(b, lvl, pool):
                 if item_ok(b, lvl, r, s, col):
                     return r, s, col
     raise RuntimeError("no legal cell at all")
+
+
+def key_place(b, lvl, r):
+    """KEY-POLISH (overlay ig_key): the first free legal footprint of key room r, storey 0..1, col
+    2..29 (29 never legal): cell_legal + no live entry of the storey within col-1..col+1; the room cap
+    does not apply. None (unreachable: asserted) -> storey 1, col 2."""
+    for s in (0, 1):
+        for col in range(COL_LO, COL_LO + COL_SPAN):
+            if col <= COL_LAST and cell_legal(b, r, s, col) and not any(
+                    e[0] != D["FL_EMPTY"] and e[0] & D["FL_ROOM_MASK"] == r and (1 if e[0] & D["FL_S1"] else 0) == s
+                    and abs(e[1] - col) <= 1 for e in lvl.floor):
+                return r, s, col
+    assert False, "key room %d has no free legal cell" % r
+    return r, 1, COL_LO
 
 
 def add(lvl, rsc, typ, qty):
@@ -504,6 +522,10 @@ def gen_level_items(b, master, hero, gear2=True, old_pool=False):
                 rsc = scan_place(b, lvl, non_lair)
             add(lvl, rsc, T["IT_ARROW"], ARROW_BUNDLE)   # same cell (8.5); bundle first, the bow LAST:
             add(lvl, rsc, IT_BOW, 1)                     # the cell shows its last entry (BOW-ICON)
+    # KEY-POLISH (overlay ig_key, step 6b): the level keys on the floor of their key rooms, no draw
+    for off in (G.H["LVL_KEYROOM"], G.LOFF_KEYROOM2):
+        if b[off] != ROOM_NONE:
+            add(lvl, key_place(b, lvl, b[off]), T["IT_KEY"], 1)
     gen_traps(rng, b, lvl, pres, start, lair)
     if gear2:
         gen_gear_q(rng, lvl)
@@ -640,12 +662,16 @@ def check_items(b, lvl, hero=None):
                 or not G.item_col_ok(G_room(b, r), s, col + 1):
             v.append(f"entry {i}: illegal cell r{r} s{s} c{col}")
         cells.setdefault((r, s, col), []).append((i, typ))
+        if typ == T["IT_KEY"]:                  # KEY-POLISH: one per key room, in it, qty 1
+            if r not in (b[G.H["LVL_KEYROOM"]], b[G.LOFF_KEYROOM2]) or qty != 1:
+                v.append(f"entry {i}: key r{r} qty {qty} (key rooms {b[G.H['LVL_KEYROOM']]} / {b[G.LOFF_KEYROOM2]})")
+            continue
         try:
             g = glyph(typ)
         except ValueError:
             v.append(f"entry {i}: bad type {typ}")
             continue
-        if typ == T["IT_POTION"] or typ in (T["IT_KEY"],):
+        if typ == T["IT_POTION"]:
             v.append(f"entry {i}: type {typ} not allowed")
         if i < len(base) and typ == T["IT_POTION"]:
             v.append("legacy potion left")
@@ -671,8 +697,13 @@ def check_items(b, lvl, hero=None):
     for (r, s, c) in cells:
         if (r, s, c + 1) in cells:
             v.append(f"items r{r} s{s} at cols {c} and {c + 1}")
+    for kr in (b[G.H["LVL_KEYROOM"]], b[G.LOFF_KEYROOM2]):
+        if kr != ROOM_NONE and sum(1 for e in lvl.floor if e[2] == T["IT_KEY"] and e[0] & 15 == kr) != 1:
+            v.append(f"key room {kr}: not exactly one key entry")
     per_room = {}
     for rb, col, typ, qty in lvl.floor:
+        if typ == T["IT_KEY"]:                  # KEY-POLISH: the key ignores the room cap
+            continue
         per_room[rb & D["FL_ROOM_MASK"]] = per_room.get(rb & D["FL_ROOM_MASK"], 0) + 1
     for r, n in per_room.items():
         if n > ROOM_CAP + 1:                   # (+ the bow's bundle)
