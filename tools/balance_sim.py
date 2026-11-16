@@ -257,6 +257,8 @@ NAME_TYPE.update({"Short Sword": "IT_W_SHORT", "Oak Staff": "IT_W_OAK", "Cleaver
 BAG_GEAR_MAX = 8
 UNIQUE = {1: "Goblin Helm", 2: "Silk Cloak", 3: "Gravecloak", 4: ("Cleaver", "Bone Staff"), 5: "Scarab",
           6: "Ring of the Grave", 7: "Mirror Helm"}
+# pre-LARGER-D trap counts: items_model.TRAP_COUNT now carries the x4/3 (T6), the sim keeps TRAP_MULT as its knob
+TRAP_COUNT_1X = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
 FOODS = [10, 15, 20, 30, 40]   # 7 / 8: Carrot Apple Pear Cheese Meat (uniform)
 DROP_FOOD = {"RAT": (30, 1, 4), "GOBLIN": (15, 1, 4), "ORC": (40, 1, 3)}   # (value, k, N) 8.6/9.6
 LEVELUP = {"W": (5, 1), "M": (3, 2)}   # documentation only (the sim reads W_LVL_HP / M_* params; WIDOW-SPIT: W 4 -> 5)
@@ -874,7 +876,7 @@ class Game:
         n = len(self.rooms)
         slots = list(range(n + 2))
         self.rng.shuffle(slots)
-        self.traps = {sl: pool[self.rng.randrange(len(pool))] for sl in slots[:int(IM.TRAP_COUNT[depth] * self.P["TRAP_MULT"] + 0.5)]}
+        self.traps = {sl: pool[self.rng.randrange(len(pool))] for sl in slots[:int(TRAP_COUNT_1X[depth] * self.P["TRAP_MULT"] + 0.5)]}
         self.trap_known = set()
         self.slot_start, self.slot_lair = n, n + 1
 

@@ -206,7 +206,7 @@ ig_main:
                 call ig_add1
                 pop  bc
                 djnz .bl
-                ; 6. Warrior, D1-D7: daggers 2 + rnd(2), arrows 5 + rnd(4) (NL);
+                ; 6. Warrior, D1-D7: daggers 2 + rnd(2), arrows 7 + rnd(4) (NL; T6);
                 ;    D2: the bow (place, else scan) + the 6-arrow bundle in its cell
 .ammo:          ld   a, (HERO_KIND)
                 or   a
@@ -217,7 +217,7 @@ ig_main:
                 ld   bc, (IT_DAGGER << 8) | 2  ; B = type, C = qty base (span 2)
                 ld   a, 2
                 call ig_ammo
-                ld   bc, (IT_ARROW << 8) | 5   ; (span 4)
+                ld   bc, (IT_ARROW << 8) | 7   ; 1d4+6 (LARGER-D T6; span 4)
                 ld   a, 4
                 call ig_ammo
                 ld   a, (ig_d)
@@ -360,12 +360,17 @@ ig_seed:        ld   b, a
 .s:             ld   (GEN_RNG), hl
                 ret
 
-; ig_grp — IX = descriptor {n_lo, type_lo, k, DW pool-pointer variable}: n = n_lo + rnd(2) items, each type = type_lo + rnd(k)
+; ig_grp — IX = descriptor {n_lo (bit 7: fixed, no roll), type_lo, k, DW pool-pointer variable}: n = n_lo + rnd(2) items, each type = type_lo + rnd(k)
 ; (k = 0: ig_gp[rnd(len)]), qty 1, place in the pool, append (or drop).
 ; Keeps IX. Clobbers A, BC, DE, HL.
-ig_grp:         ld   a, 2
+ig_grp:         ld   a, (ix+0)
+                and  $7F
+                ld   b, a
+                bit  7, (ix+0)                 ; LARGER-D T6: bit 7 = fixed count (scrolls 2, no roll)
+                jr   nz, .l
+                ld   a, 2
                 call rnd
-                add  a, (ix+0)
+                add  a, b
                 ld   b, a
 .l:             push bc
                 ld   a, (ix+2)
@@ -720,10 +725,10 @@ ig_trap_ok:     call ig_desc
 ; --- data ---------------------------------------------------------------------
 ; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2)), type_lo, k (0 = the gear
 ; pool), DW the pool-pointer variable
-ig_grps:        DB   3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
-                DW   ig_nsp                    ; food 3-4 (FLOOR1: the D8 lair allowed)
-                DB   1, IT_SCR_LO, IT_SCR_HI - IT_SCR_LO + 1
-                DW   ig_nsp                    ; scrolls 1-2 (lair allowed)
+ig_grps:        DB   4, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
+                DW   ig_nsp                    ; food 4-5 (LARGER-D T6; FLOOR1: the D8 lair allowed)
+                DB   $80 | 2, IT_SCR_LO, IT_SCR_HI - IT_SCR_LO + 1
+                DW   ig_nsp                    ; scrolls exactly 2 (LARGER-D T6; lair allowed)
                 DB   1, 0, 0
                 DW   ig_nsp                    ; gear 1-2
                 ASSERT $ - ig_grps == IG_GRP_N * IG_GRP_LEN
@@ -749,8 +754,9 @@ ig_gtab:        DB   2 | GT_W, IT_W_LONG
 IG_GEAR_N       EQU ($ - ig_gtab) / 2
 ; §1.5 traps: count by depth; pool length = min(depth, TRAP_KINDS) (DART D1+, GAS D2+, TELEPORT D3+, STUN D4+, ALARM D5+)
 ; = a prefix of ig_tord (type = ig_tord[rnd(len)]; one draw, as before STUN1)
-ig_tcnt:        DB   1, 2, 2, 3, 3, 3, 4, 4
+ig_tcnt:        DB   1, 3, 3, 4, 4, 4, 5, 5   ; LARGER-D T6: old 1,2,2,3,3,3,4,4 x 4/3 half-up (<= TRAP_MAX 8)
 ig_tord:        DB   TT_DART, TT_GAS, TT_TELEPORT, TT_STUN, TT_ALARM
+                ASSERT TRAP_MAX >= 8 && FLOOR_MAX == 32       ; .fe's `bit 7, l` ends the 32-entry (128-B) list
                 ASSERT TT_DART == 0 && TT_GAS == 1 && TT_TELEPORT == 2 && TT_ALARM == 3 && TT_STUN == 4
 ig_image_end:
 ; --- scratch (past the stored image; inside the window) ------------------------

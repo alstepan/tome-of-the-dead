@@ -26,15 +26,15 @@ is dropped (counted, not an error).
     others type = POT_BY_ROLL[rnd(3)]. Then (FLOOR1) each entry in list order is
     re-checked against the item rules below (its own cell freed first); an
     illegal one is re-placed (non-start pool, scan fallback, same slot).
- 2. food:    n = 3 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
- 3. scrolls: n = 1 + rnd(2); each: type = IT_S_TELEPORT + rnd(4), place(non-start).
+ 2. food:    n = 4 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
+ 3. scrolls: n = 2 (fixed, no roll); each: type = IT_S_TELEPORT + rnd(4), place(non-start).
  4. gear:    n = 1 + rnd(2); each: type = pool[rnd(len)] (depth + class gated),
     then place(non-start).  Fixed stats, no state roll.
  5. books (IT_BOOK, D1-D7): n = 1 (+1 if depth >= 4 and rnd(2) == 0; the roll is
     skipped on D1-D3 and D8); the D1 book is in the start room at a
     place()d col (scan fallback, never dropped); the others place(non-start).
     D8: none, no roll.
- 6. Warrior only, D1-D7: dagger stack qty 2 + rnd(2), arrow stack qty 5 + rnd(4),
+ 6. Warrior only, D1-D7: dagger stack qty 2 + rnd(2), arrow stack qty 7 + rnd(4),
     each place(non-start non-lair). Then D2 only: the bow (place(non-start
     non-lair) with a deterministic scan fallback: "regardless of RNG") plus
     an IT_ARROW qty-6 entry in the bow's cell. D8: no ammo.
@@ -92,8 +92,8 @@ ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
 
 POT_BY_ROLL = (T["IT_P_HEAL"], T["IT_P_MANA"], T["IT_P_CURE"])    # Q_POTION_TYPE
 POTION_COUNT_MIN = G.POTIONS_MIN             # 8.5 / levelgen (LARGER-D: 3..4 entries, from GEN_RNG)
-FOOD_N_MIN, FOOD_N_SPAN = 3, 2              # 8.5 food 3-4
-SCROLL_N_MIN, SCROLL_N_SPAN = 1, 2          # 8.5 scrolls 1-2
+FOOD_N_MIN, FOOD_N_SPAN = 4, 2              # LARGER-D T6: food 4-5
+SCROLL_N = 2                                # LARGER-D T6: scrolls exactly 2 (no roll)
 GEAR_N_MIN, GEAR_N_SPAN = 1, 2              # 8.5 gear 1-2
 BOOK2_DEPTHS = range(4, 8)                  # 8.5 / 5: 2nd book 1 in 2 on D4-D7
 BOOK_DEPTHS = range(1, 8)                   # 8.5: class book D1-D7
@@ -128,7 +128,7 @@ Q_T0, Q_T1, Q_T2 = 2, 6, 8
 Q_MIN, Q_MAX = -1, 2
 QTY_MAX_GEAR = 8                            # numeric gear FL_QTY = 1 + (q & 7): 1, 2, 3 or 8 (q -1)
 # 1.5 traps: count per depth; pool = kinds allowed at that depth (uniform)
-TRAP_COUNT = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
+TRAP_COUNT = {1: 1, 2: 3, 3: 3, 4: 4, 5: 4, 6: 4, 7: 5, 8: 5}   # LARGER-D T6: x4/3 half-up of 1,2,2,3,3,3,4,4 (<= TRAP_MAX 8)
 # STUN1 (game.md 1.5.1): pool order DART GAS TELEPORT STUN ALARM (the overlay's ig_tord prefix)
 TRAP_FIRST = ((T["TT_DART"], 1), (T["TT_GAS"], 2), (T["TT_TELEPORT"], 3), (T["TT_STUN"], 4), (T["TT_ALARM"], 5))
 
@@ -480,7 +480,7 @@ def gen_level_items(b, master, hero, gear2=True, old_pool=False):
         typ = D["IT_FOOD_LO"] + rng.rnd(D["IT_FOOD_HI"] - D["IT_FOOD_LO"] + 1)
         try_add(rng, b, lvl, glyph_pool, typ, 1)
     # 8.5 scrolls 1-2 (PAGES glyph 18: lair allowed on D8), type uniform of 4 (8)
-    for _ in range(SCROLL_N_MIN + rng.rnd(SCROLL_N_SPAN)):
+    for _ in range(SCROLL_N):
         typ = D["IT_SCR_LO"] + rng.rnd(D["IT_SCR_HI"] - D["IT_SCR_LO"] + 1)
         try_add(rng, b, lvl, non_start, typ, 1)
     # 8.5 gear 1-2 depth-gated, fixed stats
@@ -496,7 +496,7 @@ def gen_level_items(b, master, hero, gear2=True, old_pool=False):
             try_add(rng, b, lvl, pool, IT_BOOK, 1, scan=(depth == 1 and k == 0))
     # 8.5 ammunition / bow (Warrior runs only)
     if hero == HERO_WARRIOR and depth in AMMO_DEPTHS:
-        for typ, lo, span in ((T["IT_DAGGER"], 2, 2), (T["IT_ARROW"], 5, 4)):
+        for typ, lo, span in ((T["IT_DAGGER"], 2, 2), (T["IT_ARROW"], 7, 4)):
             try_add(rng, b, lvl, non_lair, typ, lo + rng.rnd(span))
         if depth == BOW_DEPTH:
             rsc = place(rng, b, lvl, non_lair)
@@ -692,7 +692,7 @@ def check_items(b, lvl, hero=None):
     nbk = cnt.get(IT_BOOK, 0)
     if not FOOD_N_MIN - lvl.dropped_items <= nf <= FOOD_N_MIN + FOOD_N_SPAN - 1:
         v.append(f"food {nf}")
-    if not SCROLL_N_MIN - lvl.dropped_items <= ns <= SCROLL_N_MIN + SCROLL_N_SPAN - 1:
+    if not SCROLL_N - lvl.dropped_items <= ns <= SCROLL_N:
         v.append(f"scrolls {ns}")
     if not GEAR_N_MIN - lvl.dropped_items <= ng <= GEAR_N_MIN + GEAR_N_SPAN - 1:
         v.append(f"gear {ng}")
@@ -720,7 +720,7 @@ def check_items(b, lvl, hero=None):
         for rb, col, typ, qty in lvl.floor:
             if typ == T["IT_DAGGER"] and not 2 <= qty <= 3:
                 v.append(f"dagger qty {qty}")
-            if typ == T["IT_ARROW"] and not (5 <= qty <= 8 or qty == ARROW_BUNDLE):
+            if typ == T["IT_ARROW"] and not (7 <= qty <= 10 or qty == ARROW_BUNDLE):
                 v.append(f"arrow qty {qty}")
             if typ in (T["IT_DAGGER"], T["IT_ARROW"], IT_BOW) and (rb & 15 in (start, lair)):
                 v.append("ammo/bow in start/lair room")
