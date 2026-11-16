@@ -362,7 +362,8 @@ item_hp_far:
 
 ;------------------------------------------------------------------------------
 ; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1) + LARGER-D T8
-; KEY-PANEL the two key cells (28 / 29, 21) (key_pan: cyan / magenta while held, else blank). HL = PANEL_DIRTY.  ~1.9k T
+; KEY-PANEL the two 16x8 key icons (24-25 / 27-28, 21) (key_pan: cyan / magenta while held, else blank).
+; HL = PANEL_DIRTY.  ~2.3k T
 ;------------------------------------------------------------------------------
 item_depth:
                 res  PD_DEPTH_BIT, (hl)
@@ -382,8 +383,11 @@ item_depth:
                 ld   e, DEPTH_COL * 8
                 call print6
                 ASSERT ((DEPTH_COL * 8) & 7) == 0 && DEPTH_COL * 8 + 6 * 2 <= 256     ; print6 x rule
-                ld   bc, (ICON_ROW << 8) | DEPTH_COL   ; KEY-PANEL: the "Dn" cells marked here (R6 had
-                ld   de, (2 << 8) | 1          ; no room), key_pan marks its own two
+                ld   bc, (ICON_ROW << 8) | DEPTH_COL   ; KEY-PANEL: the "Dn" cells and the key icons
+                ld   de, (2 << 8) | 1          ; are marked here (R6 has no room); the marks only
+                call pmark_rect                ; matter at the next present, after key_pan draws
+                ld   bc, (STAT_ROW << 8) | KEY_PAN_COL
+                ld   d, KEY_PAN_W              ; E = 1 kept (pmark_rect keeps BC, DE)
                 call pmark_rect
                 ld   a, (LVL_FLAGS)            ; KEY-PANEL: key_pan's input (far6 passes A)
                 ld   hl, key_pan               ; LARGER-D T8 / KEY-PANEL (R6 key6.asm): the key cells

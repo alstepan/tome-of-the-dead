@@ -78,10 +78,21 @@ ASSUMPTIONS THE SPEC LEFT OPEN (all overridable or documented; sensitivity-test 
     skips a bouncing spell that could come back unless HP >= 90 % and the self-hit cannot kill, skips piercing Lightning with a
     reflector in line; staff when MP < the cheapest rank-1 cost.  Warrior throws daggers/arrows at gap 3..range.
   * Floor loot is collected room by room (no hunting); gear equip by a fixed score (v = m + q), never a type the GEAR1 gate would ban; cursed gear does not exist (3E rev 6).
+  * EXPERT policy (--policy expert; measurement of a skilled player, changes no game parameter): cautious thresholds + eat_fed (keep FED,
+    smallest food that fits under 100, 1 item kept in reserve) + sleep_open (Sleep scroll, else Fear, as the opener vs a non-boss group of
+    >= 2 or hp >= param.EXP_SLEEP_HP; Teleport stays the escape) + jump_p=1 (identical to cautious: kite 1.0 already jumps whenever the
+    JUMP rules allow) + rest_full (rest to full before every room).  Ablations: --policy expert-no_eat_fed | expert-no_sleep_open |
+    expert-no_jump_p (never jump) | expert-no_rest_full.  Not modelled: the player choosing WHICH scroll to hoard, luring monsters one at a
+    time, door tactics, reading unknown scrolls by ID; the sim's own sleep-wake rule applies.
+    More flags (off in the base expert, combos by name: expert+charm_food+avoid-no_rest_full-no_jump_p, any order of +flag / -no_flag):
+    charm_food (from D3 gear_score + CHARM_FOOD_BONUS for Plenty / Scarab) and avoid (room skipping + proactive Teleport / Fear; avoid_skip =
+    skipping only).  The sim has NO room graph / key: the stand-in is one random non-lair room = key room, never skipped; any other room
+    may be skipped (max AVOID_MAX per level) when its monsters' hp >= AVOID_HP_LVL x level or (D3+) FOOD + bag < AVOID_FOOD; a skip loses
+    the room's XP and its share of the floor loot, the transit and plate crossing still happen; skipped monsters stay (no respawn effect).
   * STALL = 220 turns in a fight or > 12 / 40 retreat cycles: the bot gives up, run counted as a loss.
 
 USAGE
-  python3 tools/balance_sim.py --hero W|M|both --policy cautious|average|reckless|all --runs 10000 \\
+  python3 tools/balance_sim.py --hero W|M|both --policy cautious|average|reckless|expert|all --runs 10000 \\
       --seed 1 [--overrides tools/balance_optionA.json] [--set key=val ...] [--json out.json] [--csv out.csv]
   python3 tools/balance_sim.py --compare tools/balance_optionA.json   # baseline vs override, full report
   override keys: ab_rank.Firebolt.1.range=8 | kx.Spider.FIRE=N | kind.Archmage.hp=60 | param.MAGE_REGEN=7
@@ -142,6 +153,15 @@ PARAMS = {
     # XP of a golden boss: null = what the build does (base-kind KXP: combat3.asm reads kx_tab only);
     # game.md 4.1 says King 20 / Queen 30 / Lord 45 / Pharaoh 65 / H.Necro 80 -> set this list to test it
     "GOLD_XP": "image",                 # "image" = bxp_d + KXP_<base> (src/data7.asm + .sym); null = base-kind KXP only; or a list
+    "EXP_SLEEP_HP": 16,                 # expert sleep_open: total hp of sleepable non-boss monsters that counts as dangerous
+    # expert avoid (docs: the sim has no room graph; stand-in = one random non-lair room is the key room (never skipped); every other
+    # room is skippable, at most AVOID_MAX per level; the expert skips a room when its monsters' total hp >= AVOID_HP_LVL x hero level, or
+    # (depth >= 3) FOOD + bag food < AVOID_FOOD.  A skip = no fight, no XP, and its 1/(rooms left) share of the floor loot is lost;
+    # the transit and the plate crossing still happen.  Proactive disengage: HP < AVOID_PC and the live monsters' hp > hero hp ->
+    # Teleport scroll (retreat, rest, come back), else Fear on an un-feared front.
+    "AVOID_MAX": 2, "AVOID_HP_LVL": 8, "AVOID_FOOD": 60, "AVOID_PC": 0.5,
+    "CHARM_FOOD_BONUS": 8,              # expert charm_food: gear_score bonus of a food-x1/2 charm from D3 on
+    "TIER_FOOD": 1,                     # tier variants (Screech Bat, Black Widow, Skeleton Guard/Knight, Poltergeist) drop Carrot/Apple/Pear 1 in 4 (asm; 0 = pre-fix numbers)
     "JUMP": 1,                          # 2.4: jump-then-cast / jump-to-range bot tactic (0 = off)
     "JUMP_COLS": 6, "JUMP_FOOD": 2,     # D = 6 cols, 1 turn + 2 FOOD, never two turns in a row
     "W_HP0": 24, "W_MP0": 6, "W_LVL_HP": None, "W_LVL_MP": 1,  # 4 / 4.1 (hero_st_init / xp7 immediates = CODE); W_LVL_HP null = .sym LUP_W_HP (5 since WIDOW-SPIT)
@@ -190,6 +210,42 @@ POLICIES = {   # 4.3: rest_hp, rest_mp(Mage), heal, escape, kite_p, boss_retreat
     "average":  dict(rest_hp=0.50, rest_mp=0.50, heal=0.25, escape=0.15, kite=0.5, retreat=0.25),
     "reckless": dict(rest_hp=0.25, rest_mp=0.25, heal=0.15, escape=None, kite=0.0, retreat=None),
 }
+# EXPERT (skilled-player stand-in, measurement only): cautious thresholds + four tactics, each its own flag (ablate with expert-no_<flag>).
+#   eat_fed    keep FED: eat the smallest food whenever it fits under FOOD 100 and the hero is not FED, but keep >= 1 item in reserve
+#   sleep_open Sleep scroll (else Fear for a group) as the opener vs a dangerous non-boss group (>= 2 bodies or hp >= EXP_SLEEP_HP)
+#   jump_p     jump-away probability (cautious kite=1.0 already jumps every time the JUMP rules allow, so expert == cautious here;
+#              the ablation sets 0.0 = never jump)
+#   rest_full  rest to full HP/MP before every room, not only below rest_hp / rest_mp
+POLICIES["expert"] = dict(POLICIES["cautious"], eat_fed=1, sleep_open=1, jump_p=1.0, rest_full=1)
+#   charm_food (D3+) prefer Amulet of Plenty / Scarab (food x1/2) in the charm slot (gear_score + CHARM_FOOD_BONUS)
+#   rest_fed   (off in the base expert) rest() eats the bag up to FED before resting a hurt hero (regen needs FED)
+#   avoid      1 = skip rooms (AVOID_* params, key-room stand-in) + proactive Teleport/Fear disengage; 2 = room skipping only
+# Name grammar (any combination): expert[+flag...][-no_flag...], e.g. expert+charm_food+avoid-no_rest_full-no_jump_p; the base expert
+# has eat_fed, sleep_open, jump_p, rest_full on and charm_food / avoid off.
+_OFF = {"jump_p": 0.0}
+_ON = {"jump_p": 1.0, "avoid_skip": 2}
+_EXTRA = ("charm_food", "avoid", "avoid_skip", "rest_fed")
+
+
+class _PolDict(dict):
+    def __missing__(self, name):
+        if not name.startswith("expert"):
+            raise KeyError(name)
+        pol = dict(self["expert"])
+        for sign, flag in re.findall(r"([+-])(?:no_)?([a-z_]+)", name[len("expert"):]):
+            neg = ("-no_" + flag) in name
+            if flag not in pol and flag not in _EXTRA:
+                raise KeyError(name)
+            if flag == "avoid_skip":
+                pol["avoid"] = 0 if neg else 2
+            else:
+                pol[flag] = _OFF.get(flag, 0) if neg else _ON.get(flag, 1)
+        self[name] = pol
+        return pol
+
+
+POLICIES = _PolDict(POLICIES)
+BASE_POLICIES = ["cautious", "average", "reckless", "expert"]   # what --policy all runs
 SPELLS = ["Spark", "Firebolt", "Frost", "Drain", "Lightning"]
 ABIL = SPELLS + ["Power", "Whirl"]
 TYPES = ["PHYS", "FIRE", "COLD", "SHOCK", "DRAIN", "DARK"]
@@ -512,6 +568,7 @@ class Game:
         self.G = D.gear
         self.jumped = False
         self.committed = False
+        self.tier_food_bases = {D.id(n) for n in ("BAT", "SPIDER", "SKELETON", "GHOST")}   # Screech / Black Widow / Skel Guard+Knight / Poltergeist
         self.pname = policy
         self.rr = rng.random
         self.t = 0
@@ -915,9 +972,28 @@ class Game:
                 self.cross_trap(sl)
 
     # ---- pickups ---------------------------------------------------------------------------
-    def pick_some(self, frac):
-        """Collect `frac` of the remaining floor loot (room-by-room approximation)."""
+    def pick_some(self, frac, discard=False):
+        """Collect `frac` of the remaining floor loot (room-by-room approximation); discard = a skipped room, the share is lost."""
         f, h, rng = self.floor, self.h, self.rng
+        if discard:
+            for key in ("pots", "food", "scr", "gear"):
+                lst = f[key]
+                for _ in range(len(lst)):
+                    if self.rr() < frac:
+                        lst.pop(0)
+                    else:
+                        lst.append(lst.pop(0))
+            for _ in range(f["books"]):
+                if self.rr() < frac:
+                    f["books"] -= 1
+            if self.hero == "W":
+                if self.rr() < frac:
+                    f["dag"] = 0
+                if self.rr() < frac:
+                    f["arr"] = 0
+                if self.rr() < frac:
+                    f["bow"] = False
+            return
 
         def take(lst):
             k = len(lst)
@@ -1030,6 +1106,8 @@ class Game:
             s += d.get("atk", 0) * 3 + mp * 0.3 - (1 if d.get("regen") == 2.0 else 0) + (3 if d.get("regen") == 0.5 else 0)
         if d.get("food"):
             s += 2
+            if self.pol.get("charm_food") and self.depth >= 3:
+                s += self.P["CHARM_FOOD_BONUS"]
         if d.get("mirror"):
             s += 6
         if d.get("res"):
@@ -1090,6 +1168,18 @@ class Game:
                 h.bagfood.sort()
                 h.food = min(100, h.food + h.bagfood.pop(0))
 
+    def eat_fed(self):
+        """expert eat_fed: top FOOD up to FED (>= 50) with the smallest item that still fits under 100; keep 1 item in reserve."""
+        h = self.h
+        if not self.pol.get("eat_fed") or (h.poison and not h.poison_imm):
+            return
+        while h.food < 50 and len(h.bagfood) >= 2:
+            h.bagfood.sort()
+            if h.food + h.bagfood[0] > 100:
+                return
+            h.food += h.bagfood.pop(0)
+            self.stat_add("fed_eats")
+
     def heal_pct(self):
         return self.h.hp / self.h.maxhp
 
@@ -1112,6 +1202,13 @@ class Game:
         while used < cap:
             need_hp = h.hp < h.maxhp * hp_to
             need_mp = (self.hero == "M" or (self.boss_prep and (h.ranks["Power"] or h.ranks["Whirl"]))) and h.mp < h.maxmp * mp_to
+            self.eat_fed()
+            if need_hp and self.pol.get("rest_fed") and not (h.poison and not h.poison_imm):
+                # expert rest_fed: HP regen needs FED (>= 50); eat up to it from the bag (no reserve) instead of giving up the rest
+                while h.food < 50 and h.bagfood:
+                    h.bagfood.sort()
+                    h.food = min(100, h.food + h.bagfood.pop(0))
+                    self.stat_add("rest_eats")
             if self.hunger_stage() >= 1:
                 self.eat_if_needed(force=self.hunger_stage() >= 1 and h.food < 50 and bool(h.bagfood) and len(h.bagfood) > 2)
                 if self.hunger_stage() >= 1:
@@ -1158,10 +1255,21 @@ class Game:
         rng.shuffle(order)
         n = len(order)
         self.seen_t = {}
+        key_ri = rng.choice(order) if self.pol.get("avoid") else None     # stand-in key room (see PARAMS AVOID_*); drawn only for avoid
+        skips = 0
         for i, ri in enumerate(order):
             self.transit()
             if P["RESP_MODE"] != "time":
                 self.progress_respawn(order, i)
+            if self.pol.get("avoid") and ri != key_ri and skips < P["AVOID_MAX"] and self.skip_room(self.rooms[ri]):
+                skips += 1
+                self.stat_add("skipped_rooms")
+                self.cross_trap(ri)
+                self.seen_t[ri] = self.t
+                self.visited_cleared += 1
+                self.pick_some(1.0 / (n - i + 0.0), discard=True)
+                self.meet_respawns()
+                continue
             self.pre_room_rest()
             self.cross_trap(ri)
             self.visit(self.rooms[ri], "room", slot=ri)
@@ -1186,9 +1294,20 @@ class Game:
         if depth == 8:
             self.sanctum()
 
+    def skip_room(self, mons):
+        """expert avoid: skip a non-key room that is too dangerous for the hero's level, or when food is short (D3+)."""
+        h, P = self.h, self.P
+        live = [m for m in mons if m.hp > 0]
+        if not live:
+            return False
+        if sum(m.hp for m in live) >= P["AVOID_HP_LVL"] * h.lvl:
+            return True
+        return self.depth >= 3 and h.food + sum(h.bagfood) < P["AVOID_FOOD"]
+
     def transit(self):
         self.adv(self.rng.randint(self.P["TRANSIT_LO"], self.P["TRANSIT_HI"]))
         self.eat_if_needed()
+        self.eat_fed()
         self.cross_known()
 
     def meet_respawns(self):
@@ -1211,7 +1330,7 @@ class Game:
             return
         hp_need = self.heal_pct() < pol["rest_hp"]
         mp_need = self.hero == "M" and h.mp < h.maxmp * pol["rest_mp"]
-        if hp_need or mp_need:
+        if hp_need or mp_need or pol.get("rest_full"):
             self.rest(1.0, 1.0)
         elif self.hero == "M" and h.mp < h.maxmp:
             pass
@@ -1365,6 +1484,7 @@ class Game:
         self.setup_geometry(mons, boss_room)
         self.hx = 0
         self.jumped = False
+        self.opened = False
         self.turns = 0
         h.hold = 0
         start_t = self.t
@@ -1794,6 +1914,24 @@ class Game:
                     if not m.boss and not (m.k["imm"] & 8):
                         m.fear = 6
                 return "skip"
+        if pol.get("sleep_open") and not self.opened and front is not None:
+            self.opened = True
+            if self.expert_opener(alive):
+                return "skip"
+        if pol.get("avoid") == 1 and not boss_room and front is not None and pc < P["AVOID_PC"] and not front.fear:
+            if sum(m.hp for m in alive) > h.hp:
+                if h.scr["tele"]:
+                    h.scr["tele"] -= 1
+                    self.stat_add("tele_scrolls")
+                    self.stat_add("avoid_tele")
+                    return "retreat"
+                fr = [m for m in alive if not m.boss and not (m.k["imm"] & 8)]
+                if fr and h.scr["fear"]:
+                    h.scr["fear"] -= 1
+                    for m in fr:
+                        m.fear = 6
+                    self.stat_add("avoid_fear")
+                    return "skip"
         if boss_room and not self.committed and pol["retreat"] is not None and pc < pol["retreat"] and self.boss.hp > 0 and self.boss in alive:
             if self.boss.x >= 2 or True:
                 return self.do_retreat(alive, mons)
@@ -1816,6 +1954,25 @@ class Game:
         if self.hero == "M":
             return self.mage_act(alive, front, mons)
         return self.warrior_act(alive, front)
+
+    def expert_opener(self, alive):
+        """expert sleep_open: read Sleep (else Fear) first vs a dangerous non-boss group; one turn.  True if a scroll was read."""
+        h = self.h
+        sl = [m for m in alive if not m.boss and not (m.k["imm"] & 1)]
+        if sl and h.scr["sleep"] and (len(sl) >= 2 or sum(m.hp for m in sl) >= self.P["EXP_SLEEP_HP"]):
+            h.scr["sleep"] -= 1
+            for m in sl:
+                m.hold, m.holdkind = 8, "sleep"
+            self.stat_add("open_sleep")
+            return True
+        fr = [m for m in alive if not m.boss and not (m.k["imm"] & 8)]
+        if len(fr) >= 2 and h.scr["fear"]:
+            h.scr["fear"] -= 1
+            for m in fr:
+                m.fear = 6
+            self.stat_add("open_fear")
+            return True
+        return False
 
     def do_retreat(self, alive, mons):
         h = self.h
@@ -1996,7 +2153,7 @@ class Game:
             return False
         if self.behind + self.hx < P["JUMP_COLS"]:
             return False
-        if self.rr() >= self.pol["kite"]:
+        if self.rr() >= self.pol.get("jump_p", self.pol["kite"]):
             return False
         if self.hero == "M":
             if h.mp < self.min_cost():
@@ -2215,6 +2372,9 @@ class Game:
             tier = 1 + (m.kind != base) + (m.kind in [t[1] for t in self.D.tiers.values() if t[1]])
             if self.rr() < tier / dr[1]:
                 h.bagfood.append(dr[0])
+        if (self.P["TIER_FOOD"] and m.kind != base and not m.resp and not m.summoned and not m.boss
+                and base in self.tier_food_bases and self.rr() < 0.25):
+            h.bagfood.append((10, 15, 20)[int(self.rr() * 3)])     # tier6.asm 445-449: Carrot / Apple / Pear 1 in 4, none from respawns
         if base == self.D.id("NECRO") and not m.resp and self.rr() < 1 / 3:
             h.mana += 1
         if self.D.nm3 and base == self.D.kid["FIRE_IMP"] and not m.resp and self.rr() < 1.0 / self.P["IMP_MANA_N"]:
@@ -2489,7 +2649,7 @@ def larger_d_bal(a, base):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="BAL-1b balance Monte Carlo")
     ap.add_argument("--hero", default="both", choices=["W", "M", "both"])
-    ap.add_argument("--policy", default="all", choices=list(POLICIES) + ["all"])
+    ap.add_argument("--policy", default="all", help="cautious|average|reckless|expert|all or an expert combo name (see POLICIES)")
     ap.add_argument("--runs", type=int, default=10000)
     ap.add_argument("--seed", default="1")
     ap.add_argument("--overrides", action="append", help="JSON override file (see tools/balance_optionA.json); repeatable, merged in order")
@@ -2509,7 +2669,7 @@ def main(argv=None):
     ap.add_argument("--ld-bsim1", action="store_true", help="--ld-bal: Mage +30 HP check on passing cells")
     a = ap.parse_args(argv)
     heroes = ["W", "M"] if a.hero == "both" else [a.hero]
-    pols = list(POLICIES) if a.policy == "all" else [a.policy]
+    pols = BASE_POLICIES if a.policy == "all" else [a.policy]
     ov = {}
     for f in a.overrides or []:
         ov = merge(ov, json.load(open(f)))
