@@ -34,6 +34,7 @@
                 ; (MEM-RECLAIM w3: lq_block, the AI-L1 ladder queue, moved to bank 3: src/lq3.asm)
                 ; boss6.asm (lp_post): NEW-MON3 T1 -> bank-0 boss0.asm (src/nm3_b0.asm)
                 ; (3F-T10 sanct6.asm: M0 -> bank 7 sanct7.asm, the high block after the tilesets)
+                INCLUDE "key6.asm"             ; LARGER-D T8: key_pan, the panel key cell (far6 from item_depth)
                 INCLUDE "tome6.asm"            ; P3: seal_open (the Archmage's death) + tome_geo6 (hero vs lectern)
                 INCLUDE "icons6.asm"           ; IC1: icon_slot / worn_draw / qs_draw (the 16x16 icon blitter)
                 ; AMMO-COUNT: before the icon data (after it, qs_ammo's +66 B made the guard pad 26 B)

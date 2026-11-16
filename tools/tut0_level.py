@@ -178,7 +178,9 @@ def structure(blk, r):
         m[top + 1][dcol], m[top + 1][dcol + 1] = T["T_DOOR_ARCH_L"], T["T_DOOR_ARCH_R"]
         for row in range(top + 2, top + SA):
             m[row][dcol] = T["T_DOOR_L"]
-            m[row][dcol + 1] = T["T_DOOR_LOCK"] if st & (D["EG_LOCK"] | D["EG_SEAL"]) else T["T_DOOR_R"]
+            m[row][dcol + 1] = T["T_DOOR_LOCK"] if st & D["EG_SEAL"] else T["T_DOOR_R"]
+        if st & D["EG_LOCK"]:           # LARGER-D T8: one plate cell (bank3 build_room_map -> lockl.asm lk_stamp)
+            m[top + 2 + D["DOOR_PLATE_DY"]][dcol + 1] = T["T_DOOR_LOCK"]
     p = d[D["RD_PITCOL"]]
     if p:
         m[F0][p - 1], m[F0][p + 3] = T["T_PIT_L"], T["T_PIT_R"]

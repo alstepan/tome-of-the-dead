@@ -767,12 +767,13 @@ build_room_map:
                 inc  hl
                 ld   (hl), T_DOOR_ARCH_R
                 ld   a, e
+                ld   (dr_edge), a              ; LARGER-D T8: lk_stamp (lockl.asm) reads it
                 ld   de, (T_DOOR_JAMB_L << 8) | T_DOOR_JAMB_R   ; open (B10)
                 bit  EG_OPEN_BIT, a
                 jr   nz, .dk
                 ld   de, (T_DOOR_L << 8) | T_DOOR_R
-                and  EG_LOCK | EG_SEAL
-                jr   z, .dk
+                and  EG_SEAL                   ; T8: sealed = the whole lock column; locked = T_DOOR_R
+                jr   z, .dk                    ; + one plate (lk_stamp)
                 ld   e, T_DOOR_LOCK
 .dk:            ld   a, DOOR_PLANK_H
 .dp:            inc  b                         ; planks, rows 9s+2 .. 9s+7
@@ -784,7 +785,7 @@ build_room_map:
                 pop  af
                 dec  a
                 jr   nz, .dp
-                ret
+                jp   lk_stamp                  ; T8 (lowram): the plate + its colour (HL = the last plank-R cell, C = col)
                 ASSERT DOOR_ARCH_DY == 1 && DOOR_PLANK_DY == 2 && DOOR_COLS == 2
                 ASSERT RDX_LS1 == RDX_L << 4 && RDX_RS1 == RDX_R << 4
 

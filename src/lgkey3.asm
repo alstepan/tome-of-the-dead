@@ -754,7 +754,13 @@ lk_edge:        call kcrec
                 dec  l
                 dec  l
                 dec  l
-                dec  l
+                dec  l                  ; -> KC_NEAR
+                ld   a, (hl)
+                inc  l
+                cp   (hl)               ; near - far: CF = the near room is the left one
+                jr   c, .l
+                set  EG_NEARR_BIT, c    ; LARGER-D T8: hero_door's far-side bolt reads it
+.l:             dec  l
                 dec  l                  ; -> KC_E
                 ld   a, (hl)
                 ld   hl, EDGE_TAB
@@ -763,4 +769,4 @@ lk_edge:        call kcrec
                 or   c
                 ld   (hl), a
                 ret
-                ASSERT KC_NLO == 5 && KC_E == 0 && (KS_CAND & $FF) == $20
+                ASSERT KC_NLO == 5 && KC_E == 0 && KC_NEAR == 1 && KC_FAR == 2 && (KS_CAND & $FF) == $20

@@ -183,6 +183,7 @@ H = {k: D[k] - BASE for k in ("LVL_DEPTH LVL_SEED GEN_RNG LVL_ATTR_FLOOR LVL_ATT
 LBASE, LBLOCK_LEN, LOFF_EDGE, LOFF_DESC, LOFF_FLOOR, LH = BASE, BLOCK_LEN, OFF_EDGE, OFF_DESC, OFF_FLOOR, H
 LOFF_KEYROOM2 = D["LVL_KEYROOM2"] - BASE   # LARGER-D T4: $6EAE (the T2 spare after TRAP_N): colour-1 key room, ROOM_NONE if unused
 EG_LOCKC = D["EG_LOCKC"]                  # LARGER-D T4: $20, lock colour 1 (EG_LOCK set; clear = colour 0)
+EG_NEARR = D["EG_NEARR"]                  # LARGER-D T8: $40, the lock's start-side (near) room is the RIGHT one
 
 
 ATTRS = {1: (0x0F, 0x01), 2: (0x27, 0x04), 3: (0x17, 0x02), 4: (0x28, 0x05),
@@ -712,7 +713,7 @@ def attempt(rng, depth, l2=True):
     CONTINUES and pass 2 reruns draws 3-5b (n and start are KEPT, not redrawn; S IS redrawn) with BRANCH_ODDS2 (rev 3: Warnsdorff
     dropped). Pass 2 passes final=True: no F floor, the best valid set is taken, else a full Restart (rev 3). A Restart
     (pick_feature / potions) still re-enters from draw 1 with pass 1. Outputs: edges[hedge(min)] |= EG_LOCK | EG_DOOR
-    (| EG_LOCKC for colour 1); LVL_KEYROOM = colour-0 key room, LVL_KEYROOM2 ($6EAE) = colour-1, ROOM_NONE.
+    (| EG_LOCKC for colour 1, | EG_NEARR (T8) when the near room is the right one); LVL_KEYROOM = colour-0 key room, LVL_KEYROOM2 ($6EAE) = colour-1, ROOM_NONE.
     Z80: src/levelgen.asm attempt + src/lgkey.asm ksel (LARGER-D T4, bit-exact: tests/levelgen_z80.py).
     The D8 Sanctum leaf runs afterwards on its own stream (sanctum_pass, SANCT_SALT): no GEN_RNG draw."""
     n = 10 + rng.rnd(3)
@@ -759,7 +760,7 @@ def attempt(rng, depth, l2=True):
             rooms[r + 3].up = c; rooms[r + 3].exits |= L["RDX_U"]
     leaves = [r for r in visited if len(adj[r]) == 1]
     for a_, b_, col in locks:           # LOCKed edges are doors (clearing EG_LOCK on unlock leaves the open door)
-        edges[hedge(min(a_, b_))] |= L["EG_LOCK"] | L["EG_DOOR"] | (EG_LOCKC if col else 0)
+        edges[hedge(min(a_, b_))] |= L["EG_LOCK"] | L["EG_DOOR"] | (EG_LOCKC if col else 0) | (EG_NEARR if a_ > b_ else 0)
     rooms[start].start = True
     rooms[lair].lair = True
     for r in leaves:

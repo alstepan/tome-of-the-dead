@@ -386,7 +386,7 @@ def check(b, stats=None):
         r = gy * GW + gx
         eb = b[OFF_EDGE + e]
         linked = r in pset and (r + 1) in adj.get(r, ())
-        if eb & ~(D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"] | G.EG_LOCKC): v.append(f"edge {e} unexpected bits")
+        if eb & ~(D["EG_LINK"] | D["EG_DOOR"] | D["EG_LOCK"] | G.EG_LOCKC | G.EG_NEARR): v.append(f"edge {e} unexpected bits")
         if bool(eb & D["EG_LINK"]) != linked: v.append(f"edge {e} LINK vs exits")
         if eb & D["EG_DOOR"] and not eb & D["EG_LINK"]: v.append(f"edge {e} door w/o link")
     nedges = sum(len(a) for a in adj.values()) // 2

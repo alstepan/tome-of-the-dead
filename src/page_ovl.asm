@@ -23,8 +23,8 @@
 ;        rows 0-1); ITEMS n/20 (x 48);    |  BREAK / I   close (VB_NONE), any mode
 ;        [CLOSE] cols 26-31 (selectable)  |  FIRE / ENTER grid: an item -> the verb
 ;  1     DAGGERS d  ARROWS a (Warrior),   |               strip (first enabled verb);
-;        KEY at col 26 (LF_KEY_TAKEN)     |               [CLOSE] -> close; empty: -
-;  2/23  ornament                         |               strip: confirm (CLOSE ->
+;        T8 CYAN / MAGENTA KEY col 23     |               [CLOSE] -> close; empty: -
+;  2/23  ornament (3: 2nd key line)       |               strip: confirm (CLOSE ->
 ;  4-14  bag 5 x 4: icon 2x2 at row       |               close; REMOVE with a full
 ;        4+3r, col 9+3c; QTY digit (>= 2) |               bag -> BAG FULL, stays)
 ;        at row 5+3r, col 11+3c           |  directions  grid: the cursor (wrap rules
@@ -55,6 +55,10 @@ PG_TXT_X        EQU 48              ; rows 0 / 1 counters, WORN label (pixel x)
 PG_CLOSE_ROW    EQU 0
 PG_CLOSE_COL    EQU 26
 PG_CLOSE_W      EQU 6               ; "[CLOSE]" = 42 px
+PG_KEY_ROW      EQU 1               ; LARGER-D T8: held keys, rows 1 / 3, cols 23-31 ("MAGENTA KEY" 66 px from x 184;
+PG_KEY_COL      EQU 23              ;   right of row 1's "DAGGERS 99  ARROWS 99" (x 48..173), above the grid)
+PG_KEY_W        EQU 9
+                ASSERT PG_KEY_COL * 8 + 11 * 6 <= 256 && PG_KEY_COL + PG_KEY_W <= 32 && PG_ORN_TOP == PG_KEY_ROW + 1
 PG_GRID_ROW     EQU 4               ; 5 x 4 bag grid, 16x16 icons 3 cells apart
 PG_GRID_COL     EQU 9               ; cols 9..23 (with the count column)
 PG_WLAB_ROW     EQU 15
@@ -190,14 +194,19 @@ page_main:
                 call pg_num
 .nk:            ld   bc, ((PG_CLOSE_ROW + 1) << 8) | PG_TXT_X
                 call pg_out
+                ; LARGER-D T8: one line per held key (rows 1, then 3), in its colour
                 ld   a, (LVL_FLAGS)
-                and  LF_KEY_TAKEN
-                jr   z, .nky
-                ld   hl, pg_s_key              ; KEY under [CLOSE]
-                ld   b, PG_CLOSE_ROW + 1
-                ld   e, PG_CLOSE_COL * 8
-                call print6
-.nky:
+                ld   b, PG_KEY_ROW
+                add  a, a                      ; CF = LF_KEYM, bit 7 = LF_KEYC
+                push af
+                add  a, a                      ; CF = LF_KEYC
+                ld   hl, pg_s_kcy
+                ld   c, ATTR_KEY_C
+                call c, pg_key
+                pop  af
+                ld   hl, pg_s_kmg
+                ld   c, ATTR_KEY_M
+                call c, pg_key
                 ; the 20 bag + 4 worn cells
                 xor  a
 .cl:            push af
@@ -877,7 +886,6 @@ pg_s_items:     DB   "ITEMS ", 0
 pg_s_of:        DB   "/20", 0
 pg_s_dag:       DB   "DAGGERS ", 0
 pg_s_arr:       DB   "  ARROWS ", 0
-pg_s_key:       DB   "KEY", 0
 pg_s_x:         DB   " X", 0
 pg_s_empty:     DB   "EMPTY", 0
 pg_s_star:      DB   "*", 0

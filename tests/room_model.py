@@ -144,6 +144,23 @@ def floor_cells(fl, room, slots=None):
 floor_inks = floor_cells             # (pre-FLOOR1 name: the per-cell inks)
 
 
+def plate_cells(rmap, glyphs, edges, room):
+    """LARGER-D T8: {(c, r): (glyph, attr)} of the room's lock plates (merge into expected_cell's `ink`).
+    A plate = a T_DOOR_LOCK cell of the plank-R col (1 / 31) with T_DOOR_R above it (a sealed door keeps
+    the whole lock column: TILE_ATTRS); attr = magenta if its edge has EG_LOCKC, else cyan (lockl.asm
+    lk_stamp / lk_cell: the colour as built, so a lock cleared after the build keeps its colour)."""
+    out = {}
+    g = bytes(glyphs[T["T_DOOR_LOCK"] * 8:T["T_DOOR_LOCK"] * 8 + 8])
+    for c, side in ((1, "L"), (31, "R")):
+        if (side == "L" and room % 3 == 0) or (side == "R" and room % 3 == 2):
+            continue
+        eb = edges[edge_index(room, side)]
+        for r in range(1, ROWS):
+            if rmap[r * 32 + c] == T["T_DOOR_LOCK"] and rmap[(r - 1) * 32 + c] == T["T_DOOR_R"]:
+                out[(c, r)] = (g, S["ATTR_KEY_M"] if eb & S["EG_LOCKC"] else S["ATTR_KEY_C"])
+    return out
+
+
 def expected_cell(rmap, glyphs, attrs, orn, ink, c, r, logical_col=None):
     """(glyph, attr) the screen shows for map cell (c, r): its tile, except the
     row-17 ornament over PLAT / WALLF cells (glyph by logical col) and FLOOR1
@@ -190,8 +207,9 @@ def render_room(blk, r, decor=True, anim=None):
                 m[row][dcol], m[row][dcol + 1] = T["T_DOOR_JAMB_L"], T["T_DOOR_JAMB_R"]
             else:
                 m[row][dcol] = T["T_DOOR_L"]
-                m[row][dcol + 1] = T["T_DOOR_LOCK"] if st & (S["EG_LOCK"] | S["EG_SEAL"]) \
-                    else T["T_DOOR_R"]
+                m[row][dcol + 1] = T["T_DOOR_LOCK"] if st & S["EG_SEAL"] else T["T_DOOR_R"]
+        if st & S["EG_LOCK"] and not st & S["EG_OPEN"]:   # LARGER-D T8: one plate cell (lockl.asm lk_stamp)
+            m[top + 2 + S["DOOR_PLATE_DY"]][dcol + 1] = T["T_DOOR_LOCK"]
     p = d[S["RD_PITCOL"]]
     if p:                                      # L2 (game.md §1.1 "Wide pit"): W holes
         pw = pit_width(d)

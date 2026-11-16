@@ -298,6 +298,9 @@ level_show:
 ; Keeps A. Clobbers: F, BC, DE, HL.   ~60 T, the one logging entry ~0.4k T + log_push
 ;------------------------------------------------------------------------------
 lair_hint:
+                push af                        ; LARGER-D T8: a key room's first entry
+                call key_find                  ; takes its key (lockl.asm)
+                pop  af
                 ld   hl, LVL_LAIR
                 cp   (hl)
                 ret  nz
@@ -423,6 +426,7 @@ room_show:
                 ld   bc, 0                     ; FLOOR1: the items over the drawn cells
                 ld   de, (ROOM_COLS << 8) | PLAY_ROWS
                 call fi_cells
+                call lk_shadow                 ; LARGER-D T8: the plates' colour into the shadow (bank 7 paged)
                 ld   a, SCREEN_BITMAP >> 8
                 jp   orn_row
 
@@ -441,7 +445,8 @@ room_shadow:
                 ld   de, ANIM_N
                 ld   bc, ANIM_COPY_LEN
                 ldir
-                jp   shadow_room               ; (FLOOR1: the markers' shadow attr is unused)
+                call shadow_room               ; (FLOOR1: the markers' shadow attr is unused)
+                jp   lk_shadow                 ; LARGER-D T8: the plates (the scroll's lk_cell put them on screen)
 
 ;------------------------------------------------------------------------------
 ; fi_cells — FLOOR1 (game.md §8.11 Q1 rev 2026-10-26): the floor items over a
@@ -470,6 +475,8 @@ fi_cells:
                 or   c
                 ld   l, a                      ; HL = the map cell (B, C)
 .c:             ld   a, (hl)
+                cp   T_DOOR_LOCK               ; LARGER-D T8: a lock plate's colour (lockl.asm;
+                call z, lk_cell                ; A = 0 out); +17 T a plain cell
                 cp   T_ITEM0
                 call nc, fi_cell
                 inc  l
@@ -1105,7 +1112,7 @@ door_open:
                 ld   a, (hl)
                 and  EG_LOCK | EG_SEAL
                 ret  nz                        ; CF = 0 (and)
-                set  EG_OPEN_BIT, (hl)
+.op:            set  EG_OPEN_BIT, (hl)         ; LARGER-D T8: key_door enters here (HL / B / C of door_find)
                 ld   a, SFX_DOOR               ; SND-5: any opener (hero or monster)
                 call sfx_req
                 xor  a
@@ -1148,14 +1155,19 @@ mon_door:
                 ret
 
 ;------------------------------------------------------------------------------
-; hero_door — try_horizontal's bump into a closed plank, IX = hero, A = dx.
+; hero_door — try_horizontal's bump into a closed plank, IX = hero, A = dx (= TMP6).
 ; Opens it and faces it (CF = 1: 1 turn, 2 ticks), or prints that it is
-; locked (CF = 0: no turn, F4).  Clobbers: all but IX.
+; locked (CF = 0: no turn, F4). LARGER-D T8: a locked door goes through
+; key_door (lockl.asm): its key or the far-side bolt opens it (1 turn).
+; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 hero_door:
                 call door_open
+                jr   c, .open
+                ld   a, (TMP6)
+                call key_door                  ; HL / B / C from door_find
                 jr   nc, .locked
-                call face_tmp6
+.open:          call face_tmp6
                 scf
                 ret
 .locked:        ld   hl, LOCK_SHOWN            ; once per press: read_turn_input
@@ -2619,6 +2631,7 @@ page_run:
                 INCLUDE "rsp0.asm"             ; LARGER-D T5: the progress respawn rsp_run / rsp_w (cold, once per
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
+                INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates, panel)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with

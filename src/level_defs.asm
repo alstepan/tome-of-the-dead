@@ -166,10 +166,17 @@ EG_OPEN         EQU %00000100       ; door open (runtime: set by bump/opener, cl
 EG_LOCK         EQU %00001000       ; locked: needs a level key (LARGER-D T4: set by level_gen, larger_depths.md §2.1)
 EG_SEAL         EQU %00010000       ; sealed: opens on the Archmage's death (D8; never set in 3B)
 EG_LOCKC        EQU %00100000       ; LARGER-D T4: lock colour 1 = magenta (with EG_LOCK; clear = colour 0 = cyan)
+EG_NEARR        EQU %01000000       ; LARGER-D T8: with EG_LOCK: the lock's start-side (near) room is the RIGHT one
+                                    ; (r + 1); clear = the left (r). level_gen sets it (lk_edge, == levelgen.py); hero_door
+                                    ; reads it for the far-side bolt (§2.1 rev 2): a bump from the far room opens keyless
 EG_LINK_BIT     EQU 0
 EG_DOOR_BIT     EQU 1
 EG_OPEN_BIT     EQU 2
+EG_LOCK_BIT     EQU 3               ; LARGER-D T8: hero_door clears it (key / far-side bolt)
 EG_SEAL_BIT     EQU 4               ; P3: seal_open (R6 boss6.asm) clears it on the Archmage's death
+EG_LOCKC_BIT    EQU 5
+EG_NEARR_BIT    EQU 6
+                ASSERT EG_LOCK == 1 << EG_LOCK_BIT && EG_LOCKC == 1 << EG_LOCKC_BIT && EG_NEARR == 1 << EG_NEARR_BIT
 ; States the task names: none = 0, open passage = LINK, closed door =
 ; LINK|DOOR, open door = LINK|DOOR|OPEN, locked = LINK|DOOR|LOCK,
 ; sealed = LINK|DOOR|SEAL.
@@ -181,6 +188,16 @@ DOOR_COLS       EQU 2
 DOOR_ARCH_DY    EQU 1
 DOOR_PLANK_DY   EQU 2
 DOOR_PLANK_H    EQU 6
+; LARGER-D T8 (larger_depths.md §2.1 rev 2 "Coloured keys"): a LOCKED closed door shows ONE plate cell
+; (T_DOOR_LOCK, plank-R col, plank row DOOR_PLATE_DY of the 6) in its key colour, the other planks are
+; T_DOOR_R $06; a SEALED door (D8) keeps the whole T_DOOR_LOCK column at TILE_ATTRS $06. The colour is per
+; cell (no free tile id): build_room_map -> lk_stamp records it per side (LK_TAB), fi_cells -> lk_cell puts it
+; on the screen (room draw + scroll strips), lk_shadow copies it into the bank-7 attr shadow.
+DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
+ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
+ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)
+ATTR_KEY_M      EQU $43             ; magenta: lock colour 1
+ATTR_KEY_CM     EQU $EB             ; panel key, both held: FLASH + BRIGHT, paper cyan, ink magenta
 
 ;------------------------------------------------------------------------------
 ; FLOOR_LIST (game.md §8.5): <= 32 entries x 4 B, FLOOR_N used (header).
@@ -426,7 +443,7 @@ LOWRAM_END_3B   EQU LP_END          ; = LOWRAM_FREE_END (defs.asm); test stubs r
 
 LF_GRATE_OPEN   EQU %00000001       ; lair grate open (3F-T8: set by grate_open when the boss dies; 3B: at level start)
 LF_GRATE_OPEN_BIT EQU 0
-LF_KEY_TAKEN    EQU %00000010       ; (3E+)
+                                    ; bit 1 (was LF_KEY_TAKEN, never set) free since LARGER-D T8
 LF_SEAL_OPEN    EQU %00000100       ; P3: the Archmage died, the Sanctum seal is open (seal_open, R6 boss6.asm)
 LF_SEAL_OPEN_BIT EQU 2
 LF_GATE_HINT    EQU %00001000       ; B12 / 3F-T8: the first-lair-entry line ("THE GATE IS BARRED")
@@ -437,6 +454,10 @@ LF_UNIQUE_BIT   EQU 4
 LF_PROVOKED     EQU %00100000       ; 3F-T8 (§9.2 G2 PROVOKED): the hero's damage reached the lair boss;
 LF_PROVOKED_BIT EQU 5               ; cleared when lp_post places the boss (every lair entry). ONE bit:
                                     ; one boss a level (the per-entity choice of the spec, engineer's call)
+LF_KEYC         EQU %01000000       ; LARGER-D T8: the cyan (colour 0) key is HELD (found on the first entry
+LF_KEYM         EQU %10000000       ; into LVL_KEYROOM / LVL_KEYROOM2, cleared when it unlocks its door).
+                                    ; Taken = LVL_KEYROOM(2) := ROOM_NONE at pickup. Per level (level_gen
+                                    ; rewrites LVL_FLAGS). Panel / bag index = LVL_FLAGS rlca rlca & 3
 
 ; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
 ; (16-bit). Additive with an ODD constant, NOT an XOR with depth * $0101: level_gen

@@ -20,7 +20,7 @@
 ;                           to E_POT (heals QUAFF_HEAL). Retired by T11 (floor
 ;                           potions become IT_P_*); then id 1 is reserved.
 ;   2..4       counters     never in the bag (game.md §8): DAGGERS / ARROWS
-;                           (hero_defs.asm) and the level key (LF_KEY_TAKEN)
+;                           (hero_defs.asm) and the level key (LF_KEYC / LF_KEYM)
 ;   5..18      bag-only     food, potions, scrolls (light ID), book, bow
 ;   19..43     gear         W / A / H / C slot ranges, in WORN slot order
 ;------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ IT_POTION       EQU 1               ; legacy (see above); E_POT migration: memor
 ; counters (floor-only types: pickup adds to a counter, never a bag slot)
 IT_DAGGER       EQU 2               ; D3-7: FL_QTY = count, cap DAGGERS_MAX (FLOOR1 icon 44)
 IT_ARROW        EQU 3               ; D3-7: FL_QTY = count, cap ARROWS_MAX (FLOOR1 icon 45)
-IT_KEY          EQU 4               ; level key: pickup sets LF_KEY_TAKEN (game.md §8)
+IT_KEY          EQU 4               ; level key: never an item (LARGER-D T8: held mask LF_KEYC / LF_KEYM in LVL_FLAGS)
 ; food, ascending FOOD value (game.md §7 table), so the quick slot's
 ; "smallest FOOD first" (§8) = the lowest food type present
 IT_F_CARROT     EQU 5               ; +10
