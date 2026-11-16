@@ -150,13 +150,13 @@ ROOM_MAX 3 unchanged, so per-room fight and supply density stay; books/gear/bow/
 | Monsters incl. boss D1..D8 (§9.4) | 13/14/14/15/16/15/15/12 | **20/21/21/23/24/23/23/18** (today × 1.5, rounded half up; user 2026-11-15 "package 2, option 1"); min `|R|` 8 × 3 = 24 ≥ max N 24 (tight, T5 asserts it). *History: ×1.35 row 18/19/19/20/22/20/20/16, superseded* |
 | `RESPAWN_MAX` (§9.5) | 6 | **6** unchanged. *History: spec 8, superseded* |
 | Respawn trigger (§9.5) | time trickle | **progress-tied (§3.2)**; the time trickle is **disabled for larger depths** |
-| Mage MP regen period (§7) | 6 turns | **4.5**: alternating 4/5 turns (same average). Warrior unchanged (8) |
+| Mage MP regen period (§7) | 6 turns | **5** (package 3; Mana / Scarab ½ = 2.5 exact via quarter-turn counting). Warrior unchanged (8). *History: package 2 4.5* |
 | Food entries (§8.5) | 3–4 | **4–5** (≈ 104 + drops ~27 ≈ 131 vs ~100 burned per ~610-turn level; today 100 / 75) |
 | Potions / scrolls | 2–3 (min 2) / 1–2 | **3–4 (min 3, ≥ 1 Heal) / 2** |
 | Arrow / dagger stack | 1d4+4 / 1d2+1 | **1d4+6** / unchanged |
 | Traps (§1.5) | per depth, list ≤ 6 | count × 4/3 rounded, **list ≤ 8**, ≤ 1 per room |
-| `XP_NEXT` L2..L9 (§4.1) | 40/100/200/340/500/700/920/1,150 | **55/135/270/460/675/945/1,240/1,550**: `LVL_EXP(d) = d` kept |
-| FED HP regen (§7) | +1 per 12 turns | **+(1 + `MAXHP` div 24) per 12 turns** (§3.1) |
+| `XP_NEXT` L2..L9 (§4.1) | 40/100/200/340/500/700/920/1,150 | **44/110/220/374/550/770/1,012/1,265** (×1.1, package 3): `LVL_EXP(d) = d` kept. *History: package 2 ×1.35* |
+| FED HP regen (§7) | +1 per 12 turns | **+(1 + `MAXHP` div 40) per 12 turns** (§3.1, package 3; package 2: div 24) |
 
 Why scale, not sparse: same totals over 37 % more rooms = empty corridors that add minutes, not play, while
 the food clock still burns ~100 per level. Why scale XP: BAL-1/B20 assume hero level = depth.
@@ -172,7 +172,7 @@ any size, the same shape as the MP rule (`+1 + MAXMP div 16` per period, §7). F
 FED-only and the HUNGRY/WEAK halts stay. `FED_REGEN` 4 (+3 per 12) overshoots (0.66 vs the ~0.40 target).
 Sim the divisor 16/24/32; first food knob if starvation shows: 4–5 → 5–6.
 
-Package 2 keeps k = 24 (user 2026-11-15); the divisor sim is closed. `XP_NEXT` ×1.35 kept. Amulets (Mana, Scarab)
+Package 2 kept k = 24; **package 3 (shipped) uses k = 40** (§3.2). `XP_NEXT` ×1.35 kept. Amulets (Mana, Scarab)
 unchanged; the mana-amulet player measured 63.7 % (amulet granted from D2, optimistic), accepted by the user.
 
 ### 3.2 Progress-tied respawns (replaces the time trickle on larger depths)
@@ -188,6 +188,11 @@ unchanged; the mana-amulet player measured 63.7 % (amulet granted from D2, optim
 
 **Sim evidence** (10k x 2 seeds, package 2): W 43.1 / M 42.7, gap 0.4; monsters met per run 162/187 (today 111/113);
 run length ~5,565/6,248 turns; BSIM1 ok (+30 HP Mage 50.5 %).
+
+**Package 3 (shipped; user 2026-11-15: target 20–30 %, even W/M):** monsters 20/21/21/23/24/23/23/18, `XP_NEXT`
+44/110/220/374/550/770/1,012/1,265, FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns (Warrior 8), progress
+respawns p 0.75 cap `RESPAWN_MAX` 6. Sim (`tools/balance_sim.py --ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5**
+(seed 1 alone: 24.9 / 26.8). Package 2 (W 43 / M 43) was judged too easy for the longer levels.
 
 **Balance gate (before any Z80; history, passed by package 2):** `tools/balance_sim.py` with 12-room levels, §3 table and §3.1 regen, 10k ×
 2 seeds, average policy. Pass = W and M ≥ 35 % and within ±3 of BAL-1 FINAL (W 41.1/41.5, M 40.1/38.8),

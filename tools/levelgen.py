@@ -981,14 +981,14 @@ def _x2(*k4):
 
 # NEW-MON3 T9: the new_monsters.md §5 lists (slots 0..n-1 distinct, fallback order; n..7 duplicates = weight),
 # weights = the tuned preset tools/balance_nm3.json (user 2026-11-13). K_ALIAS = Imp on D4 / D6, Wraith D5 / D7 / D8.
-LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 13),
-          2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 14),
-          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 14),
-          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 15),
-          5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 16),
-          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 15),
-          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 15),
-          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 12)}
+LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 20),
+          2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 21),
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 21),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 23),
+          5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 24),
+          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 23),
+          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 23),
+          8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 18)}
 NM3_B_DEPTHS = L["NM3_B_DEPTHS"]          # bit d-1: row 31 is the Frost Wraith on depth d (defs.asm)
 NM3_WR_HP = L["NM3_WR_HP"]
 
@@ -1255,12 +1255,15 @@ def lp_cmap1(b, r, k, placed=()):
     return any(ps == 1 and lo <= k <= hi for ps, lo, hi in placed)
 
 
-def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM):
+def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM, fb=False):
     """3F-T8 (game.md §9.2 'Boss guard' G1 / G1a / G1b; Z80 R6 boss6.asm lp_post): a unit of the
     lair -> (1, x) or None (the ordinary 8-try placement). No spawn-stream step. The post: c (the
     lair's RD_EXITCOL: on the grate); a hero arriving on storey 1 with a body gap < 5 to it shifts
     it 1 col at a time away (right if hx < c) to the first x with gap >= 5 whose body cols carry
-    no cell-map mark outside the exit's own c-1..c+3; out of LP_XMIN..LP_XMAX+1-wb -> None. The
+    no cell-map mark outside the exit's own c-1..c+3; out of LP_XMIN..LP_XMAX+1-wb -> None (the
+    ordinary placement). fb (LARGER-D T5, boss.py R0; lp_enter calls it for the BOSS only once
+    try 0 / the slide / the 8 tries failed too): then the farthest cell-legal x of the walk (c
+    itself if legal), gap < 5; None only if there is none. The
     boss (kind | LEK_GOLD == LP_BOSS) stands there; any other unit tries shoulder to shoulder on
     the door side (left if the lair has a left edge), then the other side: range, gap 5, no
     mark, else None (also when the boss has no post)."""
@@ -1279,13 +1282,21 @@ def lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM):
                    or any(ps == 1 and plo <= k <= phi for ps, plo, phi in placed) for k in range(x, x + ww))
     bx = c
     if not gap(c, wb) or marks(c, wb, c - 1, c + 3):
+        # LARGER-D T5 (boss.py R0, D5 seed 50107): a 3x4 lair can have no x with gap 5 (door right, c 24, three more
+        # shafts' footprints on storey 1) and lp_place may find no cell either: fb -> the farthest cell-legal x
+        best = None if marks(c, wb, c - 1, c + 3) else c
         d = 1 if hx < c else -1
         while True:
             bx += d
             if not rng(bx, wb):
-                return None
-            if gap(bx, wb) and not marks(bx, wb, c - 1, c + 3):
+                if not fb or best is None:
+                    return None
+                bx = best
                 break
+            if not marks(bx, wb, c - 1, c + 3):
+                best = bx
+                if gap(bx, wb):
+                    break
     if kb & (ROWM | LEK_GOLD) == boss:
         return (1, bx)
     sides = [bx - 1 - w, bx + wb + 1]
@@ -1306,6 +1317,7 @@ def lp_seed(b, lp, r):
 
 LP_CALLS = 0                # rnd calls of the last lp_enter (tests: cost)
 LP_OUT_SLOT = []            # ROOM-MEM: the parked slot each placed unit of the last lp_enter used (None: a free one)
+LP_POST_FB = []             # LARGER-D T5: out indices of the last lp_enter placed by the boss post fallback (game.md G1a)
 
 
 def lp_pos_byte(x, s, left, fyo=None):
@@ -1376,8 +1388,9 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
     # ROOM-MEM2: try 0 is every unit's LP_POS byte (the last cell lp_bank wrote; parked or not); a parked
     # body (kind, s, x, left[, slot]) only decides the slot (restored in place) and keeps its own facing
     parked = [[True] + list(q) for q in (parked or [])]     # [still parked, kind, s, x, left(, slot)]
-    global LP_OUT_SLOT
+    global LP_OUT_SLOT, LP_POST_FB
     LP_OUT_SLOT = []                                        # per out entry: its parked slot (q[5]) / None
+    LP_POST_FB = []
     rng = Rng(0, 0)
     rng.x = lp_seed(b, lp, r)
     lp[lp_off("LP_RNG"):lp_off("LP_RNG") + 2] = rng.x.to_bytes(2, "little")
@@ -1470,6 +1483,10 @@ def lp_enter(b, lp, r, hs, hx, hw, f3=False, parked=None):
                 continue
             best = (s, x)
             break
+        if best is None and r == b[LH["LVL_LAIR"]] and kb & (ROWM | LEK_GOLD) == lp[lp_off("LP_BOSS")]:
+            best = lp_post(b, lp, r, kb, w, fly, hs, hx, hw, placed, info, ROWM, fb=True)   # T5 R0: lp_enter .np
+            if best is not None:
+                LP_POST_FB.append(len(out))             # levelcheck: this unit's gap < 5 is the documented fallback
         if best is None:
             left.append((kb, hp, pos))
             continue

@@ -370,44 +370,7 @@ kcons:          push ix
                 ret
                 ASSERT ((KC_REC + KR_LEN) >> 8) == (KC_REC >> 8)
 
-; kins: A = slot. The slot := KC_REC when KC_REC's 8-B string is smaller. Clobbers A, BC, DE, HL.
-kins:           ld   c, a
-                add  a, a
-                add  a, c
-                add  a, a
-                add  a, a               ; 12 * slot
-                add  a, KS_BEST & $FF
-                ld   e, a
-                ld   d, KS_BEST >> 8
-                push de
-                ld   hl, KC_REC
-                ld   b, 8
-.c:             ld   a, (de)
-                cp   (hl)
-                jr   nz, .d
-                inc  hl
-                inc  de
-                djnz .c
-.d:             pop  de                 ; (equal: the same result, copied again: harmless)
-                ret  c                  ; slot < new
-                ld   hl, KC_REC
-                ld   bc, KR_LEN
-                ldir
-                ret
-
-; kload: A = candidate index, DE = KC_L0 / KC_L1: its 8 B, KL_CI := index. Clobbers A, BC, DE, HL.
-kload:          ld   hl, KL_CI
-                add  hl, de
-                ld   (hl), a
-                add  a, a
-                add  a, a
-                add  a, a
-                add  a, KS_CAND & $FF
-                ld   l, a
-                ld   h, KS_CAND >> 8
-                ld   bc, 8
-                ldir
-                ret
+; kins / kload: LARGER-D T5 -> the low-RAM cold block (src/lgkeyl.asm: B0_CODE2 room; plain calls, GEN_SCRATCH only)
 
 ;==============================================================================
 ; ksel (see the header)

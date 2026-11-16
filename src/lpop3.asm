@@ -36,9 +36,15 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
 
 ; Per-depth budget rows lp_dtab (+ LP_DROW): NEW-MON3 T1 moved them to bank-0 B0_CODE2 with the
 ; header copy (src/nm3_b0.asm lp_hdr0, FARB0 from lp_budget); A-1 (the row-31 alias) hooks in there.
-; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 10 >= 7 = the most rooms R
+; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 16 >= 10 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
+; LARGER-D T5: lp_dtab max count 24 (D5) vs the tight min room capacity: the 3x4 grid's min |R| 8 x ROOM_MAX 3 = 24
+; (the discard path would silently drop units otherwise). Armed once the grid has 12 cells (T4); on 3x3 |R| can be 7.
+LP_N_MAX        EQU 24
+    IF GRID_CELLS >= ROOM_SLOTS
+                ASSERT ROOMS_MIN * ROOM_MAX >= LP_N_MAX
+    ENDIF
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
 ; (3F: MEM-RECLAIM w3: lp_wt is the kind_tab KT_REACH slot, bank 2 main.asm; the macro LP_WT_ROWS lives in defs.asm)
@@ -269,6 +275,8 @@ lp_transition:
                 ld   hl, ROOM_VISITS
                 call hla
                 inc  (hl)
+                ld   hl, TRK_PHASE             ; LARGER-D T5: a room entry: the progress-respawn event runs on the next
+                set  TRK_DUE_BIT, (hl)         ; INPUT tick (turn_input -> low-RAM rsp_run: the first-entry test, the roll, the pick)
                 ld   hl, SLOTREC + SLOTREC_STRIDE + R_VIS
                 ld   de, SLOTREC_STRIDE
                 ld   b, P_MAX_ENT - 1
@@ -355,7 +363,8 @@ lp_enter:
                 ld   hl, LPV_ROOM              ; of the lair takes its post (bank-0 boss0.asm, no
                 cp   (hl)                      ; stream step; keeps IX); an escort with no legal
                 jr   nz, .t0                   ; post falls back to its saved cell / lp_place
-                FARB0 lp_post                  ; NEW-MON3 T1: bank 0 (boss0.asm; was far6 R6, +2 B); L = 1: C = 1, E = x
+                xor  a                         ; LARGER-D T5: A = 0 the post (!= 0: .np's boss fallback)
+                FARB0 lp_post                  ; NEW-MON3 T1: bank 0 (boss0.asm; A passes in); L = 1: C = 1, E = x
                 ld   a, l
                 cp   1                         ; Z, NC: posted
                 jr   z, .sp
@@ -370,7 +379,7 @@ lp_enter:
 .pl:            call lp_place                  ; CF = no legal cell, else C = s, E = x
 .sp:            call nc, lp_spawn              ; CF = no free slot
                 jr   c, .np
-                ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
+.spd:           ld   a, (LPV_FACE)             ; ROOM-MEM2: consumed (a later unit faces the hero unless
                 or   a                         ; its own try 0 sets it); a flyer placed by try 0 / the
                 jr   z, .nu                    ; slide (bit 6) goes back to its saved band row (R6 lp_fy6).
                 ld   e, a                      ; (0, the first-visit path: 29 T)
@@ -380,7 +389,23 @@ lp_enter:
                 ld   hl, lp_fy6
                 call nz, far6
                 jr   .nu
-.np:            xor  a                         ; not placed: stays in the record (its LP_POS byte: lp_t06
+.np:            ld   hl, (LPV_RDP)             ; LARGER-D T5 (boss.py R0): the lair's BOSS that neither its post (no
+                ld   a, (hl)                   ; gap-5 col: 3x4 lairs) nor try 0 / the slide / lp_place could seat:
+                and  LEK_KIND_MASK | LEK_GOLD  ; lp_post again with A != 0 -> the farthest cell-legal col of its G1a
+                ld   hl, LP_BOSS               ; walk (gap < 5). Never lost in the record (invisible) again.
+                cp   (hl)
+                jr   nz, .np0
+                ld   a, (LVL_LAIR)
+                ld   hl, LPV_ROOM
+                cp   (hl)
+                jr   nz, .np0
+                ld   a, 1                      ; the fallback mode
+                FARB0 lp_post
+                dec  l
+                jr   nz, .np0
+                call lp_spawn                  ; C = 1, E = x (IX kept); a 2nd CF: the plain path, no loop
+                jr   nc, .spd
+.np0:           xor  a                         ; not placed: stays in the record (its LP_POS byte: lp_t06
                 ld   (LPV_FACE), a             ; copied it to WRP); no try-0 marker leaks to the next unit
                 ld   hl, (LPV_RDP)
                 ld   de, (LPV_WRP)
@@ -474,17 +499,15 @@ lp_place:       ld   b, LP_TRIES
 ;             (lp_legal); lp_spawn marks each body it places.
 ; Clobbers: A, BC, DE, HL, IX.   ~2.5k T
 ;------------------------------------------------------------------------------
-lp_cmap:        ld   hl, LP_CMAP               ; clear: 3 stores / loop, ~15 T/B
-                ld   b, 2 * LP_CMW / 3         ; (ldir: 21 T/B; ~0.4k T saved)
+lp_cmap:        ld   hl, LP_CMAP               ; clear: 6 stores / loop, ~13 T/B (LARGER-D T5: was 3,
+                ld   b, 2 * LP_CMW / 6         ; ~15 T/B: -0.14k T an entry for +6 B; ldir: 21 T/B)
                 xor  a
-.c:             ld   (hl), a
-                inc  l
+.c:             REPT 6
                 ld   (hl), a
                 inc  l
-                ld   (hl), a
-                inc  l
+                ENDR
                 djnz .c
-                ASSERT (2 * LP_CMW) % 3 == 0
+                ASSERT (2 * LP_CMW) % 6 == 0
                 ld   a, (LPV_ROOM)
                 call rdp
                 push hl
@@ -750,12 +773,13 @@ lp_spawn:       push de                        ; E = col
                 ASSERT (ST_T1 & $FF) == $E0 && ST_T2 == ST_T1 + 16 && ST_X == (ST_FLAGS & $FF00) + $100 && (ST_FLAGS & $FF) == $10
                 push ix
                 pop  hl
-                ld   b, P_ENT_STRIDE / 2       ; the slot = 0 (32-aligned: one page), 2 B a pass:
-.z:             ld   (hl), d                   ; 0.56k T (the LDIR it replaces: 0.67k), 2 B less
-                inc  l
-                ld   (hl), d
-                inc  l
+                ld   b, P_ENT_STRIDE / 8       ; the slot = 0 (32-aligned: one page), 8 B a pass:
+.z:             REPT 8                         ; 0.40k T (LARGER-D T5: was 2 B a pass, 0.56k; the
+                ld   (hl), d                   ; x1.5 density spawns ~1.8 units an entry: -0.29k T
+                inc  l                         ; on the lp_enter mean for +12 B)
+                ENDR
                 djnz .z
+                ASSERT P_ENT_STRIDE % 8 == 0
                 ld   a, (LPV_FACE)             ; ROOM-MEM2: placed on its LP_POS cell (try 0): its saved facing
                 ld   (ix+E_FLAGS), a           ; (lp_t06: EF_LEFT bit, != 0 marks it for .mk; spawn_one rewrites
                 jr   .mk                       ; E_FLAGS); 0 = face the hero

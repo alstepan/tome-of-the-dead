@@ -57,7 +57,7 @@ ROOM_SLOTS      EQU 12
                 ASSERT GRID_CELLS == ROOM_SLOTS
 ROOMS_MIN       EQU 10              ; larger_depths.md §2 (DFS tree, + 0–1 loop edge); D8 max 11 + Sanctum
 ROOMS_MAX       EQU 12
-LP_N_MIN        EQU 16              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
+LP_N_MIN        EQU 18              ; smallest lp_dtab count incl. boss (D8; keep == the table, lpop3.asm)
 LEVELS          EQU 8               ; D1..D8 (LVL_DEPTH 1..8)
 ROOM_NONE       EQU $FF             ; "no room" in LVL_KEYROOM / LVL_SANCTUM
 

@@ -23,13 +23,14 @@
 ;     amulet is worn: §8 "FOOD burn x1/2") -> 0, FOOD - 1. FOOD floors at 0:
 ;     hunger is never fatal;
 ;  3. hg_stage (HSTAGE, its line, STS_HWEAK);
-;  4. FED: HP_RG + 1, at HP_REG_FED -> 0, HP + 1 (to MAXHP; the panel polls
+;  4. FED: HP_RG + 1, at HP_REG_FED -> 0, HP + 1 + MAXHP div 40 (T5 pkg 3; to MAXHP; the panel polls
 ;     HP). WEAK: HW_TMR + 1, at HW_REPEAT the faint (hg_faint, §7.1);
 ;  5. MP_HOLD for xp_turn: WEAK (status or hunger) -> != 0 (MP regen
 ;     halted); HUNGRY -> TURN_COUNTER bit 0 (MP_RG advances every 2nd turn:
 ;     the regen period doubles, §8.11); else 0.
 ; Clobbers: A, BC, DE, HL.   ~0.6k T contended (+ ~3k on a line turn; + far6 wear_apply on a wear turn)
 ;------------------------------------------------------------------------------
+HP_FED_DIV      EQU 40              ; LARGER-D T5 package 3 (user 2026-11-15): FED regen 1 + MAXHP div 40 per HP_REG_FED turns
 hunger_turn:
                 ld   a, (WEAR_PEND)            ; 3F-T6: a wear event of this turn (abil6.asm): the line,
                 or   a                         ; hero_recalc, the worn cell — deferred from the input tick
@@ -70,12 +71,27 @@ hunger_turn:
                 ld   hl, P_ENTITIES + E_HP
                 ld   a, (hl)
                 inc  hl
-                cp   (hl)                      ; HP < MAXHP ?
+                ld   c, (hl)                   ; C = MAXHP
+                cp   c                         ; HP < MAXHP ?
                 jr   nc, .hold
-                dec  hl
-                inc  (hl)
+                ld   b, a                      ; B = HP
+                ld   a, c
+                ld   d, 1                      ; LARGER-D T5 (§3.1): gain D = 1 + MAXHP div HP_FED_DIV
+.dv:            sub  HP_FED_DIV                ; (<= 6 steps: MAXHP < 256, once per 12 turns: a loop beats a table)
+                jr   c, .dg
+                inc  d
+                jr   .dv
+.dg:            ld   a, b
+                add  a, d
+                cp   c
+                jr   c, .hp
+                ld   a, c                      ; clamp at MAXHP
+.hp:            dec  hl
+                ld   (hl), a
+                sub  b                         ; A = the HP actually gained
                 ld   hl, DN_SLOT + DS_SNAP     ; D3-11: FED regen is silent (game.md §6.5): accounted
-                inc  (hl)
+                add  a, (hl)
+                ld   (hl), a
                 jr   .hold
 .nfed:          cp   HS_WEAK
                 jr   nz, .hold

@@ -5,8 +5,12 @@
 ; bank-2 xpn_tab (the single XP_NEXT table, also read by bank-1 item_info).
 ;==============================================================================
 
-MP_REG_W        EQU 8               ; game.md §4: Warrior +1 MP per 8 turns
-MP_REG_M        EQU 6               ; Mage period 6 (B20, game.md 4.0)
+; LARGER-D T5 (larger_depths §3): MP_PER / MP_RG count QUARTER-turns (MP_RG += MP_RG_STEP a turn, at MP_PER:
+; MP_RG -= MP_PER, the remainder kept), so the Mana / Scarab x 1/2 of the Mage's 5-turn period (2.5 turns: alternates 3 / 2)
+; and Plate x 2 (10) stay exact with no toggle state (package 3). Warrior 8 turns unchanged.
+MP_RG_STEP      EQU 4               ; quarter-turns per turn
+MP_REG_W        EQU 8 * MP_RG_STEP  ; Warrior +1 MP per 8 turns (game.md §4)
+MP_REG_M        EQU 5 * MP_RG_STEP  ; Mage 5 turns (package 3; was 6, B20; larger_depths §3.2)
 LUP_W_HP        EQU 5               ; §4.1 level-up: Warrior max HP +5 (WIDOW-SPIT: was 4), max MP +1
 LUP_W_MP        EQU 1
 LUP_M_HP        EQU 3               ; Mage max HP +3, max MP +2
@@ -22,9 +26,9 @@ XPF_EVA         EQU 2               ; an eva step
 ; xp_turn — end_turn's regen + level-up step (game.md §2.2 end of turn:
 ; "... hunger -> regen -> ..."), a plain call (bank 7), skipped when the hero
 ; is DYING (end_turn tests it first).
-; MP regen: MP_RG counts turns; at MP_PER (3E-T8 hero_recalc: the class period,
+; MP regen: MP_RG counts quarter-turns (T5); at MP_PER (3E-T8 hero_recalc: the class period,
 ; x 1/2 Mana / Scarab amulet, x 2 Plate) MP += 1 + MAXMP div 16 (to MAXMP) and
-; MP_RG = 0. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted");
+; MP_RG -= MP_PER. While WEAK (ST_FLAGS slot 0) the counter is frozen (§7 "halted");
 ; 3E-T9: the test is MP_HOLD, written by hunger_turn (R6) right before: WEAK
 ; (status or hunger) -> frozen; HUNGRY -> frozen on odd TURN_COUNTER (period x2).
 ; Level-up (XP_UP set by deal_hit's award): while LVL < LVL_MAX and XP >=
@@ -42,14 +46,16 @@ xp_turn:
                 ld   a, (MP_HOLD)              ; 3E-T9 (hunger_turn, just before): WEAK
                 or   a                         ; (status or hunger) or a HUNGRY odd turn:
                 jr   nz, .lv                   ; no regen, counter held (-1 B vs ST_FLAGS)
-                ld   a, (MP_PER)               ; 3E-T8: hero_recalc's period (class 8 / 6,
+                ld   a, (MP_PER)               ; 3E-T8: hero_recalc's period in quarter-turns (class 32 / 20,
                 ld   b, a                      ; Mana / Scarab x 1/2, Plate x 2; -6 B)
                 ld   hl, MP_RG
-                inc  (hl)
                 ld   a, (hl)
+                add  a, MP_RG_STEP
                 cp   b
+                ld   (hl), a                   ; (ld keeps the carry)
                 jr   c, .lv
-                ld   (hl), 0
+                sub  b                         ; keep the remainder: a halved Mage period (2.5) alternates 3 / 2
+                ld   (hl), a
                 ld   hl, MAXMP
                 ld   a, (hl)
                 rrca

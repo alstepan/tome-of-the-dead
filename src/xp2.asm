@@ -10,7 +10,7 @@
 ; and bank-1 item_info alike.
 ;------------------------------------------------------------------------------
 XPN_COUNT       EQU 8
-xpn_tab:        DW   40, 100, 200, 340, 500, 700, 920, 1150
+xpn_tab:        DW   44, 110, 220, 374, 550, 770, 1012, 1265     ; LARGER-D T5 package 3
                 ASSERT $ - xpn_tab == XPN_COUNT * 2 && XPN_COUNT == LVL_MAX - 1
 
 ; item_mp (the MP panel item): NEW-MON3 T1 -> bank-0 src/nm3_b0.asm (FARB0 from panel_more).

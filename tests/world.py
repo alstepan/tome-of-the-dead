@@ -1635,8 +1635,8 @@ def w15_icons(p, check):
           info(fr) == text6(line((0, "POTION"), (16, "X1"), (28, "FIRE: DRINK")), 0, 32), "")
     p.wb("SEL_SLOT", 9)
     fr = settle_panel()
-    check("W15i Bag line: 'BAG  LV 1  XP 0/40' (game.md §4.1)",
-          info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/40")), 0, 32), "")
+    check("W15i Bag line: 'BAG  LV 1  XP 0/44' (game.md §4.1; LARGER-D T5 package 3)",
+          info(fr) == text6(line((0, "BAG"), (16, "LV 1"), (28, "XP 0/44")), 0, 32), "")
     p.wb("XP", 39)
     p.wb(S["XP"] + 1, 1)                          # 295
     p.wb("LVL", 4)
@@ -1645,7 +1645,7 @@ def w15_icons(p, check):
     p.wb("SEL_SLOT", 9)
     fr = settle_panel()
     check("W15i Bag line follows LVL / XP; level digit follows LVL",
-          info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/340")), 0, 32)
+          info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/374")), 0, 32)
           and log_row(fr, 19, 31, 1) == text6("4", 0, 1), "")
     check("W15i displayed == composed", fr == p.composed_frame(), "")
 
@@ -3505,7 +3505,7 @@ def w21_exits(p, check):
     p.proto_start = 0
     n_exits = n_pits = 0
     try:
-        for M in (0x0007, 0x1234):
+        for M in (118, 0x1234):                        # LARGER-D T5: 118 (10 storey-0 exits, 6 pit rooms on the 3x4 grid) for 0x0007 (2 / 0)
             p.load()
             p.wait_state(S["GS_SELECT"])
             p.wb("seed_fixed", 1)
@@ -3590,8 +3590,8 @@ def w21_exits(p, check):
         p.proto_start = 1
         p.load()
 
-L2_CASES = (("wide", 4, 13, 7), ("wide", 4, 1, 7), ("wide", 4, 5, 0),     # W 4 / 5 / 6
-            ("mid", 4, 4, 4), ("mid", 4, 2, 8))                           # w 2 / 3
+L2_CASES = (("wide", 4, 19, 4), ("wide", 4, 1, 1), ("wide", 4, 1, 10),    # W 4 / 5 / 6 (LARGER-D T5: re-picked on
+            ("mid", 4, 4, 10), ("mid", 4, 1, 8))                          # w 2 / 3   the 3x4 generator)
 
 
 def l2_walk_parts(m, kh):

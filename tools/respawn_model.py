@@ -46,7 +46,7 @@ class Level:
     def __init__(self, depth, lvl, kinds, lair, recs, items=None):
         self.depth, self.lvl, self.kinds, self.lair = depth, lvl, list(kinds), lair
         self.recs = recs
-        self.items = items or [0] * 9
+        self.items = items or [0] * 12          # LARGER-D: 12 room slots
         self.resp = 0               # LP_RESPAWNS
         self.boss_dead = False
         self.sanctum = None         # LVL_SANCTUM (D8; 3F-D2: never eligible)

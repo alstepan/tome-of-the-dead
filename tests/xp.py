@@ -165,32 +165,32 @@ def run(h, p, check):
     # ======================= L / G: threshold, gains ============================
     scene(K_KNIGHT, hp=30, mp=3, maxmp=6)
     base_w = katk(K_KNIGHT)
-    x = kill(36)
-    check("L1 XP 36 + Goblin 3 = 39: stays L1", x == 39 and p.rb("LVL") == 1 and p.rb("XP_UP") == 0,
+    x = kill(40)
+    check("L1 XP 40 + Goblin 3 = 43: stays L1", x == 43 and p.rb("LVL") == 1 and p.rb("XP_UP") == 0,
           (x, p.rb("LVL")))
-    x = kill(37)
+    x = kill(41)
     st = hero_stats()
-    check("L2 XP 37 + 3 = 40 = XP_NEXT[2]: L2, XP_UP cleared", x == 40 and st[0] == 2 and p.rb("XP_UP") == 0,
+    check("L2 XP 41 + 3 = 44 = XP_NEXT[2] (LARGER-D T5 package 3): L2, XP_UP cleared", x == 44 and st[0] == 2 and p.rb("XP_UP") == 0,
           (x, st))
     check("G1 Warrior: HP 30/30 -> 35/35, MP 3/6 -> 4/7", st[1:] == (35, 35, 4, 7) and S["LUP_W_HP"] == 5, st)
     check("G1 'YOU REACH LEVEL 2!' logged once", lines.count(TXT["xp_reach"] + "2!") == 1, lines)
     check("L3 panel level digit: LVL_SH follows LVL", p.rb("LVL_SH") == 2, p.rb("LVL_SH"))
     check("G1 no step at L2: atk / eva unchanged", katk(K_KNIGHT) == base_w, (katk(K_KNIGHT), base_w))
-    x = kill(37, flags=EF_RESPAWN)
-    check("L4 a respawned Goblin awards KXP / 2 = 1 (37 -> 38)", x == 38, x)
+    x = kill(52, flags=EF_RESPAWN)
+    check("L4 a respawned Goblin awards KXP / 2 = 1 (52 -> 53)", x == 53, x)
 
     scene(K_WIZARD, hp=20, mp=5, maxmp=12)
-    kill(39)
+    kill(54)
     st = hero_stats()
     check("G2 Mage: L2, HP 20/20 -> 23/23, MP 5/12 -> 7/14", st == (2, 23, 23, 7, 14), st)
 
     # ======================= S: steps, multi-level, cap, reset ===================
     scene(K_KNIGHT, hp=30, mp=0, maxmp=6)
     p.wb("MP_RG", 0)
-    kill(919)
+    kill(1239)
     st = hero_stats()
     a1 = katk(K_KNIGHT)
-    check("S1 XP 922 from L1: L8 at once, HP +35, MP +7", st == (8, 65, 65, 7, 13), st)
+    check("S1 XP 1242 from L1: L8 at once, HP +35, MP +7", st == (8, 65, 65, 7, 13), st)
     check("S1 atk +2 (L4, L8), eva +1 (L6)", a1 == (base_w[0] + 2, base_w[1] + 1), (a1, base_w))
     want = [TXT["xp_reach"] + "8!", TXT["xp_atk"], TXT["xp_eva"]]
     check("S1 lines: REACH LEVEL 8!, STRIKE TRUER, FEEL NIMBLE (once each)",
@@ -205,24 +205,24 @@ def run(h, p, check):
 
     # ======================= M: MP regen ==========================================
     # B20 (game.md 4.0): Mage period 6; gain = 1 + MAXMP div 16 (MAXMP 16 -> +2), clamped
-    for hero, per, mx in ((K_KNIGHT, 8, 2), (K_WIZARD, 6, 2), (K_WIZARD, 6, 16)):
+    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 20, 2), (K_WIZARD, 20, 16)):   # LARGER-D T5: MP_PER in quarter-turns, +4 a turn (Mage 5, package 3)
         gain = 1 + (mx >> 4)
         scene(hero, mp=0, maxmp=mx)
         got = []
-        for i in range(2 * per + 2):
+        for i in range(20):
             p.turn("WAIT")
             got.append(p.rb("MP"))
-        want = [min(mx, gain * ((i + 1) // per)) for i in range(2 * per + 2)]
-        check(f"M1 {'Warrior' if hero == K_KNIGHT else 'Mage'} MAXMP {mx}: +{gain} MP per {per} turns, capped at MAXMP",
+        want = [min(mx, gain * (4 * (i + 1) // per)) for i in range(20)]
+        check(f"M1 {'Warrior' if hero == K_KNIGHT else 'Mage'} MAXMP {mx}: +{gain} MP per {per / 4} turns, capped at MAXMP",
               got == want, (got, want))
         p.tick(3)
         check("M2 panel MP_SH follows MP (item_mp)", p.rb("MP_SH") == p.rb("MP"), (p.rb("MP_SH"), p.rb("MP")))
     # B20 clamp: MP + gain never overshoots MAXMP (MAXMP 17 gain 2; MAXMP 99 gain 7)
     for mx, mp0, want in ((17, 16, 17), (99, 98, 99)):
         scene(K_WIZARD, mp=mp0, maxmp=mx)
-        for i in range(6):
+        for i in range(5):
             p.turn("WAIT")
-        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 6th turn (no overshoot)",
+        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 5th turn (no overshoot)",
               p.rb("MP") == want, p.rb("MP"))
     scene(K_WIZARD, mp=0, maxmp=12)
     p.wb(S["ST_FLAGS"], S["STS_WEAK"])
@@ -273,10 +273,10 @@ def run(h, p, check):
         ok = p.code([0x21] + w16(S["xp_turn"]) + [0xCD] + w16(S["far7"]))   # (DI: SYS_FRAMES holds)
         return ok, p.tstates
     tt = {}
-    for nm, xp0, xpu in (("regen only", 0, 0), ("XP no level", 10, 1), ("1 level + line", 40, 1),
-                         ("L1->L4 + 2 lines", 200, 1), ("L1->L9 + 3 lines", 1200, 1)):
+    for nm, xp0, xpu in (("regen only", 0, 0), ("XP no level", 10, 1), ("1 level + line", 44, 1),
+                         ("L1->L4 + 2 lines", 220, 1), ("L1->L9 + 3 lines", 1265, 1)):
         tt[nm] = xp_code(xp0, xpu, True)[1]
-    ok2, t9 = xp_code(1200, 1, False)
+    ok2, t9 = xp_code(1265, 1, False)
     pend = (p.rb("XP_UP"), p.rb("LVL"))
     print(f"[info] xp_turn costs (1st frame): {tt}; in a 2nd frame (level-up deferred): {t9} T", flush=True)
     # Limit 13,500 T (was 13,000; MEM-SND fix): the cost is mostly the 3 log lines'
@@ -293,7 +293,7 @@ def run(h, p, check):
           ok2 and pend == (1, 1) and t9 <= 1000, (ok2, pend, t9))
     # a deferred level-up lands on a later INPUT tick (turn_input -> xp_level)
     scene(K_KNIGHT, hp=30, mp=0, maxmp=6)
-    p.wmem(S["XP"], w16(200))
+    p.wmem(S["XP"], w16(220))
     p.wb("XP_UP", 1)
     p.tick(2)
     check("C3 deferred level-up done by a later INPUT tick: L4, REACH LEVEL 4!, STRIKE TRUER; XP_UP 0",
