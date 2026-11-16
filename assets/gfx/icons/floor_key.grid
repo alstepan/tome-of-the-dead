@@ -1,6 +1,6 @@
 # Tome of the Dead 16x16 item icon (IC1, game.md 8.11 Q5). Packed by tools/icons16.py.
 # name: floor_key
-# note: KEY-POLISH level key on the floor (IT_KEY): ring left, 2-px shaft, two teeth; lower half only (rests on the floor); placeholder after the panel label_key, artist review pending
+# note: KEY-POLISH level key on the floor (IT_KEY): ring left, 2-px shaft, two teeth; lower half only (rests on the floor); placeholder after the panel label_key, approved by the user 2026-11-16
 # legend: '#' ink (item-type ink from it_tab / ITEM_INK; magenta key: key_ink), '.' paper; 1 bit, no mask
 #
 ................

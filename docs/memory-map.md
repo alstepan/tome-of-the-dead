@@ -7334,7 +7334,7 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   -> the attr shadow, so `erase_rect` keeps it). Ink only, paper 0: no clash (lock8 K7). Unlock -> `door_paint` /
   `shadow_rect` restore $06. Models: `tests/room_model.py` (render + `plate_cells` for every screen==map check),
   `tools/tut0_level.py` (D0's B-C plate: cyan, the tutorial clears its lock after the build).
-- **Panel** (30, 19): `item_depth` (HOT, +3 B) far6s **`key_pan`** (`src/key6.asm`, R6 54 B): attr `$45` / `$43` / both
+- **Panel** (30, 19; superseded by KEY-PANEL: two cells (28 / 29, 21), DOOR-FRAME ledger): `item_depth` (HOT, +3 B) far6s **`key_pan`** (`src/key6.asm`, R6 54 B): attr `$45` / `$43` / both
   `ATTR_KEY_CM` `$EB` (FLASH) / none 0; the 8x8 `label_key` glyph (copied bytes) drawn when a key is held (invisible at attr 0
   afterwards; goldens unchanged: the cell stays empty until a key); `pmark_rect` 2 x 2. Pickup / unlock set `PD_DEPTH`.
   No timed "new key" flash beyond `$EB` for two keys (spec rev 2 panel row).
@@ -7385,6 +7385,43 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   from the bag after the unlock, all 12 planks + shadow in K7 (room_show and the B -> C scroll), K8 one key entry per
   key room on generated D1 / D2.
 
+## DOOR-FRAME ledger (`feat/door-frame-key`, 2026-11-16; user playtest of main `c873ee2`; + KEY-PANEL, same branch)
+
+- **Frame cells (user: a coloured frame always means a locked door).** A closed door's frame is its lintel (row 9s,
+  `T_BRICK`, cols 0-1 / 30-31) and its arch (row 9s+1, `T_DOOR_ARCH_L` / `_R`); a closed door has no jamb cells (the
+  plank glyphs carry the jamb strokes; `T_DOOR_JAMB_*` exist only on an open door). **Coloured: the 2 arch cells**
+  (pure frame glyphs, no brick pixels). **Skipped: the 2 lintel cells** (they ARE wall bricks: tinting them would tint
+  the wall). Ink on paper 0 (`$45` / `$43`), no clash.
+- **Mechanism, 0 B:** the arch ids 21-22 sit right below the plank ids 23-25, so `fi_cells`' hook (lowram.asm) and
+  `lk_shadow` (lockl.asm) now test the range `T_DOOR_ARCH_L .. T_DOOR_LOCK` (same opcodes, other constants); `lk_cell`
+  paints the arch with `dr_tab[side]` like the planks (key colour while locked, `ATTR_PLANK` = the arch's own `$06`
+  otherwise: boot6.asm ASSERTs `TILE_ATTRS` 21..25 == `ATTR_PLANK`). Plain-cell cost unchanged (31 T); +2 hook calls a
+  closed door (~0.4k T a room draw), `lk_shadow` ~4.7k T (was ~4.5k).
+- **Revert, +1 B low RAM:** `door_paint` repaints rows B-1 .. B+5 (the arch row + the planks: `dec b`, E = 7) through
+  `rect_repaint` (`shadow_rect` = `TILE_ATTRS` `$06` into the bank-7 shadow, `queue_damage` restores the screen). So
+  every door opening after its lock went drops the arch colour: key unlock and far-side bolt (`key_door` ->
+  `door_open.op`), and D0's B-C door (the tutorial clears `EG_LOCK` after the build, as T8 / KEY-POLISH: planks AND arch
+  stay cyan until the ordinary open). Monsters' opens / `try_close` repaint one more (unchanged `$06`) row.
+- **Sealed / ordinary doors:** unchanged (`dr_tab` = `ATTR_PLANK` for them; the arch keeps `$06`).
+- **KEY-PANEL (user 2026-11-16, same branch).** Two panel key cells on row `STAT_ROW` 21: cyan at **`KEY_PAN_COL` 28**,
+  magenta at **29** (level_defs.asm). Why there: rows 18-19 are full (icons cols 0-29, "Dn" (30-31, 18), (30, 19) the old
+  key cell, the level digit (31, 19)); row 20 is the info line (all 32 cols); row 21 cols 24-29 have no writer (the FOOD
+  word ends at col 23 (`HG_CHARS` ASSERT), the status icons are cols 30-31, the 3E ammo text is gone (counts are in the
+  icon slots)), both heroes; rows 22-23 are log + gear. The tutorial BARS pointer (cols 0-29) only sets FLASH: on a blank
+  cell (attr 0) it shows nothing. `key_pan` (R6 key6.asm, rewritten): per cell glyph line AND its mask (`$FF` held / 0)
+  for lines 0..4 (`label_key` lines 5..7 are 0, never written: level_show clears the panel, no other writer), attr
+  `$45` / `$43` held else `ATTR_HUD` (the panel clear's `$47`: a blank cell, and the goldens keep their hash); no "both"
+  (`ATTR_KEY_CM` `$EB` retired); (30, 19) stays blank (pi_rects attr 0). `item_depth` (HOT_COPY, +12 B) now marks the
+  "Dn" cells itself and passes `LVL_FLAGS` in A (farb passes A), so R6 fits. Goldens: unchanged.
+- **Free (release `-DDEBUG_KIT=0`, before -> after):** low RAM `LOWRAM_SPARE` 67 -> **66**; R6 6 -> **3** (with GARG-FLY merged: 10 -> 7); HOT_COPY spare
+  43 -> **31**; bank 7 40, B0_CODE2 31, bank 1 20, bank 3 22: unchanged; TUT0 blob packed +1 B (5554, `BLOB_RES` 8). F3_GEN=0:
+  low RAM 68, R6 8, bank 3 18.
+- **Also:** `assets/gfx/icons/floor_key.grid` note "approved by the user 2026-11-16" (text only; `icons16.svg.html` caption
+  regenerated, packed bytes unchanged).
+- **Tests:** `tests/lock8.py` (69 checks) K9 (arch coloured on both screens + shadow via room_show cyan / magenta and the B -> C scroll,
+  lintel never; back to `$06` after the key unlock and the far-side bolt, screens == map; sealed and ordinary doors `$06`),
+  KEY-PANEL checks in K0-K4 / K8 (cyan only, magenta only, both, a magenta then a cyan unlock, descend), PNG
+  `keypanel_both.png`; `tests/room_model.plate_cells` includes the arch.
 ## GARG-FLY ledger (`feat/garg-fly`, 2026-11-16; user playtest of main `c873ee2`: "flying animation until it fights / sits back")
 
 - **What it showed.** An awake Gargoyle flew (`garg_fly` 4 / `garg_fly2` 4) only while tweening a step (M_MOVE); every
