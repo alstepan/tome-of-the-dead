@@ -282,17 +282,18 @@ dk_attack:      DB FID_dk_walk1, 3, 0, FID_dk_cleave, 2, SF_IMPACT, SEQ_END
 dk_hurt:        DB FID_dk_walk1, 3, 0, SEQ_END
 dk_death:       DEATHSEQ FID_dk_walk1, FID_small_corpse, FID_small_corpse, FID_dk_walk1
 ksm_dk_e:
-; Gargoyle (G-1, RCD_AWAKE): PERCHED = KS_IDLE (garg_perch, the statue: only while perched); WAKING = the KS_CLIMB slot
-; as a one-shot SEQUENCE wake -> alert (perch6; 4 ticks as before; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE
-; for every flyer step); AWAKE at rest = the KS_CLIMBREST fid = garg_alert, the grounded alert crouch (anim .cyc jumps to
-; .crest: a flyer is never on a ladder); flight = garg_fly 4 / garg_fly2 4 (wing down-stroke, both MOT); ATTACK = windup ->
-; claw; HURT = garg_hurt; DEATH = garg_dead mid-air (the bat_dead shape).
-ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_idle, ga_fly, ga_wake, ga_wake + 3, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
+; Gargoyle (G-1, RCD_AWAKE): PERCHED = the KS_CLIMBREST fid (ga_perch = garg_perch, the statue: anim .cyc jumps to .crest
+; for a perched Gargoyle; a flyer is never on a ladder, so .crest is free); WAKING = the KS_CLIMB slot as a one-shot
+; SEQUENCE wake -> alert (perch6; 4 ticks; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE for every flyer step);
+; AWAKE at rest (hovering) = KS_IDLE = the flight cycle garg_fly 4 / garg_fly2 4 (GARG-FLY, user 2026-11-16: the wing
+; cycle plays the whole time it is awake, moving or not; was the static garg_alert crouch); ATTACK = windup -> claw;
+; HURT = garg_hurt; DEATH = garg_dead mid-air (the bat_dead shape). KS_IDLE = KS_MOVE share ga_fly.
+ksm_ga:         KSMH ksm_ga_e - ksm_ga_s, 2, ga_fly, ga_fly, ga_wake, ga_perch, ga_attack, ga_hurt, ga_hurt, ga_death, ksm_ga_s
 ksm_ga_s:
-ga_idle:        DB 1, FID_garg_perch, 1, SEQ_END
+ga_perch:       DB FID_garg_perch                          ; anim .crest reads this one byte (GARG-FLY: was a 4-B cycle)
 ga_fly:         DB 8, FID_garg_fly, 4, FID_garg_fly2, 4, SEQ_END   ; power-of-two total: cycle_frame AND path
                 ASSERT (FFL_garg_fly & FF_MOTION) && (FFL_garg_fly2 & FF_MOTION)
-ga_wake:        DB FID_garg_wake, 2, 0, FID_garg_alert, 2, 0, SEQ_END   ; 4 ticks as before; ga_wake + 3 = garg_alert
+ga_wake:        DB FID_garg_wake, 2, 0, FID_garg_alert, 2, 0, SEQ_END   ; 4 ticks as before
 ga_attack:      DB FID_garg_windup, 2, 0, FID_garg_claw, 2, SF_IMPACT, SEQ_END
 ga_hurt:        DB FID_garg_hurt, 3, 0, SEQ_END
 ga_death:       DEATHSEQ FID_garg_hurt, FID_garg_dead, FID_garg_dead, FID_garg_alert

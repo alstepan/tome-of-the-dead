@@ -214,6 +214,8 @@ site, `TURN_COUNTER` width (~4,900 turns), and that no other table is sized 9.
 
 ## 5. Joint budget with NEW-MON3 (per amendment (1): joins, cap 5 kinds on D4–D7)
 
+> **STALE, superseded by the as-built ledgers (2026-11-16).** The B0_FREE / bank-2 / pool figures below were a pre-build estimate. Measured: `docs/memory-map.md` LARGER-D T2 / T4 / T5 / T8 ledgers (low RAM `LOWRAM_SPARE` 84 B, bank 3 22 B to `AY_RESERVE`, R6 25 B, bank 1 23 B, B0_CODE2 53 B, bank 7 53 B; pools grew 0 B). Level state is `ROOM_DESC` 12 × 16 at `$6D40`, `LP_STATE` 199 B, `TRAP_MAX` 8, `EDGES_H` 8; the generator and key selection cost bank 3 +1.2 KB and B0_CODE2 +0.9 KB. NEW-MON3 shipped earlier (PRs #37-#41).
+
 Key point: **fund the FRT page and new code from the existing B0_FREE carve, not by moving `POOL_START`**.
 The carve already sits below `POOL_START` `$FC3E`, so using it costs the pool 0 B; the `POOL_CAP −256 on
 every level` route in new_monsters.md §2.3 predates the carve and is no longer needed.
@@ -259,6 +261,8 @@ level; §1.5 traps; §4.1 `XP_NEXT`/expected XP; §7 FED regen; §8.5; §8.11 fo
 `TRAP_LIST`, low-RAM code moved to B0_FREE). new_monsters.md §2.3 (fund from the carve). plan.md (new task).
 
 ## 9. Open questions for the user (defaults in bold)
+
+**All resolved (2026-11-16).** 1 grid: 3 × 4, 10–12 rooms (user 2026-11-12). 2 content: scaled, then **package 3** (user 2026-11-15: monsters ×1.5, `XP_NEXT` ×1.1, FED regen `1 + MAXHP div 40`, Mage MP 5 turns; the ×1.35 / div 24 defaults below are superseded). 3 XP: scaled (×1.1). 4 regen: scales with max HP (k = 40). 5 loops: 0–1 kept (rev 3: an optional loop may not cross a lock). 6 order: NEW-MON3 first. 7 gate: package 3 targets **20–30 % with W and M even** (sim W 25.4 / M 26.5), replacing the ≥ 35 % gate (package 2, W 43 / M 43, was judged too easy). Level-gen worst **1.58M T accepted by the user 2026-11-15** (T4 measured 1,545,373 T; over the +50 % target, behind the level card). Option text kept as history:
 1. Grid: **3 wide × 4 tall, 10–12 rooms (~82–89 min)**, or 4×3, or 4×4 (12–16, ~104–113 min)?
 2. Content: **scale monsters and consumables ×~1.35, keep books/gear/bow/uniques**, or keep totals (sparser)?
 3. XP: **scale `XP_NEXT` ×1.35**, or keep thresholds (hero ~+1 level, easier)?

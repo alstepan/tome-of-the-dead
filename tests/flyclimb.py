@@ -37,7 +37,8 @@ VBATTY = {FID["bat_flapup"], FID["bat_glide"]}
 RUNS = [("GHOST", 3, GHOSTY, 4, False), ("GHOST", 7, GHOSTY, 4, False), ("POLTERGEIST", 7, GHOSTY, 4, False),
         ("BAT", 3, BATTY, 2, True), ("SCREECH", 3, BATTY, 2, True), ("VBAT", 6, VBATTY, 2, True),
         ("VBAT", 8, VBATTY, 2, True)]
-SEEDS = {3: 0x3F11, 6: 0x3F12, 7: 0x3F13, 8: 0x3F14}
+# LARGER-D T7: D3 re-picked (0x3F11 / 0x3F31 / 0x3F41 give a 3x4 room where the bats never move down in 30 turns)
+SEEDS = {3: 0x3F21, 6: 0x3F12, 7: 0x3F13, 8: 0x3F14}
 fails = 0
 
 

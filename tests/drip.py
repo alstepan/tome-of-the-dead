@@ -175,7 +175,7 @@ def exit_room(p, check, exit_, want):
     kw, kh = game.body(p, K_KNIGHT)
     y = 9 * s_ + 8 - kh
     room0 = p.rb("CUR_ROOM")
-    p.place(0, 31 - kw if key == "L" else 0, y)
+    p.place(0, 31 - kw if key == "L" else 1, y)     # left: x 1 (the exit fires on entering col 0; x 0 is already past it)
     p.until(lambda: drip(p)["drawn"] and drip(p)["st"] == S["DRS_FORM"], 600)
     d0 = drip(p)
     for _ in range(6):
@@ -214,9 +214,15 @@ def run(p, check):
     for master in range(0x1234, 0x1234 + 80):
         start(p, master)
         d = drip(p)
-        exit_ = open_side(bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS)))
+        rmap = bytes(p.z.read_memory(S["ROOM_MAP"], 32 * PLAY_ROWS))
+        exit_ = open_side(rmap)
         if d["n"] and exit_:
-            break
+            a_ = S["ROOM_DESC"] + p.rb("CUR_ROOM") * S["RD_STRIDE"] + S["RD_SEED"]
+            sd_ = p.z.read_memory(a_, 2)
+            # LARGER-D T7: the M check below needs one depth with 2 sources on this map; the 3x4 start rooms
+            # of the first masters had none, so the master is chosen for it (was: the first with a source)
+            if any(len(model_room(rmap, dep, sd_[0] | sd_[1] << 8)) == 2 for dep in range(1, 8)):
+                break
     room = p.rb("CUR_ROOM")
     a = S["ROOM_DESC"] + room * S["RD_STRIDE"] + S["RD_SEED"]
     seed = p.z.read_memory(a, 2)

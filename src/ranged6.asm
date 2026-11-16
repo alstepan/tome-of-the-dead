@@ -612,7 +612,7 @@ shot_tick:
 ; standing (not mid-ladder) on its storey (storey_ref vs PL_STOREY) at a box gap <= PERCH_GAP (an overlap
 ; counts as 0) -> RCD_AWAKE, it faces him, "THE GARGOYLE WAKES UP." (the existing MSG_M_WAKE line, 0 new
 ; text), the WAKING pose (its KS_CLIMB one-shot: a flyer never climbs; T10b's art) and the turn is spent;
-; else it waits (the PERCHED rest pose: anim's KS_IDLE). Never otherwise. Damage (deal_hit) and a missed
+; else it waits (the PERCHED rest pose: anim's KS_CLIMBREST fid, GARG-FLY). Never otherwise. Damage (deal_hit) and a missed
 ; bump (do_attack) set RCD_AWAKE silently; room re-entry re-perches (zeroed / restored slot clears bit 2).
 ; Clobbers: all but IX.  A waiting turn ~0.5k T (far6 incl.); a wake + its line ~2.5k.
 ;------------------------------------------------------------------------------

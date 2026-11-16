@@ -208,7 +208,7 @@ class Mon:
             k, r, x, y = b[S["E_KIND"]], b[S["E_ROOM"]], b[S["E_X"]], b[S["E_Y"]]
             if s and r != room:
                 parked += 1
-            if k >= S["K_COUNT"] or r > 8 or x > 31 or y > 17:
+            if k >= S["K_COUNT"] or r >= S["GRID_CELLS"] or x > 31 or y > 17:       # LARGER-D T7: 12 room slots (was r > 8)
                 self.v("ENT", f"slot {s}: kind {k} room {r} x {x} y {y} flags {fl:#x}")
             if s and r == NOWHERE:
                 self.v("ENT", f"slot {s}: parked in NOWHERE (leak) kind {k}")

@@ -240,10 +240,10 @@ anim_entity:
                 ld   b, 1
                 ret
 .cyc:           call kind_seq_ptr              ; (A = kind + KT_SEQ low: kind_seq_ptr's index)
-                cp   (K_GARGOYLE + KT_SEQ) & $FF   ; NEW-MON3 G-1 pose: an AWAKE Gargoyle rests on its KS_CLIMBREST
-                jr   nz, .cy1                  ; fid (T10b: the grounded alert crouch; a flyer is never on a ladder,
-                bit  RCD_AWAKE_BIT, (ix+E_RCD) ; so .crest is free), a perched one in KS_IDLE (the statue); waking
-                jr   nz, .crest                ; = its KS_CLIMB one-shot (perch6). +19 T a resting body of another kind
+                cp   (K_GARGOYLE + KT_SEQ) & $FF   ; NEW-MON3 G-1 pose: a PERCHED Gargoyle rests on its KS_CLIMBREST
+                jr   nz, .cy1                  ; fid (the statue; a flyer is never on a ladder, so .crest is free),
+                bit  RCD_AWAKE_BIT, (ix+E_RCD) ; an awake one hovers on KS_IDLE = the fly cycle (GARG-FLY); waking
+                jr   z, .crest                 ; = its KS_CLIMB one-shot (perch6). +19 T a resting body of another kind
 .cy1:           ld   a, (hl)                   ; KS_IDLE
                 inc  hl
                 ld   h, (hl)

@@ -296,12 +296,12 @@ def run(h, p, check):
     scene(K_KNIGHT, [])
     goblin(3, HX + 3, True)
     p.set_ent(3, HP=1, MAXHP=1)
-    p.wmem(S["XP"], w16(39))
+    p.wmem(S["XP"], w16(43))                     # XP_NEXT[2] 44 (LARGER-D T5; was 40 / 39): the Goblin's 3 XP cross it
     p.select_slot(0)
     lines, dd = [], 0
     for _ in range(12):
         l_, d_ = play_turn(0)
-        if p.rw("XP") >= 40:
+        if p.rw("XP") >= 44:
             lines, dd = l_, d_
             break
     print(f"[info] L14 kill + level-up: {lines} drop {dd}", flush=True)
