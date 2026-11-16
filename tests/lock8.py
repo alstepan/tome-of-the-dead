@@ -5,16 +5,16 @@ PROTO rooms A-D (LVL_DEPTH poked to 1 where the engine pickup must run), plus on
   K1  KEY-POLISH floor key: an IT_KEY entry in LVL_KEYROOM (B) is drawn on entry (key icon, $45) and the
       entry grants NOTHING; standing on it picks it up: LF_KEYC, LVL_KEYROOM := ROOM_NONE, the entry
       FL_EMPTY, the cell no longer a marker, "YOU FIND A CYAN KEY", SFX_PICKUP, KEY-PANEL: the cyan panel
-      key cell (28, 21) attr $45 + the key glyph, the magenta one (29, 21) blank; a re-entry gives nothing
+      key cell (24-25, 21) attr $45 + the key glyph, the magenta one (27-28, 21) blank; a re-entry gives nothing
   K2  the IT_KEY entry in LVL_KEYROOM2 (A) is magenta ($43); its pickup: LF_KEYM, "YOU FIND A MAGENTA KEY",
       KEY-PANEL both key cells drawn ($45 / $43, (30, 19) blank: no "both" state); the bag page: CYAN KEY ($45) at col 6 and MAGENTA KEY ($43) at col 16 on
       row 3, each once; row 1 (the counters, ARROWS 12) holds no key text (the T8 "2 CYAN KEYS" bug: the
       key line sat right of "ARROWS 12" and read as a count)
   K3  bump a locked door without its key: 0 turns, THE DOOR IS LOCKED, SFX_LAND; the other colour's key = no key;
-      KEY-PANEL magenta only: (29, 21) drawn, (28, 21) blank
+      KEY-PANEL magenta only: (27-28, 21) drawn, (24-25, 21) blank
   K4  bump with the key: 1 turn, EG_LOCK cleared + open (jambs), the key used up, YOU UNLOCK THE DOOR,
       both panel key cells blank, the bag page shows no key line any more; KEY-PANEL: both held, a magenta
-      unlock blanks (29, 21) only, then a cyan unlock blanks (28, 21)
+      unlock blanks (27-28, 21) only, then a cyan unlock blanks (24-25, 21)
   K5  far-side bolt (EG_NEARR: the near room is the other one): 1 turn, opens keyless, no line,
       keys untouched; a near-side bump of the same lock stays locked (K3)
   K6  monsters: an opener (Goblin) is refused by a locked door from either side (try_step)
@@ -26,6 +26,7 @@ PROTO rooms A-D (LVL_DEPTH poked to 1 where the engine pickup must run), plus on
       on both screens + the shadow (room_show cyan / magenta, the B -> C scroll), the lintel (T_BRICK row
       9s) never; back to $06 after the key unlock (K4) and the far-side bolt (K5); a sealed door and an
       ordinary closed door: arch + planks $06
+  KM  KEY-PANEL for the Wizard: cyan only, magenta only, both, none (16x8 icons, the gap col blank)
   K8  generated D1 (fixed seed): every lock's EG_NEARR == its start side (flood of G without it); each
       key room holds one IT_KEY floor entry and no key is held at the start; after keys are held,
       level_enter (descend) clears LF_KEYC / LF_KEYM and the panel key cell
@@ -41,7 +42,7 @@ import world  # noqa: E402  (keeps game.py's item filter inert; helpers)
 import game  # noqa: E402
 import room_model  # noqa: E402
 from game_lib import (Harness, S, EMU_ARGS, attr_at, cell_bytes, stand_y, GS_PLAYING,  # noqa: E402
-                      K_KNIGHT, EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT)
+                      K_KNIGHT, K_WIZARD, EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT)
 from world import text6, log_row, w16, bank7, map_structure  # noqa: E402
 from game_lib import frame_png  # noqa: E402
 PNG_DIR = os.environ.get("WZ_BUILD_DIR") or os.path.join(os.path.dirname(HERE), "build")
@@ -52,7 +53,20 @@ LOCKC, NEARR = S["EG_LOCKC"], S["EG_NEARR"]
 KEYC, KEYM = S["LF_KEYC"], S["LF_KEYM"]
 E_AB = S["EDGE_TAB"] + S["EDGE_AB"]
 E_DC = S["EDGE_TAB"] + S["EDGE_DC"]
-KEY_GLY = bytes([0x00, 0x60, 0x90, 0x9F, 0x65, 0x00, 0x00, 0x00])   # panel_icons.asm label_key
+# KEY-PANEL 16x8 icon = assets/gfx/icons/floor_key.grid rows 8..15, (left cell, right cell)
+_FK = [ln for ln in open(os.path.join(os.path.dirname(HERE), "assets/gfx/icons/floor_key.grid")).read().splitlines()
+       if ln and not ln.startswith("#")][8:16]
+KEY_GLY = tuple(bytes(int(r[h * 8:h * 8 + 8].replace("#", "1").replace(".", "0"), 2) for r in _FK) for h in (0, 1))
+
+
+def keys_want_(c, m):
+    """KEY-PANEL want: cyan icon cols 24-25, blank gap 26, magenta 27-28; an unheld icon is blank with the
+    panel clear's attr ATTR_HUD (the goldens keep their hash)."""
+    blank = (S["ATTR_HUD"], bytes(8))
+    icon = lambda on, at: [(at, KEY_GLY[0]), (at, KEY_GLY[1])] if on else [blank, blank]  # noqa: E731
+    return tuple(icon(c, S["ATTR_KEY_C"]) + [blank] + icon(m, S["ATTR_KEY_M"]))
+
+
 PLATE_ROW1 = S["STOREY_ROWS"] + 2 + S["DOOR_PLATE_DY"]               # storey-1 plate row (14)
 SLOT_GOBLIN = 3
 NOWHERE = 7
@@ -170,13 +184,12 @@ def main():
         LINTEL_R = [(30, LINTEL_ROW1), (31, LINTEL_ROW1)]
 
         def key_cell(fr):
-            """KEY-PANEL: ((attr, glyph) of the cyan cell, of the magenta cell) on row STAT_ROW."""
+            """KEY-PANEL: (attr, glyph) of the 5 cells KEY_PAN_COL.. on row STAT_ROW (cyan 2, gap, magenta 2)."""
             return tuple((attr_at(fr, S["KEY_PAN_COL"] + i, S["STAT_ROW"]),
-                          bytes(cell_bytes(fr, S["KEY_PAN_COL"] + i, S["STAT_ROW"]))) for i in (0, 1))
+                          bytes(cell_bytes(fr, S["KEY_PAN_COL"] + i, S["STAT_ROW"]))) for i in range(S["KEY_PAN_W"]))
 
         def keys_want(c, m):
-            blank = (S["ATTR_HUD"], bytes(8))           # a blank cell keeps the panel clear's attr (goldens)
-            return ((S["ATTR_KEY_C"], KEY_GLY) if c else blank, (S["ATTR_KEY_M"], KEY_GLY) if m else blank)
+            return keys_want_(c, m)
 
         def old_cell(fr):
             return attr_at(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1), bytes(cell_bytes(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1))
@@ -212,7 +225,7 @@ def main():
                   (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM"), ent, mk))
             check("K1 log: YOU FIND A CYAN KEY", log_row(fr, 23) == text6("YOU FIND A CYAN KEY"), "")
             check("K1 the pickup sound: SFX_PICKUP", sfx == S["SFX_PICKUP"], hex(sfx))
-            check("K1 cyan only: (28, 21) glyph + $45, (29, 21) blank (composed + displayed)",
+            check("K1 cyan only: (24-25, 21) glyph + $45, (27-28, 21) blank (composed + displayed)",
                   key_cell(fr) == keys_want(1, 0) and key_cell(p.frame()) == key_cell(fr),
                   (key_cell(fr), key_cell(p.frame())))
             marker()
@@ -253,6 +266,22 @@ def main():
             check("K2 bag (2-key regression): row 1 right of ARROWS 12 is empty (no key line beside a count)",
                   all(x == bytes(8) for x in r1), [i + 22 for i, x in enumerate(r1) if x != bytes(8)])
 
+        # ---------------- KM KEY-PANEL for the Wizard (the panel row 21 is the other hero's) ----
+        if want("KM"):
+            p.boot(K_WIZARD)
+            p.isolate()
+            for c, m in ((1, 0), (0, 1), (1, 1), (0, 0)):
+                p.wb("LVL_FLAGS", (p.rb("LVL_FLAGS") & 0x3F) | (KEYC if c else 0) | (KEYM if m else 0))
+                p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+                marker()
+                fr = p.composed_frame()
+                check(f"KM Wizard cyan {c} magenta {m}: 16x8 icons (24-25 / 27-28, 21), gap 26 blank (composed + displayed)",
+                      key_cell(fr) == keys_want(c, m) and key_cell(p.frame()) == key_cell(fr), key_cell(fr))
+            p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | KEYC | KEYM)
+            p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+            marker()
+            frame_png(p.frame(), os.path.join(PNG_DIR, "keypanel_both_wizard.png"), 3)
+
         # ---------------- K3 / K4 / K5 / K6 bump --------------------------
         if any(want(k) for k in ("K3", "K4", "K5", "K6", "K9")):
             p.boot(K_KNIGHT)
@@ -264,7 +293,7 @@ def main():
             p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
             marker()
             fr = p.composed_frame()
-            check("K3 magenta only: (29, 21) glyph + $43, (28, 21) blank (composed + displayed)",
+            check("K3 magenta only: (27-28, 21) glyph + $43, (24-25, 21) blank (composed + displayed)",
                   key_cell(fr) == keys_want(0, 1) and key_cell(p.frame()) == key_cell(fr), key_cell(fr))
             org = spy_on()
             check("K3 locked (cyan), magenta key only: no turn", p.no_turn("L"), "")
@@ -305,7 +334,7 @@ def main():
             fr = bag_rows()
             r3 = [bytes(cell_bytes(fr, c, 3)) for c in range(S["PG_KEY_COL"], S["PG_KEY_COL"] + 2 * S["PG_KEY_W"] + 1)]
             check("K4 the used key is gone from the bag page (row 3 empty)", all(x == bytes(8) for x in r3), "")
-            # KEY-PANEL: both held; unlock magenta (only (29, 21) goes), then cyan (both blank)
+            # KEY-PANEL: both held; unlock magenta (only (27-28, 21) goes), then cyan (both blank)
             p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | KEYC | KEYM)
             p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
             drain()

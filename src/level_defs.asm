@@ -201,10 +201,13 @@ DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
 ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
 ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)
 ATTR_KEY_M      EQU $43             ; magenta: lock colour 1
-; KEY-PANEL (user 2026-11-16): two panel key cells on row STAT_ROW (21), cyan at KEY_PAN_COL, magenta at
-; KEY_PAN_COL + 1, each drawn only while that key is held (key6.asm key_pan); cols 24..29 of row 21 are free
-; (the FOOD word ends at col 23, the status icons are cols 30-31); (30, 19) stays blank.
-KEY_PAN_COL     EQU 28
+; KEY-PANEL (user 2026-11-16): two 16x8 panel key icons on row STAT_ROW (21), cyan at cols KEY_PAN_COL..+1,
+; magenta at KEY_PAN_COLM..+1, a 1-col gap between, each drawn only while that key is held (key6.asm key_pan);
+; cols 24..29 of row 21 are free (the FOOD word ends at col 23, the status icons are cols 30-31); (30, 19)
+; stays blank. KEY_PAN_W = the marked rect (both icons + the gap).
+KEY_PAN_COL     EQU 24
+KEY_PAN_COLM    EQU KEY_PAN_COL + 3
+KEY_PAN_W       EQU 5
 
 ;------------------------------------------------------------------------------
 ; FLOOR_LIST (game.md §8.5): <= 32 entries x 4 B, FLOOR_N used (header).
