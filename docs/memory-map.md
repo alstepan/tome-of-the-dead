@@ -7132,7 +7132,7 @@ Art pass: 10 frames from the approved grids (`assets/gfx/source/newmon3/`, `tool
 `garg_wake` / `garg_windup` / `garg_hurt` / `garg_dead` / `garg_alert` STA|MIR, `garg_fly2` MOT|MIR; `wraith_drift2` / `drift3`
 MOT|MIR, `wraith_cast` STA|MIR; `imp_dead` (24×16) STA|MIR. Contiguous per unit (gu_tab: Gargoyle 9, Imp 4, `U_WRAITH` 5);
 packed sources SRC0 (B0_CODE2 914 -> 1,879 B, 7 blocks). `FID_COUNT` = `FRT_MAX` **163**.
-- **Poses** (seq_img.asm): Gargoyle perched = KS_IDLE `garg_perch`; waking = KS_CLIMB one-shot `garg_wake` 2 + `garg_alert` 2;
+- **Poses** (seq_img.asm; **superseded by the GARG-FLY ledger**: awake at rest = the fly cycle): Gargoyle perched = KS_IDLE `garg_perch`; waking = KS_CLIMB one-shot `garg_wake` 2 + `garg_alert` 2;
   awake at rest = the KS_CLIMBREST fid (`ga_wake + 3` = `garg_alert`; anim `.cyc` jumps to `.crest` for an awake Gargoyle: a
   flyer is never on a ladder; -2 B bank 2 before `kind_tab`, whose ALIGN pad had 1 B); move = `garg_fly` 4 / `garg_fly2` 4 (total 8);
   attack `garg_windup` -> `garg_claw` (IMPACT at 2 as before); hurt `garg_hurt`; death `garg_dead` (mid-air). Wraith: idle /
@@ -7384,3 +7384,22 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   standing on it (+ SFX_PICKUP via an `sfx_req` spy), bag row 3 + the row-1 regression, SFX_LAND on the bump, key gone
   from the bag after the unlock, all 12 planks + shadow in K7 (room_show and the B -> C scroll), K8 one key entry per
   key room on generated D1 / D2.
+
+## GARG-FLY ledger (`feat/garg-fly`, 2026-11-16; user playtest of main `c873ee2`: "flying animation until it fights / sits back")
+
+- **What it showed.** An awake Gargoyle flew (`garg_fly` 4 / `garg_fly2` 4) only while tweening a step (M_MOVE); every
+  M_REST tick in between (each tween ends after 2 ticks, then the turn waits) drew the static `garg_alert` crouch (anim
+  `.cyc` -> `.crest` = KS_CLIMBREST `ga_wake + 3`), so in play it read as crouch-hop-crouch, never a hover.
+- **Fix (sequencing only; no new art / frame / AI / rule change).** `ksm_ga` slots swapped: **KS_IDLE = KS_MOVE = `ga_fly`**
+  (awake hover plays the wing cycle on `idle_phase`, the same phase source as its flight steps, so moving / hovering is
+  one continuous cycle), **KS_CLIMBREST = `ga_perch`** (1 B: `FID_garg_perch`; the perched statue). anim `.cyc`: the
+  Gargoyle branch now jumps to `.crest` when **perched** (`jr nz` -> `jr z`, 0 B, T unchanged). Unchanged: the waking
+  one-shot (KS_CLIMB `garg_wake` 2 + `garg_alert` 2), attack windup -> claw, hurt, death (`garg_dead`), re-perch on room
+  re-entry (RCD_AWAKE clear -> the statue). Flyers never test as on a ladder (`on_ladder` NZ for KF_FLYER), so
+  `.crest` stays free for the Gargoyle. menu1 end card: the killer portrait uses KS_MOVE (unchanged: `garg_fly`).
+- **Bytes (release `-DDEBUG_KIT=0`, before -> after):** seq masters raw 997 -> 994 (`ga_idle` 4 B -> `ga_perch` 1 B), packed
+  580 -> 576 => **R6 free 6 -> 10**; region-2 seq cache D5 108 -> 105, D6 97 -> 94 of 112 (D8 111 unchanged); bank 2, bank 7,
+  B0_CODE2, low RAM, bank 1, bank 3: unchanged. No reclaim needed.
+- **Tests:** `tests/nm3b.py` W rest pose awake = `garg_fly` (was `garg_alert`); new **GF** checks (`part_fly`): 24 awake
+  ticks alternate fly / fly2 every 4 (phase = TICK_COUNTER + 5 x slot), KS_ATTACK = windup x2, RC_HURT = hurt x3 then the
+  cycle, RC_DEATH = hurt x3 then `garg_dead`, re-perched = `garg_perch` every tick.
