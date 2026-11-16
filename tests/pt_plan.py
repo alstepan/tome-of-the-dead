@@ -208,8 +208,10 @@ class Player(Bot):
         # 2. D8 endgame
         if self.depth == 8 and not fl & LF["GRATE_OPEN"]:
             if not fl & LF["SEAL_OPEN"]:
-                return self.to_lair_fight()
-            if self.rb("TOME_HP") > 0:
+                if r == self.lair or self.room_path(r, self.lair):
+                    return self.to_lair_fight()
+                # LARGER-D T7: a level-key lock bars the way: explore (step 4) for the key first
+            elif self.rb("TOME_HP") > 0:
                 return self.tome()
         # 3. boss dead / tome destroyed: leave through the lair exit
         if fl & LF["GRATE_OPEN"]:

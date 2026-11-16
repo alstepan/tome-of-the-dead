@@ -77,6 +77,18 @@ def standable(f, s, x, w=3, h=H6):
     return all(not f(c, r) & (TF_SOLID | TF_LADDER) for c in range(x, x + w) for r in range(y, y + h))
 
 
+def walkable(f, s, x, w, h, c):
+    """LARGER-D T7: the walker's way along storey s to the ladder col c is free: floor under every col of the run and no
+    solid in the body rows (a dead-end block / pit landing on storey 1 stranded the D2 Spider on the 3x4 levels)."""
+    y = stand_y(s, h)
+    for xx in range(min(x, c), max(x + w, c + 3)):
+        if not f(xx, y + h) & TF_FLOOR or f(xx, y + h) & TF_HOLE:
+            return False
+        if any(f(xx, r) & TF_SOLID for r in range(y, y + h)):
+            return False
+    return True
+
+
 with Harness() as h:
     h.launch(EMU_ARGS)
     p = Proto(h)
@@ -102,8 +114,12 @@ with Harness() as h:
             if not lad:
                 continue
             c = lad[0]
-            mx = next((x for x in list(range(c + 6, 27)) + list(range(c - 8, 0, -1)) if standable(f, 1, x, W, H)), None)
-            hx = next((x for x in list(range(c - 8, 0, -1)) + list(range(c + 8, 28)) if standable(f, 0, x)), None)
+            mx = next((x for x in list(range(c + 6, 27)) + list(range(c - 8, 0, -1))
+                       if standable(f, 1, x, W, H) and walkable(f, 1, x, W, H, c)), None)
+            # LARGER-D T7: the hero stands clear of EVERY ladder (a 2nd ladder with the hero on its top cell makes the climb
+            # illegal: the D2 Spider stopped at it under the hero on the 3x4 levels, the AI is right)
+            hx = next((x for x in list(range(c - 8, 0, -1)) + list(range(c + 8, 28))
+                       if standable(f, 0, x) and not any(x - 3 <= l <= x + 5 for l in lad)), None)
             if mx is None or hx is None:
                 continue
             done = True

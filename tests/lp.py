@@ -59,6 +59,16 @@ LP_TRANS_GUARD = 70000             # ROOM-MEM: lp_transition (2 x lp_bank + lp_e
 LP_T_GUARD = 46000                 # lp_enter worst (DI, incl. far3): game.md §9.8 D3-2: worst <= 46k, mean <= 22k (a room entry on a frozen screen, not a tick)
 
 
+# LARGER-D T7: the 3x4 levels moved every old seed off its scenario; these were re-found with
+# tools/lp_a8_sweep.py (pure-Python sweep of tools/levelgen.py, seeds 1..599; rerun it when the generator or
+# the LP rules change). A8S / A8M (depth, seed, X, s0, x0): room X's saved cell (s0, x0) of the depth's widest
+# kind sits on a storey with no free window, the hero arrives on the other one (try 0 fails, the first slide
+# scans the whole storey and fails, 4 x 8 stream tries, LP_CALLS 32). A8R (depth, seed, r, s0, x0, x1): unit 0's
+# slide fails only because unit 1's saved cell x1 is reserved.
+A8S_CASES = ((7, 32, 7, 0, 2), (7, 128, 1, 1, 2), (7, 154, 10, 1, 2), (7, 158, 4, 0, 2))
+A8R_CASES = ((1, 2, 1, 0, 2, 7), (1, 5, 6, 1, 2, 17), (1, 7, 10, 0, 2, 23), (1, 9, 11, 0, 5, 18))
+
+
 def w16(v):
     return [v & 255, v >> 8]
 
@@ -610,7 +620,7 @@ def part_a8s(h, p, check):
     p.load()
     sync_bodies(p)
     worst = (0, "")
-    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+    for d, seed, X, s0, x0 in A8S_CASES:
         p.wb("LVL", 1)
         p.wmem(S["LVL_SEED"], w16(seed))
         p.far3("level_gen", a=d)
@@ -659,7 +669,7 @@ def part_a8m(h, p, check):
     import itertools
     worst = (0, "")
     bad = 0
-    for d, seed, X, s0, x0 in ((7, 396, 2, 0, 2), (7, 363, 1, 0, 2), (7, 331, 7, 1, 2), (7, 329, 8, 0, 2)):
+    for d, seed, X, s0, x0 in A8S_CASES:
         p.load()
         sync_bodies(p)
         p.wb("LVL", 1)
@@ -713,7 +723,7 @@ def part_a8r(h, p, check):
     exactly; the entry's slide flag (LPS_USED = LP_SIG bit 0) is set; == levelgen.lp_enter."""
     p.load()
     sync_bodies(p)
-    for d, seed, r, s0, x0, x1 in ((1, 2, 1, 1, 2, 25), (1, 5, 3, 0, 2, 8), (1, 12, 5, 0, 2, 22), (1, 19, 7, 0, 5, 2)):
+    for d, seed, r, s0, x0, x1 in A8R_CASES:
         p.wb("LVL", 1)
         p.wmem(S["LVL_SEED"], w16(seed))
         p.far3("level_gen", a=d)

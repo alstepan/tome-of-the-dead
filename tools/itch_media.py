@@ -381,7 +381,7 @@ class Rec:
         return sum(d for _, d in self.frames)
 
 
-XP_AT = {1: 0, 2: 40, 3: 100, 4: 200, 5: 340, 6: 500, 7: 700, 8: 920, 9: 1150}
+XP_AT = {1: 0, 2: 44, 3: 110, 4: 220, 5: 374, 6: 550, 7: 770, 8: 1012, 9: 1265}   # LARGER-D package 3 XP_NEXT
 
 
 def make_stage(p, hero):
@@ -694,7 +694,7 @@ def d1_intro(st, p, rec, hero_name):
     st.leave("D")                                     # the vertical exit: the next room scrolls in
     st.wait_s(0.8)
     log(st, f"hostiles {[(h['kind'], h['x'], h['s']) for h in st.hostiles()]}")
-    p.z.cmd("write-memory %d 36 0" % S["XP"])         # 4 XP short of level 2: the first kill levels up
+    p.z.cmd("write-memory %d 40 0" % S["XP"])         # 4 XP short of level 2 (XP_NEXT[2] 44): the first kill levels up
     st.god = True
     if hero_name == "M":                              # a status effect on screen: Frost (rank poked in beside Spark)
         st.buff(ranks=[1, 0, 1, 0, 0])

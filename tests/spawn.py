@@ -380,13 +380,18 @@ def bone_caller(p, lines):
 
 # ---------------------------------------------------------------------------- P
 def pharaoh(p, lines):
-    L = Lair(p, 5, 0x7501)
-    lines.arm()
+    for k in range(24):                 # LARGER-D T7: on the 3x4 lairs the escort often finds no cell (it stays in the
+        L = Lair(p, 5, 0x7501 + k)      # record, so P5's "boss only" can't hold): take the first seed that places it
+        lines.arm()
+        if not L.ok:
+            continue
+        ok = L.enter()
+        bs = boss_slot(p)
+        if bs is not None and [s2 for s2 in room_slots(p) if s2 != bs]:
+            break
     check("P setup: D5", L.ok, p.rb("LVL_DEPTH"))
     if not L.ok:
         return
-    ok = L.enter()
-    bs = boss_slot(p)
     check("P0 in the lair, the Golden Pharaoh (a golden Mummy) live", ok and bs is not None
           and p.ent(bs)["KIND"] == K["MUMMY"], (ok, bs))
     if bs is None:

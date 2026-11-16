@@ -358,7 +358,7 @@ Per item (pool by the `POOLACC` formula, M; every new frame also costs 24 B in b
 | Inventory page | code ~1.2 KB; 32 icons ≈ 1.1 KB; text ~0.4 KB | — | paused; ~145k copy on exit |
 | Menu + redefine keys + joystick | code ~1.5 KB; strings ~0.5 KB; title art optional (~3 KB compressed) | — | cold |
 | Font | ROM 0 B; custom 96 chars 768 B (fixed RAM) | — | — |
-| Level state (2-storey rooms, doors, dead ends) | 24–32 B/room → ~1 KB/level; floor items 4 B each | — | — |
+| Level state (2-storey rooms, doors, dead ends) | 24–32 B/room; **LARGER-D (T2, as built): 12 room slots** (`ROOM_DESC` 12 × 16 + `LP_REC` 12 × 9 + `LP_POS` 12 × 4 + `ROOM_VISITS` + `TRK_W`), low RAM `LOWRAM_SPARE` is 84 B after T2/T4/T5/T8 (memory-map LARGER-D ledgers); floor items 4 B each (`FLOOR_LIST` 32) | — | — |
 | Persistent monsters | 16 slots × 32 B → **15 monsters/level** incl. followers | — | — |
 | Item/spell tables | ~256 B; inventory 16–24 × 2 B | — | — |
 
