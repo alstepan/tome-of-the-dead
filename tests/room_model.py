@@ -91,11 +91,14 @@ def item_tile(item):
     return T["T_ITEM0"] if item else None
 
 
-def item_ink(item):
+def item_ink(item, room=None, k2=None):
     """lowram item_ink: the floor attr of a type (items_model.ITEM_INK; the legacy
-    IT_POTION $42)."""
+    IT_POTION $42). KEY-POLISH: the floor key is magenta in the colour-1 key room
+    (k2 = LVL_KEYROOM2; lockl.asm key_ink), else cyan (ITEM_INK)."""
     if item == S["IT_POTION"]:
         return 0x42
+    if item == S["IT_KEY"] and room is not None and room == k2:
+        return S["ATTR_KEY_M"]
     return IM.ITEM_INK.get(item, 0)
 
 
@@ -105,7 +108,7 @@ def item_icon(item):
     if item >= S["IT_BAG_LO"]:
         return item - S["IT_BAG_LO"]
     return {S["IT_POTION"]: S["IT_P_HEAL"] - S["IT_BAG_LO"], S["IT_DAGGER"]: S["ICONS16_AMMO_DAGGER"],
-            S["IT_ARROW"]: S["ICONS16_AMMO_ARROW"]}.get(item, S["ICONS16_PH"])
+            S["IT_ARROW"]: S["ICONS16_AMMO_ARROW"], S["IT_KEY"]: S["ICONS16_KEY"]}.get(item, S["ICONS16_PH"])
 
 
 def icon_cell(item, h, r):
@@ -116,13 +119,13 @@ def icon_cell(item, h, r):
     return bytes(ic[16 * r + 8 * h:16 * r + 8 * h + 8])        # FLOOR1: quarters of 8 lines
 
 
-def floor_cells(fl, room, slots=None):
+def floor_cells(fl, room, slots=None, k2=None):
     """FLOOR1: {(col, row): (glyph 8 B, attr)} the screen shows over room's
     marker cells (fl = the 128-B FLOOR_LIST): each col of a storey shows its TOP
     entry (the last live one in list order). INVARIANT (2026-10-28): a room holds
     <= FI_SLOTS (8) distinct item types, so every top has a glyph slot (the model
     asserts it: a 9th type is a test bug, drop_put refuses it). Cells c..c+1,
-    rows 9s+6..9s+7."""
+    rows 9s+6..9s+7. k2 = LVL_KEYROOM2 (KEY-POLISH: the magenta floor key's room)."""
     slots = S["FI_SLOTS"] if slots is None else slots
     tops, types = {}, set()
     for i in range(S["FLOOR_MAX"]):
@@ -137,7 +140,7 @@ def floor_cells(fl, room, slots=None):
         top = SR * (1 if rb & S["FL_S1"] else 0) + SA - 2
         for h in (0, 1):
             for r in (0, 1):
-                out[(col + h, top + r)] = (icon_cell(it, h, r), item_ink(it))
+                out[(col + h, top + r)] = (icon_cell(it, h, r), item_ink(it, room, k2))
     return out
 
 
@@ -145,19 +148,27 @@ floor_inks = floor_cells             # (pre-FLOOR1 name: the per-cell inks)
 
 
 def plate_cells(rmap, glyphs, edges, room):
-    """LARGER-D T8: {(c, r): (glyph, attr)} of the room's lock plates (merge into expected_cell's `ink`).
-    A plate = a T_DOOR_LOCK cell of the plank-R col (1 / 31) with T_DOOR_R above it (a sealed door keeps
-    the whole lock column: TILE_ATTRS); attr = magenta if its edge has EG_LOCKC, else cyan (lockl.asm
-    lk_stamp / lk_cell: the colour as built, so a lock cleared after the build keeps its colour)."""
+    """LARGER-D T8 / KEY-POLISH: {(c, r): (glyph, attr)} of the room's locked doors (merge into
+    expected_cell's `ink`). A locked door = a T_DOOR_LOCK plate in the plank-R col (1 / 31) with T_DOOR_R
+    above it (a sealed door keeps the whole lock column: TILE_ATTRS); EVERY plank cell of that door
+    (cols c-1, c, the DOOR_PLANK_H plank rows) takes its key colour: magenta if its edge has EG_LOCKC,
+    else cyan (lockl.asm lk_stamp / lk_cell: the colour as built, so a lock cleared after the build keeps
+    its colour); the glyph stays its tile's."""
     out = {}
-    g = bytes(glyphs[T["T_DOOR_LOCK"] * 8:T["T_DOOR_LOCK"] * 8 + 8])
+    planks = (T["T_DOOR_L"], T["T_DOOR_R"], T["T_DOOR_LOCK"])
     for c, side in ((1, "L"), (31, "R")):
         if (side == "L" and room % 3 == 0) or (side == "R" and room % 3 == 2):
             continue
         eb = edges[edge_index(room, side)]
         for r in range(1, ROWS):
             if rmap[r * 32 + c] == T["T_DOOR_LOCK"] and rmap[(r - 1) * 32 + c] == T["T_DOOR_R"]:
-                out[(c, r)] = (g, S["ATTR_KEY_M"] if eb & S["EG_LOCKC"] else S["ATTR_KEY_C"])
+                at = S["ATTR_KEY_M"] if eb & S["EG_LOCKC"] else S["ATTR_KEY_C"]
+                top = r - S["DOOR_PLATE_DY"]
+                for rr in range(top, top + S["DOOR_PLANK_H"]):
+                    for cc in (c - 1, c):
+                        t = rmap[rr * 32 + cc]
+                        if t in planks:
+                            out[(cc, rr)] = (bytes(glyphs[t * 8:t * 8 + 8]), at)
     return out
 
 

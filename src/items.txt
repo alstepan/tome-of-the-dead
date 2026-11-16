@@ -60,7 +60,7 @@ IT_NONE         | -                 | -    | 0 0 0 0 0 | -  | empty slot
 IT_POTION       | -                 | -    | 0 0 0 0 0 | -  | legacy 3B stand-in (id 1 reserved after T11)
 IT_DAGGER       | -                 | $47  | 0 0 0 0 0 | -  | counter, AMMO glyph
 IT_ARROW        | -                 | $46  | 0 0 0 0 0 | -  | counter, AMMO glyph
-IT_KEY          | -                 | -    | 0 0 0 0 0 | -  | level key: found on entry, no glyph
+IT_KEY          | -                 | $45  | 0 0 0 0 0 | -  | level key: a floor item in its key room (KEY-POLISH; magenta key: key_ink)
 # food, ascending FOOD (§7 table)
 IT_F_CARROT     | CARROT            | $06  | 0 0 0 0 10 | -  | FOOD +10
 IT_F_APPLE      | APPLE             | $44  | 0 0 0 0 15 | -  | FOOD +15

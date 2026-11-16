@@ -156,7 +156,10 @@ fi_slot:        ld   a, b
                 ld   a, FI_NONE
                 ld   (de), a                   ; unmapped
                 ld   a, b
-                call item_ink                  ; (icons6.asm, R6; keeps BC, DE)
+                cp   IT_KEY                    ; KEY-POLISH: the floor key's ink by its room
+                call z, key_ink                ; (lockl.asm; reads .new's pushed DE at SP + 4: no
+                                               ; push / pop may sit between .new and here; Z = magenta)
+                call nz, item_ink              ; (icons6.asm, R6; keeps BC, DE)
                 ld   e, a                      ; FI_INK[slot * 32 ..+ 31] := the ink
                 ld   a, c
                 rrca

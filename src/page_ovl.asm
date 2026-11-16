@@ -22,9 +22,9 @@
 ;  0     title BAG (menu font, cols 2-4,  |   at the open wait for a release)
 ;        rows 0-1); ITEMS n/20 (x 48);    |  BREAK / I   close (VB_NONE), any mode
 ;        [CLOSE] cols 26-31 (selectable)  |  FIRE / ENTER grid: an item -> the verb
-;  1     DAGGERS d  ARROWS a (Warrior),   |               strip (first enabled verb);
-;        T8 CYAN / MAGENTA KEY col 23     |               [CLOSE] -> close; empty: -
-;  2/23  ornament (3: 2nd key line)       |               strip: confirm (CLOSE ->
+;  1     DAGGERS d  ARROWS a (Warrior)    |               strip (first enabled verb);
+;  3     KEY-POLISH CYAN / MAGENTA KEY    |               [CLOSE] -> close; empty: -
+;  2/23  ornament                         |               strip: confirm (CLOSE ->
 ;  4-14  bag 5 x 4: icon 2x2 at row       |               close; REMOVE with a full
 ;        4+3r, col 9+3c; QTY digit (>= 2) |               bag -> BAG FULL, stays)
 ;        at row 5+3r, col 11+3c           |  directions  grid: the cursor (wrap rules
@@ -55,10 +55,10 @@ PG_TXT_X        EQU 48              ; rows 0 / 1 counters, WORN label (pixel x)
 PG_CLOSE_ROW    EQU 0
 PG_CLOSE_COL    EQU 26
 PG_CLOSE_W      EQU 6               ; "[CLOSE]" = 42 px
-PG_KEY_ROW      EQU 1               ; LARGER-D T8: held keys, rows 1 / 3, cols 23-31 ("MAGENTA KEY" 66 px from x 184;
-PG_KEY_COL      EQU 23              ;   right of row 1's "DAGGERS 99  ARROWS 99" (x 48..173), above the grid)
-PG_KEY_W        EQU 9
-                ASSERT PG_KEY_COL * 8 + 11 * 6 <= 256 && PG_KEY_COL + PG_KEY_W <= 32 && PG_ORN_TOP == PG_KEY_ROW + 1
+PG_KEY_ROW      EQU 3               ; KEY-POLISH: held keys, one row between the top ornament and the grid: CYAN KEY
+PG_KEY_COL      EQU 6               ;   at col 6 (x 48, under the counters), MAGENTA KEY after it (col 6 or 16); T8 had
+PG_KEY_W        EQU 9               ;   them at col 23 rows 1 / 3, where "ARROWS 12  CYAN KEY" read as "2 CYAN KEY(S)"
+                ASSERT PG_KEY_COL + 2 * PG_KEY_W + 1 <= 32 && PG_KEY_ROW == PG_ORN_TOP + 1 && PG_KEY_ROW < PG_GRID_ROW
 PG_GRID_ROW     EQU 4               ; 5 x 4 bag grid, 16x16 icons 3 cells apart
 PG_GRID_COL     EQU 9               ; cols 9..23 (with the count column)
 PG_WLAB_ROW     EQU 15
@@ -194,19 +194,21 @@ page_main:
                 call pg_num
 .nk:            ld   bc, ((PG_CLOSE_ROW + 1) << 8) | PG_TXT_X
                 call pg_out
-                ; LARGER-D T8: one line per held key (rows 1, then 3), in its colour
+                ; KEY-POLISH: the held keys on row PG_KEY_ROW (under the top ornament: no counter digit
+                ; beside them), cyan then magenta, one word each in its colour (names: lockl.asm)
                 ld   a, (LVL_FLAGS)
-                ld   b, PG_KEY_ROW
-                add  a, a                      ; CF = LF_KEYM, bit 7 = LF_KEYC
+                ld   c, PG_KEY_COL
+                rlca                           ; CF = LF_KEYM, bit 7 = LF_KEYC
                 push af
-                add  a, a                      ; CF = LF_KEYC
-                ld   hl, pg_s_kcy
-                ld   c, ATTR_KEY_C
+                rlca                           ; CF = LF_KEYC
+                ld   hl, str_kn_c
+                ld   a, ATTR_KEY_C
                 call c, pg_key
                 pop  af
-                ld   hl, pg_s_kmg
-                ld   c, ATTR_KEY_M
+                ld   hl, str_kn_m
+                ld   a, ATTR_KEY_M
                 call c, pg_key
+                ASSERT LF_KEYC == $40 && LF_KEYM == $80
                 ; the 20 bag + 4 worn cells
                 xor  a
 .cl:            push af
@@ -699,6 +701,31 @@ pg_out:         xor  a
                 ld   e, c
                 ld   hl, PAGE_BUF
                 jp   print6
+
+;------------------------------------------------------------------------------
+; pg_key — KEY-POLISH (was bank-1 keyui1.asm): HL = a key name, A = its attr, C = its col: printed on
+; row PG_KEY_ROW, its PG_KEY_W cells stamped A. Out: C = the next key's col.  Clobbers: A, B, DE, HL.
+;------------------------------------------------------------------------------
+pg_key:         push af
+                push bc
+                ld   a, c
+                add  a, a
+                add  a, a
+                add  a, a
+                ld   e, a                      ; x = col * 8
+                ld   b, PG_KEY_ROW
+                call print6
+                pop  bc
+                pop  af
+                push bc
+                ld   b, PG_KEY_ROW
+                ld   de, (PG_KEY_W << 8) | 1
+                call stamp_rect
+                pop  bc
+                ld   a, c
+                add  a, PG_KEY_W + 1
+                ld   c, a
+                ret
 
 ;------------------------------------------------------------------------------
 ; pg_box — a 16x16 outline over the 2 x 2 cells at row B, col C (bitmap only;
