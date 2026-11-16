@@ -7385,7 +7385,6 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   from the bag after the unlock, all 12 planks + shadow in K7 (room_show and the B -> C scroll), K8 one key entry per
   key room on generated D1 / D2.
 
-<<<<<<< HEAD
 ## DOOR-FRAME ledger (`feat/door-frame-key`, 2026-11-16; user playtest of main `c873ee2`; + KEY-PANEL, same branch)
 
 - **Frame cells (user: a coloured frame always means a locked door).** A closed door's frame is its lintel (row 9s,
@@ -7414,7 +7413,7 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   `$45` / `$43` held else `ATTR_HUD` (the panel clear's `$47`: a blank cell, and the goldens keep their hash); no "both"
   (`ATTR_KEY_CM` `$EB` retired); (30, 19) stays blank (pi_rects attr 0). `item_depth` (HOT_COPY, +12 B) now marks the
   "Dn" cells itself and passes `LVL_FLAGS` in A (farb passes A), so R6 fits. Goldens: unchanged.
-- **Free (release `-DDEBUG_KIT=0`, before -> after):** low RAM `LOWRAM_SPARE` 67 -> **66**; R6 6 -> **3**; HOT_COPY spare
+- **Free (release `-DDEBUG_KIT=0`, before -> after):** low RAM `LOWRAM_SPARE` 67 -> **66**; R6 6 -> **3** (with GARG-FLY merged: 10 -> 7); HOT_COPY spare
   43 -> **31**; bank 7 40, B0_CODE2 31, bank 1 20, bank 3 22: unchanged; TUT0 blob packed +1 B (5554, `BLOB_RES` 8). F3_GEN=0:
   low RAM 68, R6 8, bank 3 18.
 - **Also:** `assets/gfx/icons/floor_key.grid` note "approved by the user 2026-11-16" (text only; `icons16.svg.html` caption
@@ -7423,7 +7422,6 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   lintel never; back to `$06` after the key unlock and the far-side bolt, screens == map; sealed and ordinary doors `$06`),
   KEY-PANEL checks in K0-K4 / K8 (cyan only, magenta only, both, a magenta then a cyan unlock, descend), PNG
   `keypanel_both.png`; `tests/room_model.plate_cells` includes the arch.
-=======
 ## GARG-FLY ledger (`feat/garg-fly`, 2026-11-16; user playtest of main `c873ee2`: "flying animation until it fights / sits back")
 
 - **What it showed.** An awake Gargoyle flew (`garg_fly` 4 / `garg_fly2` 4) only while tweening a step (M_MOVE); every
@@ -7442,4 +7440,3 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
 - **Tests:** `tests/nm3b.py` W rest pose awake = `garg_fly` (was `garg_alert`); new **GF** checks (`part_fly`): 24 awake
   ticks alternate fly / fly2 every 4 (phase = TICK_COUNTER + 5 x slot), KS_ATTACK = windup x2, RC_HURT = hurt x3 then the
   cycle, RC_DEATH = hurt x3 then `garg_dead`, re-perched = `garg_perch` every tick.
->>>>>>> origin/main
