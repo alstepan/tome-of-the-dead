@@ -27,7 +27,7 @@ PLAY_ROWS       EQU STOREY_COUNT * STOREY_ROWS  ; 18 (PROTO ROOM_ROWS: 21)
 PLAY_CELLS      EQU ROOM_COLS * PLAY_ROWS       ; 576 (PROTO: 672)
 PANEL_ROW       EQU PLAY_ROWS       ; 18: first panel row (never stamped / scrolled)
 PANEL_ROWS      EQU 6               ; rows 18..23
-ICON_ROW        EQU 18              ; rows 18–19: 10 icons 24x16 (cols 3i..3i+2), depth/key cols 30–31
+ICON_ROW        EQU 18              ; rows 18–19: 10 icons 24x16 (cols 3i..3i+2), depth + level digit cols 30–31 (KEY-PANEL: keys at (28/29, 21))
 INFO_ROW        EQU 20              ; info line (6x8 text, 42 chars)
 STAT_ROW        EQU 21              ; HP/MP/FOOD bars, hunger word, ammo
 LOG_ROW         EQU 22              ; rows 22–23: 2-row log (cols 0–23) + worn gear (cols 24–31)
@@ -201,7 +201,10 @@ DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
 ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
 ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)
 ATTR_KEY_M      EQU $43             ; magenta: lock colour 1
-ATTR_KEY_CM     EQU $EB             ; panel key, both held: FLASH + BRIGHT, paper cyan, ink magenta
+; KEY-PANEL (user 2026-11-16): two panel key cells on row STAT_ROW (21), cyan at KEY_PAN_COL, magenta at
+; KEY_PAN_COL + 1, each drawn only while that key is held (key6.asm key_pan); cols 24..29 of row 21 are free
+; (the FOOD word ends at col 23, the status icons are cols 30-31); (30, 19) stays blank.
+KEY_PAN_COL     EQU 28
 
 ;------------------------------------------------------------------------------
 ; FLOOR_LIST (game.md §8.5): <= 32 entries x 4 B, FLOOR_N used (header).
@@ -693,7 +696,7 @@ PD_AMMO         EQU %00001000       ; Warrior ammo (row 21 cols 24–31)
 PD_LOG          EQU %00010000       ; log: scroll 23 -> 22 + newest line (LOG_Q non-empty)
 PD_ICONS        EQU %00100000       ; icon states (select / grey)
 PD_INFO         EQU %01000000       ; info line
-PD_DEPTH        EQU %10000000       ; depth + key icon (cols 30–31, rows 18–19)
+PD_DEPTH        EQU %10000000       ; depth (cols 30–31, row 18) + KEY-PANEL the key cells (cols 28–29, row 21)
 
 ;------------------------------------------------------------------------------
 ; B3B-11 panel engine (concept-screen §5, game.md §3.3–3.5; src/panel.asm).
