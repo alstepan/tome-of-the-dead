@@ -43,6 +43,8 @@ loading picture -> PRESS ANY KEY -> MENU (controls 3/4, hero 2; row 10 pointer, 
   2  START (DEPTH 1)
   BROTHER MORROW WILL TEACH YOU      (R2; was THE SEXTON WILL TEACH YOU)
   ```
+  Layout (2026-11-16): block centred on rows 9..14 (items cols 5.., rows 9 / 13), the R2 line in the
+  **small 8x8 ROM font** directly under item 1 (row 11, col 1, bitmap via `print_str`, attrs by the blob).
   `1` or **ENTER** = TUTORIAL (ENTER nudges the newcomer; see Q1); `2` = START. Keys accepted only
   after all keys are released once (the START `1` is still held). BREAK = back to the menu.
 - **Seed:** taken at the START press as today (§1). The D0→D1 reset re-runs the START init, so D1 is
