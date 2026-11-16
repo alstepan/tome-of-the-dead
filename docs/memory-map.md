@@ -7440,3 +7440,44 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
 - **Tests:** `tests/nm3b.py` W rest pose awake = `garg_fly` (was `garg_alert`); new **GF** checks (`part_fly`): 24 awake
   ticks alternate fly / fly2 every 4 (phase = TICK_COUNTER + 5 x slot), KS_ATTACK = windup x2, RC_HURT = hurt x3 then the
   cycle, RC_DEATH = hurt x3 then `garg_dead`, re-perched = `garg_perch` every tick.
+## MORROW-SPEAK ledger (`feat/morrow-speak`, 2026-11-16; user decisions: speech balloon option D + Morrow's log ink; docs/design/tutorial_d0.md §15)
+
+- **Where:** D0 blob only (`src/tut/tut_speak.asm`, INCLUDEd by `tut_blob.asm`; art `assets/gfx/mentor/balloon.grid` ->
+  `balloon.asm`, gfx_convert `--mode tile`). **0 resident bytes** (bank 2 free 10, HOT_COPY spare 31, low RAM
+  `LOWRAM_SPARE` 66, bank 7 40, B0_CODE2 31, R6 7, bank 1 20, bank 3 22: all unchanged; R6 untouched).
+- **Blob:** 7,750 -> **8,385 B raw** (+635: tut_speak code ~540 + the balloon 36 + the lectern copy 32 + hooks in
+  tut_turn / tut_start ~25), packed 5,554 -> 6,080. **`BLOB_ORG` `$E1B2` -> `$DF37`** (`BLOB_RES` 8,393; tail 8, ASSERT
+  `BLOB_TAIL >= 8`). Below it: the D0 pool top Warrior `$D460` / Mage `$CE40` (ASSERT + `POOL_SIM_MARGIN`; 2,775 B to
+  spare), BOOT4 ends `$DA0B` (1,323 B free below `BLOB_ORG`). `POOL_START`, the D1+ pool, every level need: unchanged
+  (the blob is overwritten by the D1 pool as before). Tape: BOOT4 block +526 B.
+- **`TUT_RAM` +6 B** (`TUT_RAM_END` `$5ED9` -> **`$5EDF`** <= `PF_ROWF` `$5EE0`, ASSERTed; 1 B left): `TV_LMOR` `$5ED9`
+  (bit s = `LOG_TXT` ring slot s holds his pending line), `TV_BSAY` `$5EDA` (!= 0: his line is the newest drawn),
+  `TV_BCOL` `$5EDB` (balloon left col, 0 = none), `TV_BROW` `$5EDC`, `TV_BKEY` `$5EDD` (placed for spot | facing-left << 7),
+  `TV_BGLY` `$5EDE` (which side's glyphs ids 15..18 hold: 0 none, 1 left = mirrored, 2 right). Test-observable.
+- **4th SMC site `il_go`** (`item_log.go`, panel2.asm, bank 2 `$95C4`; label only): `ld hl, item_log0` / `ld c,
+  BANK_TEXT` / `jp farb`. While D0 runs **`il_go + 1` = `blob_log`, `il_go + 4` = `BANK_BLOB`** (`tt_hook`, from
+  `tut_d0` with `pl_et` / `pi_ic`); put back with them by **`tt_unhook`** (`blob_choice`: death, Quit, choice 2 /
+  BREAK, the first offer too; `tt_reset`: the grate step). ASSERTed: the opcodes `$21` / `$0E` and the original operands.
+  `blob_log`: the slot's `TV_LMOR` bit, `FARB0 item_log0` (unchanged line drawing), then rows 22 / 23 cols 0..23 attrs
+  (row 22 = row 23's old ink & `$BF`; row 23 = `$45` his / `ATTR_LOG_NEW`), no extra mark (`HUD4_PW` already covers
+  every inked cell), then `tt_bal`. The bank-7 `LT_HOLD` path's direct `jp item_log` goes through the same site.
+- **Balloon = a tile stamp on 4 BORROWED common ids 15..18 (`T_LECT_TL..BR`, the D8 Sanctum lectern):** all 64 ids are
+  in use on D0 (0..31 common, 32..42 D0 decor, 43..59 Morrow, 60..63 item markers); the lectern is placed only by
+  `build_room_map` in the Sanctum and the win card. On a placement `tt_bgly` writes `TILE_GLYPHS` 15..18 (as drawn, or
+  mirrored through `BITREV_TAB` on his left side), `TILE_ATTRS` := `$07`, **`tile_flags` := 0** (not solid / not
+  attackable while a balloon); **`tt_unhook` restores** glyphs (blob copy `bal_lect` == tiles_common, checked by
+  tests/tut0.py S3), attrs `ATTR_LECT_TOP` x 2 / `ATTR_LECT_FOOT` x 2, flags `TF_SOLID | TF_ATTACK` (ASSERTed against
+  `tile_flags`). Rule: **a new user of ids 15..18, or a path that leaves D0 without `blob_choice` / `tt_reset`, must
+  keep that restore** (every D0 exit already passes one of them: conventions "TUT0 boot stubs + SMC operands").
+- **Cost (D0 only):** a log line +~0.3k T (farb; a row's 24 attrs are rewritten only when its owner changes, ~0.6k
+  each); `tt_bal` ~0.3k unchanged / hidden; a placement ~3-5k (search ~1-3k incl. the 16-slot body scan, glyphs only
+  when the side changes ~1-2.3k, rect_repaint 2 x 2; `tile_rect` + `pmark_rect` only inside a hold, which presents
+  without rendering; in play the next render draws the queued restore); a hide ~1.5k. **`tests/budget.py` tut0: worst
+  work 119.3k (Warrior) / 120.9k (Mage) < CAP 126k** (main: 109.2k / 111.0k; the worst tick is B5's pear turn with
+  the balloon moving at A3); a first draft drawing at once + always re-installing glyphs measured 125.1k / 126.5k.
+- **Tests (tests/tut0.py):** S1 sampler at every turn / hold (ids only at `TV_BCOL`, his line newest, displayed glyphs +
+  attr `$07` = no clash, no stale glyph, log rows' ink by owner = the `log_push` HL == `TV_BUF`, hidden after an engine
+  line / a room change), S2 both facings in front of him (PNGs `build/morrow_speak_face_left.png` / `_face_right.png`),
+  S3 static (balloon bytes == the grid, `bal_lect` == tiles_common), S4 room change / off-screen (scen_speak), C27
+  (`hooks_off`) now also `il_go` + the lectern ids restored after every D0 exit. Golden `tut0_d0_arrival` re-baselined
+  (the arrival balloon + cyan log).

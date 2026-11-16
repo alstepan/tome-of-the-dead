@@ -1057,3 +1057,33 @@ Reused as second lines: L15, L22, L52, I07, L70 (no change). Death-catch mercy r
 3. **Repeat window 32 turns** after the nudges. *Default: yes.*
 4. **B9 lost while poisoned advances at once** (rather than waiting for the timer to clear).
    *Default: advance at once.*
+
+## 15. MORROW-SPEAK — the speaker cue (user decisions 2026-11-16; as built)
+
+Brother Morrow's lines must read as HIS without a "MORROW:" prefix (none is added; every
+other line is unchanged).
+
+- **Log ink.** Every line the blob pushes (`tt_line`: all of §8's lines, the tour, the nudges,
+  mercy) is drawn in his cyan: **row 23 (newest) `$45` bright cyan**, scrolled to **row 22 `$05`**
+  (BRIGHT dropped, exactly as the white `$47` -> `$07`). Same ink as his sprite (`$05`) and the goal
+  line (`$45`). Engine lines keep `$47` / `$07`. The hold cue's BRIGHT pulse works on both.
+- **Speech balloon.** Approved art option D (Design canvas board TUT1): 16 x 16, 1 bit, no mask,
+  **white `$07`** (his sprite is non-bright `$05`), black paper, its own 2 x 2 cells (no clash).
+  Source `assets/gfx/mentor/balloon.grid` -> `balloon.asm` (`tools/gfx_convert.py --mode tile`).
+  - Shown while his latest line is the newest log line (set when that line is DRAWN on row 23).
+  - Hidden when an engine line is drawn, when he blinks away, on any room change (he is then
+    off-screen: nothing until he speaks again), and when the run leaves `GS_PLAYING`.
+  - **Place.** Every D0 spot has only 1 free row above his head (his top is 1 row below his
+    storey's top), so the "2 x 2 above him" never fits: the balloon sits on the storey's top 2
+    rows (`9s`, `9s+1`), **beside his head**: first the side he faces (in front of his face,
+    nearest first, 3 positions), else the other side (3 positions), else that showing is
+    skipped. A position needs 4 `T_AIR` cells (no wall / decor / ladder / item / his box) and
+    no live body's box on them; never on the HUD.
+  - **Tail** points at him: as drawn (lower left) when the balloon is on his right, mirrored
+    on his left, so in front of him it follows his facing (mirrored at stamp time through
+    `BITREV_TAB`, no second copy). On A1 he faces the arriving hero (left), the shaft's ladder
+    fills his left: the arrival balloon sits behind him (right side, tail toward him).
+  - Moves / re-mirrors when his spot or facing changes (turn end).
+- **Engine.** A tile stamp like Morrow himself (borrowed lectern ids 15..18, restored at every
+  D0 exit); item_log's line goes through the blob while D0 runs (a 4th SMC operand `il_go`).
+  0 resident bytes; memory-map "MORROW-SPEAK ledger"; tests `tests/tut0.py` S1-S4.

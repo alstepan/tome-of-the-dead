@@ -24,6 +24,7 @@ blob_base:
 
                 INCLUDE "tut/tut_turn.asm"     ; T7: blob_turn (the turn engine, the hold, mercy, reset)
                 INCLUDE "tut/tut_beats.asm"    ; T8 (+ T7 amendments): the beat table
+                INCLUDE "tut/tut_speak.asm"    ; MORROW-SPEAK: his log ink + the speech balloon
 
 ;------------------------------------------------------------------------------
 ; data (generated): text (tools/tutpack.py), the D0 level block + spots + mentor

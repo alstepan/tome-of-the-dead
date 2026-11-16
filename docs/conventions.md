@@ -133,16 +133,22 @@
   stubs (`src/tut/tut_stub.asm`: `ts_choice`, `ts_turn`, `ts_icon` (TUT0-R2), farb with C = `BANK_BLOB`) that the
   INSTR overlay installs at boot over `check_paging` .. `sel_tab` (tape-path-only code, dead
   after boot; nothing may call `check_paging` / read `str_lock` after boot, and no new code may
-  go there). Three bank-2 operands are SMC, flagged `; SMC:` in main.asm / io.asm: **`es_go + 1`**
+  go there). Four bank-2 operand sites are SMC, flagged `; SMC:` in main.asm / io.asm / panel2.asm: **`es_go + 1`**
   (enter_select's `jp start_game`; = `ts_choice` from boot until `blob_choice` puts
   `start_game` back), **`pl_et + 1`** (play_loop's `ld hl, end_turn`; = `ts_turn` only while
   D0 runs) and, TUT0-R2, **`pi_ic + 1`** (intent_tick's ICON MODE `ld hl, intent_icon7`, the
   global `pi_ic` = `intent_tick.pi_ic`; = `ts_icon` only while D0 runs: `ts_icon` calls the
-  real `intent_icon7`, then `blob_icon`). `pl_et` and `pi_ic` are always patched / undone
-  together: `tut_d0` sets both, `blob_choice` (death, Quit, choice `2`, BREAK) and `tt_reset`
-  (the grate step = EX_LEVEL / EX_DOWN from C) put both back. Invariant: every D0 exit passes
-  `enter_select` / `blob_choice` or undoes the operands itself — a stale `pl_et` / `pi_ic`
-  would far-call a blob the D1 pool has overwritten. `blob_icon` runs inside intent_tick (frozen
+  real `intent_icon7`, then `blob_icon`) and, MORROW-SPEAK, **`il_go + 1` / `il_go + 4`**
+  (panel2.asm item_log's `ld hl, item_log0` / `ld c, BANK_TEXT`, the global `il_go` =
+  `item_log.go`; = `blob_log` / `BANK_BLOB` only while D0 runs: the blob draws the line through
+  item_log0, then Morrow's ink + the balloon). `pl_et`, `pi_ic` and `il_go` are always patched /
+  undone together: `tut_d0` sets them (`tt_hook` for `il_go`), `blob_choice` (death, Quit,
+  choice `2`, BREAK) and `tt_reset` (the grate step = EX_LEVEL / EX_DOWN from C) put them back
+  through **`tt_unhook`**, which also restores the D8 lectern tile ids 15..18 the balloon borrows
+  (glyphs, attrs, flags). Invariant: every D0 exit passes `enter_select` / `blob_choice` or
+  undoes the operands itself — a stale `pl_et` / `pi_ic` / `il_go` would far-call a blob the D1
+  pool has overwritten, and a skipped `tt_unhook` would leave the Sanctum lectern drawn as a
+  balloon. `blob_icon` runs inside intent_tick (frozen
   ICON MODE ticks only; a still-animating turn tick returns at once) and may hold (`tt_hold`:
   whole frames + `resync_tick`); it keeps IX. Blob rules = bank3.asm's (never pages `$C000` itself; every paging helper via
   farb with C = `BANK_BLOB`; far3 / far1 / far6 / far7 nest). Tests: `tut_off()` restores
