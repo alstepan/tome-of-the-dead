@@ -16,7 +16,7 @@ IT_NAME = {}
 for _k, _v in IT.items():
     IT_NAME.setdefault(_v, _k)
 RDX = {k: S["RDX_" + k] for k in ("L", "R", "U", "D", "LS1", "RS1")}
-EG = {k: S["EG_" + k] for k in ("LINK", "DOOR", "OPEN", "LOCK", "SEAL")}
+EG = {k: S["EG_" + k] for k in ("LINK", "DOOR", "OPEN", "LOCK", "SEAL", "LOCKC", "NEARR")}
 TF = {k: S["TF_" + k] for k in ("SOLID", "FLOOR", "HOLE", "LADDER", "DOOR", "LOCK", "ATTACK", "ANIM")}
 CLOSE_SLOT, WIDTHS = 24, (1, 5, 5, 5, 5, 4)
 HERO_W = 3
@@ -280,7 +280,7 @@ class Bot:
         self.lvl_t0 = self.mon.ticks
         self.kw, self.kh = self.kb(self.hero_kind, "KT_BW"), self.kb(self.hero_kind, "KT_BH")
         self.goal_fail = collections.Counter()
-        self.rooms = [r for r in range(9) if room_model.field(self.blk, r, "RD_EXITS")]
+        self.rooms = [r for r in range(S["GRID_CELLS"]) if room_model.field(self.blk, r, "RD_EXITS")]
         self.stats["levels"] += 1
         self.ev(f"LEVEL D{self.depth}: seed {self.p.rw('LVL_SEED'):#06x} start r{self.rb('LVL_START')} "
                 f"lair r{self.lair} key r{self.keyroom} sanctum {self.sanctum} rooms {self.rooms} "
@@ -290,14 +290,28 @@ class Bot:
     def edge_flags(self, m):
         return self.rb(S["EDGE_TAB"] + m - m // 3)
 
+    def passable(self, m, a_is_right):
+        """LARGER-D T7: the horizontal edge whose LEFT room is m, crossed from the right (a_is_right) / left room. A lock bars only its start
+        (near) side (EG_NEARR: the near room is the right one) and needs the matching colour (EG_LOCKC = magenta);
+        from the far side the bolt opens it. A SEALED edge (D8 Sanctum) is never crossed here."""
+        f = self.edge_flags(m)
+        if not f & EG["LINK"]:
+            return False
+        if not f & EG["LOCK"]:
+            return True
+        if bool(f & EG["NEARR"]) != a_is_right:
+            return True                                    # the far side: the bolt
+        return bool(self.lflags() & LF["KEYM" if f & EG["LOCKC"] else "KEYC"])
+
     def neighbours(self, r):
         out = []
+        n = S["GRID_CELLS"]
         ex = room_model.field(self.blk, r, "RD_EXITS")
-        if ex & RDX["L"] and r % 3 and self.edge_flags(r - 1) & EG["LINK"]:
+        if ex & RDX["L"] and r % 3 and self.passable(r - 1, True):
             out.append((r - 1, "L"))
-        if ex & RDX["R"] and r % 3 != 2 and self.edge_flags(r) & EG["LINK"]:
+        if ex & RDX["R"] and r % 3 != 2 and self.passable(r, False):
             out.append((r + 1, "R"))
-        if ex & RDX["D"] and r + 3 < 9:
+        if ex & RDX["D"] and r + 3 < n:
             out.append((r + 3, "D"))
         if ex & RDX["U"] and r - 3 >= 0:
             out.append((r - 3, "U"))
