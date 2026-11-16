@@ -517,20 +517,22 @@ prev_tab:       DB   FID_knight_idle1, 21, $47 ; by hero kind
 
 ;------------------------------------------------------------------------------
 ; menu_ctl — row 16: KEYS / KEMPSTON / SINCLAIR 1 / SINCLAIR 2, the chosen
-; JOY_MODE on PAPER blue (options on 4-char = 3-cell boundaries).
+; JOY_MODE on PAPER blue. print6 starts on a cell (x multiple of 8): the words (24 / 48 /
+; 60 / 60 px) at x 8 / 48 / 112 / 192 -> gaps 16 / 16 / 20 px, margins 8 / 4 px (centred
+; in 256 to +-2 px); each word's cells in ctl_cells.
 ;------------------------------------------------------------------------------
 menu_ctl:
                 ld   a, TX_CTL_KEYS
-                ld   e, 0 * 6
+                ld   e, 1 * 8
                 call .o
                 ld   a, TX_CTL_KEMPSTON
-                ld   e, 8 * 6
+                ld   e, 6 * 8
                 call .o
                 ld   a, TX_CTL_SINCLAIR1
-                ld   e, 20 * 6
+                ld   e, 14 * 8
                 call .o
                 ld   a, TX_CTL_SINCLAIR2
-                ld   e, 32 * 6
+                ld   e, 24 * 8
                 call .o
                 ld   a, MENU_A_CTL
                 ld   bc, MENU_CTL_ROW << 8
@@ -551,7 +553,7 @@ menu_ctl:
                 jp   stamp_rect
 .o:             ld   b, MENU_CTL_ROW
                 jp   print6x
-ctl_cells:      DB   0, 3, 6, 6, 15, 8, 24, 8  ; per JOY_MODE: first col, cols
+ctl_cells:      DB   1, 3, 6, 6, 14, 8, 24, 8  ; per JOY_MODE: first col, cols
                 ASSERT TX_CTL_KEMPSTON == TX_CTL_KEYS + 1
 
 ;------------------------------------------------------------------------------
@@ -593,17 +595,25 @@ menu_keys:
                 dec  de
                 dec  de
                 ld   (de), a
-                ld   hl, mk_buf                ; blank the row first (shorter names)
-                ld   b, MENU_KEYS_ROW
+                ld   a, e                      ; centred: x = (128 - 3n + 4) & ~7 (print6 starts on a
+                sub  mk_buf & $FF              ; cell), n = the length <= 42 (mk_buf: one page, asserted)
+                ld   c, a
+                add  a, a
+                add  a, c
+                neg
+                add  a, 128 + 4
+                and  $F8
+                ld   c, a                      ; row_clear keeps BC
+                ld   b, MENU_KEYS_ROW          ; blank the row first (shorter names)
                 call row_clear
                 ld   hl, mk_buf
-                ld   b, MENU_KEYS_ROW
-                ld   e, 0
+                ld   e, c
                 call print6
                 ld   a, MENU_A_SUB
                 ld   bc, MENU_KEYS_ROW << 8
                 ld   de, (32 << 8) | 1
                 jp   stamp_rect
+                ASSERT (mk_buf & $FF) + 43 <= 256
 mk_order:       DB   TX_KEY_UP, JOY_U_BIT, TX_KEY_DOWN, JOY_D_BIT, TX_KEY_LEFT, JOY_L_BIT
                 DB   TX_KEY_RIGHT, JOY_R_BIT, TX_KEY_FIRE, JOY_F_BIT
 

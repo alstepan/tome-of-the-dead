@@ -372,11 +372,13 @@ ux_compact:     call ux_div3
 ; mn_sub0 — FARB0 from bank-1 menu_static (ITEM-INFO: moved out of bank 1 with the
 ; new line): the subtitle (row 5) + its attrs (rows 5-6), the footer attrs (rows
 ; 22-23), and, only while the tutorial is offered (es_go = ts_choice, TUT0), the
-; pointer NEW HERE? START > 1 TUTORIAL on row 10 cols 0-20 (attr $45, item_info.md §5).
+; pointer NEW? START > TUTORIAL on row 10, from col 4 (under the items' digit column, MN_TUT_COL;
+; centring would run into the hero previews, so it is aligned to the item text instead; attr $45).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 MN_TUT_ROW      EQU 10
 MN_TUT_ATTR     EQU $45
+MN_TUT_COL      EQU 4               ; the items' digit column
 mn_sub0:        ld   a, TX_FT_SUBTITLE
                 ld   b, 5
                 ld   e, 9 * 8                  ; 19 chars x 6 = 114 px: centred at x=71 ~ 72 (E: multiple of 8)
@@ -396,11 +398,11 @@ mn_sub0:        ld   a, TX_FT_SUBTITLE
                 ret  nz                        ; no offer: row 10 stays blank (attrs 0)
                 ld   a, TX_MN_TUT
                 ld   b, MN_TUT_ROW
-                ld   e, 0
+                ld   e, MN_TUT_COL * 8
                 call print6x
                 ld   a, MN_TUT_ATTR
-                ld   bc, MN_TUT_ROW << 8
+                ld   bc, (MN_TUT_ROW << 8) | MN_TUT_COL
                 ld   de, (MN_TUT_W << 8) | 1
                 jp   stamp_rect
-MN_TUT_W        EQU (TXL_MN_TUT * 6 + 7) / 8   ; 28 chars = 21 cells (cols 0-20, the previews start at 21)
-                ASSERT MN_TUT_W <= 21
+MN_TUT_W        EQU (TXL_MN_TUT * 6 + 7) / 8   ; 21 chars = 16 cells (cols 4-19, the previews start at 21)
+                ASSERT MN_TUT_COL + MN_TUT_W <= 21

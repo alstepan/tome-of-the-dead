@@ -119,10 +119,10 @@ def main():
         p.wait_state(S["GS_SELECT"])
         fr = p.frame()
         m_ink = [c for c in range(32) if any(cell_bytes(fr, c, 10))]
-        m_at = {attr_at(fr, c, 10) for c in range(21)}
+        m_at = {attr_at(fr, c, 10) for c in range(4, 20)}
         es = p.rb(S["es_go"] + 1) | p.rb(S["es_go"] + 2) << 8
-        check("M1 tutorial offered: row 10 NEW HERE? START > 1 TUTORIAL in cols 0-20, attr $45",
-              es == S["ts_choice"] and len([c for c in m_ink if c <= 20]) >= 18 and m_at == {0x45},
+        check("M1 tutorial offered: row 10 NEW? START > TUTORIAL in cols 4-19, attr $45",
+              es == S["ts_choice"] and len([c for c in m_ink if 4 <= c <= 19]) >= 14 and m_at == {0x45},
               (es, m_ink, m_at))                   # (cols 21+: the hero preview's body)
         p.tut_default_off = True
         p.tut_off()                                # = the offer gone (blob_choice / the grate)
