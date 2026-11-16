@@ -53,6 +53,10 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   TK4 the pickup (L24 / L25, panel key cell, D0), TK5 the unlock (1 turn, key spent) + into C, TK6 the log ends on G5
   (L45 / L47); PNGs build/tut_key_{floor,locked,unlocked}.png, build/tut_last_line.png. S5 (review A): an engine line
   replacing his newest pending line is drawn as the engine's. C27 also item_depth's digit operand
+  TUT-GEAR (2026-11-16, tut_gear.md): B9G = TV_BEAT 10 (B10..B15 at 11..16). G1 the taught route equips the helmet;
+  scen_gear: G2 the class helmet on B's floor, G3 picked up poisoned -> G0 L80 / L60 only after the cure, G4 G2 L81 / L82 +
+  goal, G5 the page + EQUIP -> L83 W / M, HELM pointer, DEF / max MP +1 (both classes; PNGs build/tut_gear_*_{w,m}.png),
+  G6 DISCARD -> silent advance, G7 EQUIP before G0 -> L83 only, G8 never picked up -> L76 on entering C
 
 Usage: ZRCP_PORT=10778 WZ_BUILD_DIR=<dir>/build [TUT0_SCEN=key,speak] python3 tests/tut0.py [--update-golden] [--only C3,C5]
 Output: one line per check, then `tut0: N failed of M: ids`.
@@ -79,6 +83,9 @@ import textpack as tp                         # noqa: E402
 
 Proto.tut_default_off = False                 # the tutorial path is live (choice screen offered)
 UPD_ONLY = set(filter(None, os.environ.get("TUT0_UPDATE", "").split(",")))   # goldens rewritten by name (the rest compared)
+# TV_BEAT record numbers (TUT-GEAR: B9G = 10 between B9 and B10, so the spec's B10..B15 are records 11..16)
+B9, B9G, B10, B11, B12, B13, B14, B15 = 9, 10, 11, 12, 13, 14, 15, 16
+NBEATS = B15 + 1
 
 
 def golden(h, name, fr):
@@ -537,7 +544,7 @@ QS_SCROLL_ICON = S["QS_SLOT0"] + S["QS_SCROLL"]
 STAND_Y = (S["STAND_Y0"], S["STAND_Y1"])
 
 
-PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 24, 1)]  # tut_rects (row, col, w, h)
+PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 24, 1), (22, 28, 2, 2)]  # tut_rects (row, col, w, h)
 
 # --- TUT0-F4 R4: the goal line (row 20 cols 0..23) and the hold prompt (cols 24..31) ---------------------
 FONT6 = open(os.path.join(REPO, "assets", "gfx", "fonts", "font6x8.bin"), "rb").read()
@@ -576,7 +583,7 @@ def goal_want(p):
     """The goal id tt_gvis should show now ($FF hidden): spec R4-3, modelled independently."""
     b, stg = tv(p, "TV_BEAT"), tv(p, "TV_STAGE")
     gid = BLOB_IMAGE[S["tut_goal"] - S["BLOB_ORG"] + b]
-    if b >= 14:
+    if b >= B14:
         return gid if p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"] else 0xFF
     if stg not in (2, 3) or (b == 9 and not p.rb("ST_FLAGS") & S["STS_POISON"]):
         return 0xFF
@@ -869,7 +876,12 @@ def go_to_C(p, run, full, pit=False):
         T(p, "WAIT")
         page_use(p, S["IT_P_CURE"], p.page_via)                  # B9: DRINK from the bag
         run.note()
-        T(p, "WAIT")
+        T(p, "WAIT")                                             # B9G G0 (L80 / L60, held): the helmet is in the bag
+        T(p, "WAIT")                                             # B9G G2 (L81 / L82, held)
+        run.gear_bag = helm(p) is not None
+        page_use(p, helm(p) or 0, p.page_via)                    # B9G: EQUIP from the bag page -> L83 W / M
+        run.gear_worn = p.rb(S["WORN"] + 3 * S["WS_HELM"])
+        run.note()
         leg(p, run, 24)
     to_floor(p, 1)
     run.note()
@@ -881,12 +893,22 @@ def go_to_C(p, run, full, pit=False):
     return p.rb("CUR_ROOM") == 5
 
 
+def helm_type(p):
+    """TUT-GEAR: the class helmet of this hero (Warrior IT_H_HELM, Mage IT_H_HOOD)."""
+    return S["IT_H_HELM"] - p.rb("HERO_KIND")
+
+
+def helm(p):
+    """The class helmet's type if it is in the bag, else None."""
+    return helm_type(p) if bag_slot(p, helm_type(p)) is not None else None
+
+
 def fight(p, run, use_scroll, n=70):
     """Walk right into the Goblin until it dies; with use_scroll, read the Sleep scroll through the ICON MODE
     once it is awake and near (B13), and keep striking. Returns (dead, used)."""
     used, waits = False, 0
     for _ in range(n):
-        if run.wake_mark is None and tv(p, "TV_BEAT") >= 12:    # R2 C24: the Goblin woke (B12)
+        if run.wake_mark is None and tv(p, "TV_BEAT") >= B12:   # R2 C24: the Goblin woke (B12)
             run.wake_mark = len(p.LOG) if p.LOG is not None else 0
         run.grate.append(p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"])
         if p.rb("ST1_KILLS"):
@@ -895,8 +917,8 @@ def fight(p, run, use_scroll, n=70):
             break
         g = goblin(p)
         if (use_scroll and not used and g and bag_slot(p, S["IT_S_SLEEP"]) is not None
-                and tv(p, "TV_BEAT") >= 12 and p.rb(S["ST_FLAGS"] + g[0]) & S["STS_HOLD"] != S["HOLD_ASLEEP"]):
-            prompt = tv(p, "TV_BEAT") >= 13 if p.mturn else p.seen(line("TL_L39", p.scheme))   # (no log capture while measuring)
+                and tv(p, "TV_BEAT") >= B12 and p.rb(S["ST_FLAGS"] + g[0]) & S["STS_HOLD"] != S["HOLD_ASLEEP"]):
+            prompt = tv(p, "TV_BEAT") >= B13 if p.mturn else p.seen(line("TL_L39", p.scheme))   # (no log capture while measuring)
             if not prompt and waits < 3:
                 waits += 1
                 T(p, "WAIT")                                     # B13's prompt (L39 / L40) shows after the wake
@@ -1012,7 +1034,7 @@ def first_lines(hero):
     c = CLS[hero]
     return ["L01", "L03", "L05", "L54", "L65", "L08", "L67", "L11", "L60", "L13", "L14" + c, "L63", "L16", "L17", "L19", "L21",
             "L70", "L23", "L24",
-            "L26", "L28", "L30b", "L31", "L33", "L34", "L35" + c, "L37", "L38" + c, "L39", "L41", "L42", "L56", "L57",
+            "L26", "L28", "L30b", "L31", "L80", "L60", "L81", "L82", "L83" + c, "L33", "L34", "L35" + c, "L37", "L38" + c, "L39", "L41", "L42", "L56", "L57",
             "L58", "L59", "L43", "L46", "L44", "L45", "L47"]      # TUT-KEY: G4 L46 / L44, G5 L45 / L47 (the grate last)
 
 
@@ -1183,12 +1205,16 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     p.tick(3)
     check("C3", f"{tag}: the grate step left D0 for D1 (hooks back: pl_et = end_turn, es_go = start_game)",
           left and w2(p, S["pl_et"] + 1) == S["end_turn"] and w2(p, S["es_go"] + 1) == S["start_game"], (left, st(p)))
-    check("C3", f"{tag}: beats B0..B15 in order, none skipped", run.beats == list(range(16)), run.beats)
+    check("C3", f"{tag}: beats B0..B9, B9G, B10..B15 in order, none skipped", run.beats == list(range(NBEATS)), run.beats)
+    check("G1", f"{tag}: TUT-GEAR B9G on the taught route: the class helmet ({'HELM' if hero == 0 else 'HOOD'}) picked up "
+          "walking, EQUIPPED from the bag page (worn helmet slot = it, gone from the bag)",
+          getattr(run, "gear_bag", False) and getattr(run, "gear_worn", 0) == S["IT_H_HELM"] - hero,
+          (getattr(run, "gear_bag", None), getattr(run, "gear_worn", None)))
     miss, late = log_order(p, first_lines(hero), scheme)
     check("C3", f"{tag}: every beat's lines in the log, in beat order", not miss and not late, (miss, late))
     check("K3", f"{tag}: the goal line == its beat's text, attr $45, at every sample ({run.goal_n} shown, {run.hide_n} hidden with the "
           f"info attrs back), shown in B0-B11 + B14 (seen {sorted(run.goal_seen)})",
-          not run.goal_bad and set(range(12)) | {14} <= run.goal_seen, (run.goal_bad[:3], sorted(run.goal_seen)))
+          not run.goal_bad and set(range(B11 + 1)) | {B14} <= run.goal_seen, (run.goal_bad[:3], sorted(run.goal_seen)))
     check("K5", f"{tag}: no FLASH in row 20 cols 24-31 during any hold (B12 G0 incl.); the ROW20 rect is 24 wide",
           not run.k5_bad and BLOB_IMAGE[S["tut_rects"] - S["BLOB_ORG"] + 4 * 6 + 2] == GOAL_W, run.k5_bad[:3])
     check("C10", f"{tag}: blob bytes == the image at {run.blob_n} checks (D0 start, 3 rooms, page, fight, grate)",
@@ -1433,6 +1459,8 @@ def scen_key(h):
             break
         T(p, "H")
     drain_log(p)
+    T(p, "WAIT")                                                 # TUT-GEAR budget: B7's G1 waits for the drained ring (+1 turn)
+    drain_log(p)
     got = [l.rstrip() for l in p.LOG[n2:]]
     at, ink, d0 = panel_key(p)
     want = ["YOU FIND A CYAN KEY", line("TL_L24"), line("TL_L25")]
@@ -1493,6 +1521,178 @@ def scen_key(h):
     check("TK5", "through the unlocked door into room C", p.rb("CUR_ROOM") == 5, st(p))
     bal_report(run, "TK route")
     check("C10", f"TK route: blob bytes == the image at {run.blob_n} checks", not run.blob_bad, run.blob_bad)
+
+
+# --- TUT-GEAR (2026-11-16, docs/design/tut_gear.md): B9G, the class helmet on B's floor (col 16) -----------------
+GEAR_COL, HELM_RECT = 16, 7                                      # tools/tut0_level.py ITEMS; TUT_PR_HELM
+
+
+def gear_entry(p):
+    """The helmet's FLOOR_LIST entry (room, col, item) at TUT0_GEAR_FL."""
+    fl = p.z.read_memory(S["FLOOR_LIST"] + 4 * S["TUT0_GEAR_FL"], 4)
+    return fl[0], fl[1], fl[2]
+
+
+def worn_helm(p):
+    return p.rb(S["WORN"] + 3 * S["WS_HELM"])
+
+
+def to_B(p, run):
+    """The short route from the D0 start into room B, on its storey 0 at the arrival."""
+    settle_holds(p)
+    to_floor(p, 0)
+    leg(p, run, 12)
+    to_floor(p, 1)
+    leg(p, run, 5)
+    ok = to_floor(p, 1, room=4)
+    to_floor(p, 0)
+    return ok
+
+
+def page_pick(p, typ, verb_right=0):
+    """Bag page open (I key), cursor on `typ`; returns True if there."""
+    s = bag_slot(p, typ)
+    return s is not None and open_page(p, "I") and page_nav(p, s)
+
+
+def page_confirm(p, verb_right=0):
+    """FIRE (the verb strip), RIGHT x verb_right, FIRE; wait for the close and the turn (if any); holds dismissed."""
+    t0 = p.rw("TURN_COUNTER")
+    p.tap("FIRE")
+    for _ in range(verb_right):
+        p.tap("L")
+    p.tap("FIRE")
+    p.until(lambda: p.rb("PAGE_OPEN") == 0, 12)
+    for _ in range(120):
+        p.tick()
+        if tv(p, "TV_HOLD") or (p.rw("TURN_COUNTER") != t0 and p.idle()):
+            break
+    p.tick(1)
+    return p.rw("TURN_COUNTER") != t0
+
+
+def scen_gear(h):
+    """TUT-GEAR G2-G8 (B9G). Per class: the floor helmet is the class's (Helm / Hood), picked up walking while poisoned:
+    no B9G line until B9 is cleared (the cure) - then G0 L80 / L60 (held), G2 L81 / L82 (held, goal L82), the page with the
+    cursor on it, EQUIP -> L83 W / M, the HELM pointer flashing, DEF / max MP +1 (PNGs build/tut_gear_{floor,page,worn}_{w,m}.png).
+    Then: DISCARD after G0 -> advance silently; EQUIP before G0 -> L83 only; never picked up -> L76 on entering C."""
+    for hero in (0, 1):
+        c = CLS[hero].lower()
+        tag = f"B9G {'Warrior' if hero == 0 else 'Mage'}"
+        p = start(h, hero)
+        run = Run(p)
+        inb = to_B(p, run)
+        ge = gear_entry(p)
+        want = S["IT_H_HELM"] - hero
+        walk_to(p, 10)
+        drain_log(p)
+        png_f = bal_png(p, f"tut_gear_floor_{c}.png")
+        check("G2", f"{tag}: room B's floor holds the class helmet (type {want}) at col {GEAR_COL} storey 0 (PNG {png_f})",
+              inb and ge == (4, GEAR_COL, want), (inb, ge))
+        n0 = len(p.LOG)
+        walk_to(p, GEAR_COL - 2)                                 # x 14 covers col 16 (the dart at 13 on the way)
+        for _ in range(2):
+            if helm(p):
+                break
+            T(p, "L")
+        pois = bool(p.rb("ST_FLAGS") & S["STS_POISON"])
+        b_pick = tv(p, "TV_BEAT")
+        walk_to(p, 19)                                           # the Cure
+        T(p, "WAIT")
+        mid = [l.rstrip() for l in p.LOG[n0:]]
+        page_use(p, S["IT_P_CURE"], "I")                         # B9: drink it
+        nc = len(p.LOG)
+        T(p, "WAIT")                                             # B9G G0
+        g0 = tv(p, "TV_BEAT"), [l.rstrip() for l in p.LOG[nc:]]
+        check("G3", f"{tag}: picked up while poisoned ({pois}, beat {b_pick} < B9G): no B9G line before the cure; after it "
+              "B9G is current and G0 = L80 / L60 (held)",
+              helm(p) == want and pois and b_pick < B9G and line("TL_L80") not in mid and g0[0] == B9G
+              and g0[1][-2:] == [line("TL_L80"), line("TL_L60")] and held(p, "TL_L80"), (helm(p), pois, b_pick, g0, mid[-4:]))
+        n1 = len(p.LOG)
+        T(p, "WAIT")                                             # G2
+        g2 = [l.rstrip() for l in p.LOG[n1:]]
+        check("G4", f"{tag}: next turn G2 = L81 / L82 (held), the goal line L82",
+              g2[-2:] == [line("TL_L81"), line("TL_L82")] and held(p, "TL_L81") and tv(p, "TV_GID") == S["TL_L82"]
+              and tv(p, "TV_STAGE") == 3, (g2, tv(p, "TV_GID"), tv(p, "TV_STAGE")))
+        d0, m0 = p.rb("HERO_DEF"), p.rb("MAXMP")
+        at = page_pick(p, want)
+        png_p = bal_png(p, f"tut_gear_page_{c}.png")
+        n2 = len(p.LOG)
+        turned = page_confirm(p)                                 # EQUIP (the first verb of gear)
+        g1 = [l.rstrip() for l in p.LOG[n2:]]
+        p.tick(2)
+        flash = rect_flash_ok(p, HELM_RECT)
+        ptr = tv(p, "TV_PTR")
+        png_w = bal_png(p, f"tut_gear_worn_{c}.png")
+        settle_holds(p)
+        stat = p.rb("HERO_DEF") == d0 + 1 if hero == 0 else p.rb("MAXMP") == m0 + 1
+        check("G5", f"{tag}: the page (cursor on it, PNG {png_p}), EQUIP = 1 turn: worn, L83{CLS[hero]} '{line('TL_L83' + CLS[hero])}' "
+              f"(no hold), the HELM pointer flashing that turn (PNG {png_w}), {'DEF' if hero == 0 else 'max MP'} +1",
+              at and turned and worn_helm(p) == want and helm(p) is None and line("TL_L83" + CLS[hero]) in g1
+              and not held(p, "TL_L83" + CLS[hero]) and ptr == HELM_RECT and flash and stat,
+              (at, turned, worn_helm(p), g1, ptr, flash, d0, p.rb("HERO_DEF"), m0, p.rb("MAXMP")))
+        T(p, "WAIT")
+        check("G5", f"{tag}: then B10 (L33), the pointer off", tv(p, "TV_BEAT") == B10 and line("TL_L33") in [l.rstrip() for l in p.LOG[n2:]]
+              and tv(p, "TV_PTR") != HELM_RECT, (st(p), tv(p, "TV_PTR")))
+        check("C10", f"{tag}: blob bytes == the image", not run.blob_bad, run.blob_bad)
+    # G6: DISCARD after G0 -> advance silently
+    p = start(h, 0)
+    run = Run(p)
+    to_B(p, run)
+    walk_to(p, 19)
+    T(p, "WAIT")
+    page_use(p, S["IT_P_CURE"], "I")
+    T(p, "WAIT")                                                 # G0
+    b0 = tv(p, "TV_BEAT")
+    at = page_pick(p, S["IT_H_HELM"])
+    n0 = len(p.LOG)
+    tc = p.rw("TURN_COUNTER")
+    page_confirm(p, verb_right=1)                                # DISCARD (0 turns)
+    gone = helm(p) is None and worn_helm(p) == 0 and p.rw("TURN_COUNTER") == tc
+    T(p, "WAIT")
+    after = [l.rstrip() for l in p.LOG[n0:]]
+    check("G6", "DISCARD after G0 (0 turns): the next turn B9G advances silently (no L81 / L82 / L83) to B10 (L33)",
+          b0 == B9G and at and gone and tv(p, "TV_BEAT") == B10 and line("TL_L33") in after
+          and not {line("TL_L81"), line("TL_L82"), line("TL_L83W")} & set(after), (b0, at, gone, st(p), after))
+    # G7: EQUIP before G0 (poisoned, B9 current) -> G1 only
+    p = start(h, 1)
+    run = Run(p)
+    to_B(p, run)
+    walk_to(p, 19)
+    b0 = tv(p, "TV_BEAT")
+    n0 = len(p.LOG)
+    ok = page_pick(p, S["IT_H_HOOD"]) and page_confirm(p)
+    settle_holds(p)
+    page_use(p, S["IT_P_CURE"], "I")
+    T(p, "WAIT")
+    T(p, "WAIT")
+    after = [l.rstrip() for l in p.LOG[n0:]]
+    check("G7", "Mage: the Hood EQUIPPED before B9G (B9 current): no L80 / L81, L83M once B9 clears, then B10",
+          b0 <= B9 and ok and worn_helm(p) == S["IT_H_HOOD"] and line("TL_L83M") in after and line("TL_L80") not in after
+          and line("TL_L81") not in after and B9G in run.beats and tv(p, "TV_BEAT") >= B10, (b0, ok, worn_helm(p), after[-6:], run.beats))
+    # G8: never picked up (its entry moved off-level) -> B9G waits silently; entering C says L76, not L53
+    p = start(h, 0)
+    run = Run(p)
+    to_B(p, run)
+    p.wb(S["FLOOR_LIST"] + 4 * S["TUT0_GEAR_FL"], 0)            # room 0: never drawn, never taken
+    walk_to(p, 19)
+    T(p, "WAIT")
+    page_use(p, S["IT_P_CURE"], "I")
+    for _ in range(3):
+        T(p, "WAIT")
+    waiting = tv(p, "TV_BEAT"), tv(p, "TV_STAGE")
+    n0 = len(p.LOG)
+    leg(p, run, 24)
+    to_floor(p, 1)
+    for _ in range(12):
+        if p.rb("CUR_ROOM") == 5:
+            break
+        T(p, "L")
+    T(p, "WAIT")
+    after = [l.rstrip() for l in p.LOG[n0:]]
+    check("G8", "helmet never picked up: B9G waits at G0 with no line; entering C prints L76 (not L53), then B11",
+          waiting == (B9G, 1) and p.rb("CUR_ROOM") == 5 and line("TL_L76") in after and line("TL_L53") not in after
+          and line("TL_L80") not in after and tv(p, "TV_BEAT") >= B11, (waiting, st(p), after[-6:]))
 
 
 def menu_kempston(p):
@@ -1566,7 +1766,7 @@ def scen_skip(h):
                   and 2 in run.beats and 3 not in run.beats, (i69, run.beats))
         if not pit:
             check("C4", "skip run: nothing read, eaten, drunk (ARANK 0, FOOD only fell), beats jumped ahead in order",
-                  arank0 == 0 and food_ok and run.beats == sorted(run.beats) and run.beats[-1] >= 10, (arank0, p.rb("FOOD"), run.beats))
+                  arank0 == 0 and food_ok and run.beats == sorted(run.beats) and run.beats[-1] >= B10, (arank0, p.rb("FOOD"), run.beats))
             g = goblin(p)
             pre = p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"]
             check("C4", "skip run: the Goblin is on the shut grate (asleep) and the grate is shut", g is not None and pre == 0, (g and g[1]["X"], pre))
@@ -2191,7 +2391,7 @@ def main():
             ("visual_w", lambda h: scen_visual(h, 0)), ("visual_m", lambda h: scen_visual(h, 1)),
             ("tour_w", lambda h: scen_tour(h, 0)), ("tour_m", lambda h: scen_tour(h, 1)),
             ("tour_k", lambda h: scen_tour(h, 0, scheme="kemp")), ("left", scen_left), ("keys", scen_keys),
-            ("speak", scen_speak), ("key", scen_key)]
+            ("speak", scen_speak), ("key", scen_key), ("gear", scen_gear)]
     pick = set(filter(None, os.environ.get("TUT0_SCEN", "").split(",")))   # TUT-KEY: a subset by name (default: all)
     with Harness() as h:
         h.launch(EMU_ARGS)

@@ -32,7 +32,7 @@
 ;   (retried next turn) unless a group is shown (the hold resyncs anyway).
 ;==============================================================================
 TUT_RAM         EQU PF_RAM + $90        ; $5E90: PF_RAM's free middle ($5E7A..$5EDF)
-TV_BEAT         EQU TUT_RAM + 0         ; current beat 0..15            (test-observable)
+TV_BEAT         EQU TUT_RAM + 0         ; current beat 0..16 (TUT-GEAR: 10 = B9G)  (test-observable)
 TV_STAGE        EQU TUT_RAM + 1         ; ST_*                          (test-observable)
 TV_TI           EQU TUT_RAM + 2         ; tail pair index (ST_TAIL)
 TV_XP           EQU TUT_RAM + 3         ; B14 extras pending: 1 = L48 check, 2 = L52 check
@@ -81,6 +81,8 @@ TFB_GRATE       EQU 3                   ; open the grate after this turn's hold 
 TFB_GFLASH      EQU 4                   ; R4-4: the nudge's turn: the goal line FLASHes (cleared by tt_goal)
 TFB_L76         EQU 5                   ; R2: L76 (a lesson left undone in A) said, once per D0
 TFB_KNAG        EQU 6                   ; TUT-KEY: L77 said on this approach to the locked door (tt_knag)
+TFB_P76         EQU 7                   ; TUT-GEAR: this ST_PRE says L76 (tt_glob: entering B with B2..B5 open, or C with
+                                        ; B9G open), else L53 (FH_IMPATIENT); cleared by tt_step .pre
 
 ST_PRE          EQU 0                   ; FH_IMPATIENT: L53 first
 ST_G0           EQU 1
@@ -109,6 +111,8 @@ TBF_GRATE_BIT   EQU 3
 TBF_H0_BIT      EQU 4
 TBF_H1_BIT      EQU 5
 TBF_H2_BIT      EQU 6
+TBF_R1G1_BIT    EQU 7                   ; TUT-GEAR: G2PRE beat, +13 = G1's rect (tt_igrp / tt_step .fire)
+                ASSERT TUT_BF_R1G1 == 1 << TBF_R1G1_BIT
                 ASSERT TUT_BF_H0 == 1 << TBF_H0_BIT && TUT_BF_H1 == 1 << TBF_H1_BIT && TUT_BF_H2 == 1 << TBF_H2_BIT
                 ASSERT TUT_BF_FIRST == 1 << TBF_FIRST_BIT && TUT_BF_TAIL == 1 << TBF_TAIL_BIT
                 ASSERT TUT_BF_G2PRE == 1 << TBF_G2PRE_BIT && TUT_BF_GRATE == 1 << TBF_GRATE_BIT
@@ -119,13 +123,21 @@ NUDGE_T2        EQU 18
 REST_T          EQU 12                  ; R2 s13.3: icon-hook calls resting on one slot -> its line
 REPEAT_COLS     EQU 6                   ; "within 4 cols" of his box: |x - col| <= 6
 TRAP_PASS_X     EQU 17                  ; B8: unpoisoned at x >= 17 = the dart was passed
+; Beat indexes (TV_BEAT, the tut_beats record number). TUT-GEAR (2026-11-16): B9G is record 10, so the spec's
+; B10..B15 are records 11..16 (named by their spec id: TUT_B10 = 11 ...); 17 records (tt_rec: x 8, two adds).
+TUT_B3          EQU 3
+TUT_B5          EQU 5
 TUT_B6          EQU 6                   ; the shaft walk (A: x 17 -> 5, ~12 turns)
 TUT_B9          EQU 9                   ; the cure: its goal line only while POISONED (R4-3)
-TUT_B10         EQU 10                  ; the door walk (B: ~20 turns) .. B12 (the fight): contiguous, see tt_repeat
-TUT_B11         EQU 11
-TUT_B12         EQU 12
-TUT_B14         EQU 14
-TUT_B15         EQU 15
+TUT_B9G         EQU 10                  ; TUT-GEAR: the bag page + EQUIP (the class helmet)
+TUT_B10         EQU 11                  ; the door walk (B: ~20 turns) .. B12 (the fight): contiguous, see tt_repeat
+TUT_B11         EQU 12
+TUT_B12         EQU 13
+TUT_B13         EQU 14
+TUT_B14         EQU 15
+TUT_B15         EQU 16
+TUT_BEATS_N     EQU TUT_B15 + 1
+                ASSERT TUT_BEATS_N * 8 <= $FF   ; tt_rec's x 8 in A
 TUT_EDGE_BC     EQU 3                   ; EDGE_TAB index of the B-C door (tut0_level.asm: LINK|DOOR|LOCK)
 TUT_EG_LOCK_BIT EQU 3
 TUT_KNAG_X      EQU 26                  ; TUT-KEY: hero x >= 26 on B's storey 1 = at the locked door (x <= 27: cols 30-31 are it)
@@ -537,16 +549,20 @@ tt_glob:
                 cp   b
                 jr   nc, .dead                 ; not later than the current beat
                 ld   e, ST_PRE
+                ld   hl, TV_FL
+                cp   TUT_B9G                   ; TUT-GEAR: B9G open = the room is C (A's / B's first beats
+                jr   z, .p76                   ; are earlier): L76 instead of B11's L53 (once by construction)
                 sub  2                         ; R2 s13.5: entering B with B2..B5 open (book /
                 cp   4                         ; ladder / pear skipped): L76 once per D0, before
                 jr   nc, .im                   ; B7's G0 (the ST_PRE mechanism of L53)
                 ld   a, c
                 cp   TUT0_ROOM_B
                 jr   nz, .im
-                ld   hl, TV_FL
                 bit  TFB_L76, (hl)
                 set  TFB_L76, (hl)             ; (SET keeps the flags)
-                jr   z, .st
+                jr   nz, .im
+.p76:           set  TFB_P76, (hl)             ; tt_step .pre says L76
+                jr   .st
 .im:            ld   a, (ix+TB_FH)
                 cp   TUT_FH_IMPATIENT
                 jr   z, .st
@@ -771,12 +787,12 @@ tt_rec:
                 ld   a, (TV_BEAT)
                 add  a, a
                 add  a, a
-                add  a, a
-                add  a, a                      ; x 16 (beat < 16)
+                add  a, a                      ; x 8 (TUT-GEAR: 17 beats, x 16 no longer fits A)
                 ld   e, a
                 ld   d, 0
                 ld   ix, tut_beats
                 add  ix, de
+                add  ix, de                    ; x 16
                 ret
 
 ;------------------------------------------------------------------------------
@@ -785,7 +801,28 @@ tt_rec:
 ;------------------------------------------------------------------------------
 tt_step:
                 call tt_rec
+                ld   a, (ix+TB_FH)             ; TUT-GEAR B9G (FH_GEAR): the gear pre-step, every stage
+                cp   TUT_FH_GEAR               ; up to WAIT (the discard costs no turn: any stage sees it)
+                jr   nz, .st0
                 ld   a, (TV_STAGE)
+                cp   ST_G2
+                jr   nc, .st0                  ; triggered: the tail
+                ld   c, a
+                call tk_helm
+                jr   c, .gw                    ; worn: the trigger (G0 skipped if not shown yet)
+                ld   a, (HERO_KIND)
+                cpl
+                add  a, IT_H_HELM + 1          ; IT_H_HELM - kind: the Hood for the Mage (tut_d0's pick)
+                call tt_inbag
+                jr   z, .st0                   ; in the bag: the beat runs (G0 now, if not shown)
+                ld   a, (FLOOR_LIST + TUT0_GEAR_FL * FL_STRIDE + FL_ROOM)
+                inc  a
+                ret  nz                        ; still on B's floor (before G0): wait, no line
+                jp   tt_adv                    ; taken and gone (DISCARD, 0 turns): advance, silent
+.gw:            ld   a, c
+                cp   ST_G0
+                jp   z, .fire                  ; equipped before G0: G1 (L83) only
+.st0:           ld   a, (TV_STAGE)
                 or   a
                 jr   z, .pre
                 dec  a
@@ -797,13 +834,14 @@ tt_step:
                 dec  a
                 jp   z, .g2
                 jp   .tail
-.pre:           ld   a, ST_G0                  ; FH_IMPATIENT's L53, else (R2) L76
+.pre:           ld   a, ST_G0                  ; (R2) L76 if tt_glob flagged it (TFB_P76), else FH_IMPATIENT's L53
                 ld   (TV_STAGE), a
-                ld   d, TL_L53
-                ld   a, (ix+TB_FH)
-                cp   TUT_FH_IMPATIENT
-                jr   z, .pr
+                ld   hl, TV_FL
                 ld   d, TL_L76
+                bit  TFB_P76, (hl)
+                res  TFB_P76, (hl)             ; (RES keeps the flags)
+                jr   nz, .pr
+                ld   d, TL_L53
 .pr:            ld   e, TUT_NONE
                 ld   c, e
                 jp   tt_group
@@ -834,9 +872,7 @@ tt_step:
                 jr   c, .fire                  ; done already: G2 skipped
                 ld   a, ST_WAIT
                 ld   (TV_STAGE), a
-                ld   d, (ix+TB_G2)
-                ld   e, (ix+TB_G2+1)
-                ld   c, (ix+TB_R1)
+                call tt_igrp                   ; G2 + its rect (none for an R1G1 beat)
                 jr   .h2
 .wait:          call tt_fh
                 ret  c
@@ -858,6 +894,8 @@ tt_step:
                 ld   c, (ix+TB_R1)
                 bit  TBF_G2PRE_BIT, (ix+TB_FL)
                 jr   z, .r1
+                bit  TBF_R1G1_BIT, (ix+TB_FL)
+                jr   nz, .r1                   ; TUT-GEAR: +13 is G1's (B9G's HELM)
                 ld   c, TUT_NONE
 .r1:            ld   d, (ix+TB_G1)
                 ld   e, (ix+TB_G1+1)
@@ -993,14 +1031,9 @@ tt_fh:
                 ld   a, (ST2_BKF)
                 or   a
                 jr   z, .no                    ; never picked up
-                ld   hl, BAG
-                ld   de, IR_STRIDE
-                ld   b, BAG_SLOTS
-.bl:            ld   a, (hl)
-                cp   IT_BOOK
+                ld   a, IT_BOOK
+                call tt_inbag
                 jr   z, .no
-                add  hl, de
-                djnz .bl
                 ld   de, (TL_L15 << 8) | TUT_NONE   ; discarded unread: advance
                 jr   .gad
 .trap:          call tt_poisoned
@@ -1031,6 +1064,18 @@ tt_fh:
                 scf
                 ret
 
+; tt_inbag — A = item type: Z = a bag slot holds it. Clobbers: B, DE, HL (A, C kept).
+tt_inbag:
+                ld   hl, BAG
+                ld   de, IR_STRIDE
+                ld   b, BAG_SLOTS
+.l:             cp   (hl)
+                ret  z
+                add  hl, de
+                djnz .l
+                or   a                         ; NZ (the type is never 0 here)
+                ret
+
 ;------------------------------------------------------------------------------
 ; tt_trig — IX = record: CF = 1 if its trigger (TUT_TK_*) holds now.
 ; Clobbers: all but IX.
@@ -1048,13 +1093,21 @@ tt_trig:
                 ld   l, a
                 jp   (hl)
 tt_ttab:        DW   tk_storey, tk_near, tk_xge, tk_arank, tk_food, tk_room, tk_pois, tk_pclr
-                DW   tk_ghurt, tk_pass, tk_gslp, tk_gdead, tt_no, tk_key
-                ASSERT TUT_TK_EXIT == 12 && TUT_TK_GOB_DEAD == 11 && TUT_TK_STOREY == 0 && TUT_TK_KEY == 13
+                DW   tk_ghurt, tk_pass, tk_gslp, tk_gdead, tt_no, tk_key, tk_helm
+                ASSERT TUT_TK_EXIT == 12 && TUT_TK_GOB_DEAD == 11 && TUT_TK_STOREY == 0 && TUT_TK_KEY == 13 && TUT_TK_HELM == 14
 tk_key:         ld   a, (LVL_FLAGS)            ; TUT-KEY: the cyan key held (key_take; key_door clears it
                 and  LF_KEYC                   ; at the unlock, B10: B7 is long passed by then)
                 ret  z                         ; CF = 0 (and)
+                ld   a, (LOG_QN)               ; TUT-GEAR budget: and the ring drained (the engine's "YOU FIND
+                cp   1                         ; A CYAN KEY" drawn): G1 a turn after the pickup, so its L24 is not
+                ret                            ; drawn in the tick that also runs B8's pose + goal (was 121.8k)
+; tk_helm — TUT-GEAR: CF = a helmet worn (the B9G goal). Clobbers: A (C kept: tt_step).
+tk_helm:        ld   a, (WORN + WS_HELM * IR_STRIDE + IR_TYPE)
+                or   a                         ; CF = 0
+                ret  z
                 scf
                 ret
+                ASSERT IT_NONE == 0 && IT_H_HOOD == IT_H_HELM - 1 && K_WIZARD == K_KNIGHT + 1
 tk_storey:      ld   a, (TV_CUR + 1)
                 call tt_sty
                 cp   (ix+TB_P2)
@@ -1271,10 +1324,10 @@ tt_repeat:
 .show:          call tt_igrp
                 ld   a, (TV_FL)
                 bit  TFB_ALT, a
-                jr   z, tt_group
+                jp   z, tt_group
                 ld   de, (TL_L32 << 8) | TUT_NONE
                 ld   c, e
-                jr   tt_group
+                jp   tt_group
 .l75:           ld   hl, TV_FL
                 set  TFB_GFLASH, (hl)
                 call tt_igrp                   ; C = the instruction's rect (re-armed)
@@ -1332,7 +1385,7 @@ tt_knag:
                 ASSERT TUT_KNAG_RE < TUT_KNAG_X && TUT_KNAG_X + TOME_HERO_W <= ROOM_COLS - DOOR_COLS
 
 ; tt_igrp — IX = record: D, E, C = its instruction group + rect (G2 / +13 for a
-; G2PRE beat, else G0 / +12). Clobbers: nothing else.
+; G2PRE beat, none with R1G1; else G0 / +12). Clobbers: nothing else.
 tt_igrp:
                 ld   d, (ix+TB_G0)
                 ld   e, (ix+TB_G0+1)
@@ -1342,6 +1395,9 @@ tt_igrp:
                 ld   d, (ix+TB_G2)
                 ld   e, (ix+TB_G2+1)
                 ld   c, (ix+TB_R1)
+                bit  TBF_R1G1_BIT, (ix+TB_FL)
+                ret  z
+                ld   c, TUT_NONE               ; TUT-GEAR: +13 is G1's rect (B9G: G2 / the nudge / the Repeat have none)
                 ret
 
 ; tt_awake — NZ: the Goblin is a live slot of CUR_ROOM and not ASLEEP. Clobbers: A, DE, HL.

@@ -305,7 +305,10 @@ tt_bdraw:
 ; touches it. Review D: D0's only bodies are the hero (slot 0) and the Goblin
 ; (TV_GOB, $FF out of C; tt_snap) — LP_TOTAL 1, no trickle, no follower — so
 ; those two are tested, not the 16 slots (~1k T a candidate -> ~0.2k; up to 6
-; candidates a placement). Clobbers: A, HL (BC, DE, IX kept).   ~0.3k T
+; candidates a placement). Relies on D0 having NO respawns: tut_d0 (tut_start.asm, "LP: ...")
+; sets LP_RESPAWNS := RESPAWN_MAX (and LF_UNIQUE silences the trickle), so no third body can
+; appear; a D0 change that spawns anything must go back to the 16-slot scan.
+; Clobbers: A, HL (BC, DE, IX kept).   ~0.3k T
 tt_bfree:
                 ld   a, c
                 dec  a
@@ -422,6 +425,11 @@ tt_bgly:
 ; them (glyphs = bal_lect, attrs ATTR_LECT_*, flags TF_SOLID | TF_ATTACK).
 ; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
+; (Review follow-up: il_go goes back to item_log0 here while LOG_Q may still hold one of his
+; lines with its MOR_MARK first byte. That is safe only because every path after it reaches
+; start_game or tut_d0 -> level_show -> panel_init7, which zeroes LOG_QN / LOG_Q before any item_log
+; runs; a new exit that draws the log first must drain the ring here, or item_log0 prints
+; byte 1 as a glyph.)
 tt_unhook:
                 ld   hl, end_turn
                 ld   (pl_et + 1), hl           ; SMC target (main.asm play_loop)

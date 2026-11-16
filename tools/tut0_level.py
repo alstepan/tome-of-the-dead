@@ -79,7 +79,12 @@ ITEMS = [(ROOM_A, 0, 24, "IT_BOOK", 1), (ROOM_A, 1, 17, "IT_F_PEAR", 1),
          # = cells 8-9: one step right of the arrival (x 5, cols 5-7) takes it (x 6 covers col 8), before Morrow's B1
          # box (cols 10-12), the dart (13) and the Cure (19); the balloon spots are the storey's top rows (never 7-8).
          # Appended: the earlier entries keep their FLOOR_LIST index.
-         (ROOM_B, 0, 8, "IT_KEY", 1)]
+         (ROOM_B, 0, 8, "IT_KEY", 1),
+         # TUT-GEAR (2026-11-16, docs/design/tut_gear.md s2): the class helmet at storey 0, col 16 (cells 16-17: right of the
+         # dart (13), left of the Cure (19-20), not under spot B2 (21-23); the key (8-9) is far left of it). The image holds
+         # IT_H_HELM (the Warrior's); tut_d0 writes IT_H_HOOD over FL_ITEM for the Mage (TUT0_GEAR_FL). Appended (index 6).
+         (ROOM_B, 0, 16, "IT_H_HELM", 1)]
+GEAR_FL = len(ITEMS) - 1                  # its FLOOR_LIST index (TUT0_GEAR_FL: the blob's class pick + the B9G discard test)
 TRAPS = [(ROOM_B, 0, 13, "TT_DART")]      # hidden (TRF_KNOWN clear)
 
 SEED_MAX = 0xFFFF
@@ -390,6 +395,7 @@ def emit(blk, spots, free_ids, seeds, used, per_room):
     o += dump("tut0_lvl_vars", lvars, comment=f"-> TRK_PHASE..DN_QN ({len(lvars)} B, 0)")
     o += dump("tut0_trap_list", trap, comment=f"-> TRAP_LIST ({D['TRAP_MAX']} x 2 B) + TRAP_N at +{D['TRAP_N'] - D['TRAP_LIST']} = {len(TRAPS)}")
     o += [f"TUT0_FLOOR_N     EQU {len(ITEMS)}",
+          f"TUT0_GEAR_FL     EQU {GEAR_FL}      ; TUT-GEAR: the class helmet's FLOOR_LIST index (col {ITEMS[GEAR_FL][2]}, storey 0)",
           "; spot table: 3 B per spot = room, col (box left), map row (box top); box = 3 cols x 6 rows, all T_AIR",
           f"TUT0_SPOT_N      EQU {len(spots)}",
           "tut0_spots:"]
