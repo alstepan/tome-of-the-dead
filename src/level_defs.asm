@@ -194,6 +194,9 @@ DOOR_PLANK_H    EQU 6
 ; door (D8) keeps the whole T_DOOR_LOCK column, every other door $06. The colour is per door side (no free
 ; tile id): build_room_map -> lk_stamp records it (dr_tab), fi_cells -> lk_cell puts it on every plank cell
 ; of the screen (room draw + scroll strips), lk_shadow copies it into the bank-7 attr shadow.
+; DOOR-FRAME (user playtest 2026-11-16): the 2 arch cells (row 9s+1) take it too while locked; the
+; lintel (row 9s) is T_BRICK wall art and stays; a closed door has no jamb cells (the plank glyphs carry
+; the jamb strokes). door_paint repaints the arch row with the planks, so an opened door reverts to $06.
 DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
 ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
 ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)

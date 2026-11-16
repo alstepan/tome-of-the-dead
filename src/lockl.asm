@@ -1,7 +1,7 @@
 ;==============================================================================
 ; lockl.asm — LARGER-D T8: the level-key runtime (larger_depths.md §2.1 rev 2 / rev 3, §6; user
 ; decisions 2026-11-16; KEY-POLISH 2026-11-16: the key is a floor item, the whole locked door in its
-; colour). Low-RAM cold block (INCLUDEd by lowram.asm): callable from any bank, pages nothing.
+; colour; DOOR-FRAME 2026-11-16: its arch too). Low-RAM cold block (INCLUDEd by lowram.asm): callable from any bank, pages nothing.
 ; Callers: hero_door (lowram, the bump), floor_pickup (bank 7, key_take), fi_slot (R6, key_ink),
 ; build_room_map (bank 3, every door it stamps), fi_cells (lowram, room draws + scroll strips),
 ; room_show / room_shadow (lowram).
@@ -116,7 +116,8 @@ str_unlock:     DB   "YOU UNLOCK THE DOOR", 0
 ; In : LK_EDGE = the edge byte, HL = the plank-R cell of the door's LAST plank row (9s + 7),
 ;      C = the door's left col (0 / ROOM_COLS - DOOR_COLS).
 ; A closed LOCKED door: plank row DOOR_PLATE_DY becomes the plate T_DOOR_LOCK (build_room_map drew
-; T_DOOR_R there); dr_tab[side] := its key colour (KEY-POLISH: lk_cell paints all 12 planks with it),
+; T_DOOR_R there); dr_tab[side] := its key colour (KEY-POLISH: lk_cell paints all 12 planks with it;
+; DOOR-FRAME: and the 2 arch cells; the lintel is T_BRICK = wall art, never tinted),
 ; else ATTR_PLANK (a sealed column, any other door: TILE_ATTRS' own value, so lk_cell / lk_shadow change
 ; nothing for it).
 ; Clobbers: A, DE, HL.   ~0.1k T a door
@@ -147,12 +148,13 @@ dr_tab:         DB   ATTR_PLANK, ATTR_PLANK    ; plate attr of the last built ma
                 ASSERT DOOR_PLATE_DY < DOOR_PLANK_H && ROOM_COLS == 32
 
 ;------------------------------------------------------------------------------
-; lk_cell — fi_cells' hook: a closed plank (T_DOOR_L / T_DOOR_R / T_DOOR_LOCK) at map cell (B, C)
+; lk_cell — fi_cells' hook: an arch or closed plank cell (T_DOOR_ARCH_L .. T_DOOR_LOCK) at map cell (B, C)
 ; (room coords; the screen cell is (B + fi_cell.dr, C + fi_cell.dc), as fi_cell): its attr on the
 ; bank-5 screen := dr_tab[C >= 16] (KEY-POLISH: every plank cell of a locked door in its key colour,
-; ATTR_PLANK = TILE_ATTRS' own value for any other door; the last built map is the drawn one:
-; room_show's, or the scroll's NEXT_MAP). Out: A = 0 (< T_ITEM0 - T_DOOR_L).
-; Keeps BC, DE, HL. Clobbers: A, F.   ~0.2k T (12 plank cells a closed door)
+; DOOR-FRAME: its 2 arch cells too; ATTR_PLANK = TILE_ATTRS' own value (arch and planks alike) for any
+; other door, open ones included; the last built map is the drawn one: room_show's, or the scroll's
+; NEXT_MAP). Out: A = 0 (< T_ITEM0 - T_DOOR_ARCH_L).
+; Keeps BC, DE, HL. Clobbers: A, F.   ~0.2k T (14 cells a closed door, 2 an open one)
 ;------------------------------------------------------------------------------
 lk_cell:
                 push hl
@@ -188,19 +190,21 @@ lk_cell:
                 xor  a
                 ret
                 ASSERT (SCREEN_ATTR & $3FF) == 0 && T_ITEM0 > 0
+                ASSERT T_DOOR_L == T_DOOR_ARCH_R + 1 && T_DOOR_ARCH_R == T_DOOR_ARCH_L + 1
 
 ;------------------------------------------------------------------------------
-; lk_shadow — room_show / room_shadow, bank 7 paged, ROOM_MAP = the room on screen: every closed plank
-; cell (T_DOOR_L .. T_DOOR_LOCK) of the door cols (0, 1, 30, 31) copies its screen attr (lk_cell's) into
-; the bank-7 attr shadow, so erase_rect restores the door's colour after a sprite crossed it.
-; Clobbers: A, B, DE, HL.   ~4.5k T
+; lk_shadow — room_show / room_shadow, bank 7 paged, ROOM_MAP = the room on screen: every arch / closed
+; plank cell (T_DOOR_ARCH_L .. T_DOOR_LOCK, DOOR-FRAME) of the door cols (0, 1, 30, 31) copies its screen
+; attr (lk_cell's) into the bank-7 attr shadow, so erase_rect restores the door's colour after a sprite
+; crossed it.
+; Clobbers: A, B, DE, HL.   ~4.7k T
 ;------------------------------------------------------------------------------
 lk_shadow:
                 ld   hl, ROOM_MAP
                 ld   b, PLAY_ROWS * 2 * DOOR_COLS
 .lp:            ld   a, (hl)
-                sub  T_DOOR_L
-                cp   T_DOOR_LOCK - T_DOOR_L + 1
+                sub  T_DOOR_ARCH_L
+                cp   T_DOOR_LOCK - T_DOOR_ARCH_L + 1
                 jr   nc, .n
                 push hl
                 ld   de, SCREEN_ATTR - ROOM_MAP
@@ -221,3 +225,4 @@ lk_shadow:
                 ret
                 ASSERT (ROOM_MAP & $FF) == 0 && DOOR_COLS == 2 && ROOM_COLS == 32
                 ASSERT T_DOOR_R == T_DOOR_L + 1 && T_DOOR_LOCK == T_DOOR_R + 1 && T_ITEM0 > T_DOOR_LOCK
+                ASSERT T_DOOR_L == T_DOOR_ARCH_L + 2

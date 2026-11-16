@@ -20,6 +20,10 @@ PROTO rooms A-D (LVL_DEPTH poked to 1 where the engine pickup must run), plus on
       12 plank cells in its key colour on the screen AND in the bank-7 attr shadow, room_show (cyan /
       magenta) and through a vertical scroll (B -> C, the D|C door magenta); an ordinary door $06;
       the room map == room_model; ink only (paper 0: no clash)
+  K9  DOOR-FRAME (user playtest 2026-11-16): the 2 arch cells (row 9s+1) of a locked door in its key colour
+      on both screens + the shadow (room_show cyan / magenta, the B -> C scroll), the lintel (T_BRICK row
+      9s) never; back to $06 after the key unlock (K4) and the far-side bolt (K5); a sealed door and an
+      ordinary closed door: arch + planks $06
   K8  generated D1 (fixed seed): every lock's EG_NEARR == its start side (flood of G without it); each
       key room holds one IT_KEY floor entry and no key is held at the start; after keys are held,
       level_enter (descend) clears LF_KEYC / LF_KEYM and the panel key cell
@@ -53,6 +57,8 @@ KEY_SLOT = S["FLOOR_MAX"] - 1                                        # their FLO
 SPY = S["LOWRAM_END_3B"] + 48                                        # the sfx_req spy (past the stubs' bytes)
 SPY_REC = SPY + 12
 PLANK_TOP1 = S["STOREY_ROWS"] + S["DOOR_PLANK_DY"]                   # storey-1 plank rows 11..16
+ARCH_ROW1 = S["STOREY_ROWS"] + S["DOOR_ARCH_DY"]                     # DOOR-FRAME: storey-1 arch row (10)
+LINTEL_ROW1 = S["STOREY_ROWS"]                                       # storey-1 lintel (T_BRICK) row (9)
 
 
 def want(tag):
@@ -145,6 +151,20 @@ def main():
             p.place(0, 1, y1, flags=HERO_R | EF_LEFT)
             walk("H", 0)
 
+        def show_a(tag):
+            ingame([0x3E, 0, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
+                   + [0xCD] + w16(S["present_full"]), tag)
+            p.settle(3)
+
+        def tri(cells):
+            """{(displayed, composed, bank-7 shadow) attr} over (col, row) cells."""
+            fr, fc = p.frame(), p.composed_frame()
+            sh = bank7(p, S["SHADOW_ATTR"], 768)
+            return {(attr_at(fr, c, r), attr_at(fc, c, r), sh[r * 32 + c]) for c, r in cells}
+
+        ARCH_R = [(30, ARCH_ROW1), (31, ARCH_ROW1)]
+        LINTEL_R = [(30, LINTEL_ROW1), (31, LINTEL_ROW1)]
+
         def key_cell(fr):
             return attr_at(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1), bytes(cell_bytes(fr, S["DEPTH_COL"], S["ICON_ROW"] + 1))
 
@@ -217,7 +237,7 @@ def main():
                   all(x == bytes(8) for x in r1), [i + 22 for i, x in enumerate(r1) if x != bytes(8)])
 
         # ---------------- K3 / K4 / K5 / K6 bump --------------------------
-        if any(want(k) for k in ("K3", "K4", "K5", "K6")):
+        if any(want(k) for k in ("K3", "K4", "K5", "K6", "K9")):
             p.boot(K_KNIGHT)
             p.isolate()
             p.place(0, 27, y1, flags=HERO_R)
@@ -239,10 +259,18 @@ def main():
             # K4: with the cyan key
             p.wb("LVL_FLAGS", (p.rb("LVL_FLAGS") & 0x3F) | KEYC)
             p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | 0x80)
+            show_a("K9 room_show A (locked cyan)")
+            g = tri(ARCH_R)
+            check("K9 locked cyan: arch (30/31, 10) $45 on both screens + shadow", g == {(S["ATTR_KEY_C"],) * 3}, g)
             drain()
             t0 = p.rw("TURN_COUNTER")
             ok = p.turn("L")
             drain()
+            p.settle(2)
+            g = tri(ARCH_R)
+            check("K9 after the key unlock: arch back to $06 on both screens + shadow", g == {(S["ATTR_PLANK"],) * 3}, g)
+            bad = p.screen_vs_map("K9 key unlock")
+            check("K9 after the key unlock: screens == ROOM_MAP (no key colour left)", not bad, bad[:3])
             m = p.z.read_memory(S["ROOM_MAP"], 576)
             jambs = all(m[r * 32 + 31] == S["T_DOOR_JAMB_R"] for r in range(S["STOREY_ROWS"] + 2, 2 * S["STOREY_ROWS"] - 1))
             check("K4 with the key: 1 turn, LOCK cleared + OPEN, hero stays, jambs",
@@ -259,6 +287,9 @@ def main():
             # K5: far-side bolt
             p.turn("C")
             p.wb(E_AB, LINK | DOOR | LOCK | LOCKC | NEARR)   # magenta, near = B: A is the far side
+            show_a("K9 room_show A (locked magenta)")
+            g = tri(ARCH_R + [(c, r) for r in range(PLANK_TOP1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (30, 31)])
+            check("K9 locked magenta (far side): arch + planks $43 on both screens + shadow", g == {(S["ATTR_KEY_M"],) * 3}, g)
             marker()
             t0 = p.rw("TURN_COUNTER")
             ok = p.turn("L")
@@ -267,6 +298,11 @@ def main():
                   (ok, p.rw("TURN_COUNTER") - t0, p.rb(E_AB) & (LOCK | OPEN), newest() == text6(dict(world.STRINGS)["descend"]),
                    p.rb("LVL_FLAGS") & (KEYC | KEYM)) == (True, 1, OPEN, True, 0),
                   (ok, p.rw("TURN_COUNTER") - t0, hex(p.rb(E_AB)), hex(p.rb("LVL_FLAGS"))))
+            p.settle(2)
+            g = tri(ARCH_R)
+            check("K9 after the far-side bolt: arch back to $06 on both screens + shadow", g == {(S["ATTR_PLANK"],) * 3}, g)
+            bad = p.screen_vs_map("K9 bolt")
+            check("K9 after the far-side bolt: screens == ROOM_MAP", not bad, bad[:3])
             # K6: an opener never passes a lock, near or far side
             p.turn("C")
             p.place(0, 10, y1, flags=HERO_R)
@@ -279,7 +315,7 @@ def main():
             p.set_ent(SLOT_GOBLIN, ROOM=NOWHERE)
 
         # ---------------- K7 plate ------------------------------------------
-        if want("K7"):
+        if want("K7") or want("K9"):
             p.boot(K_KNIGHT)
             p.isolate()
             for tag, eg, at in (("cyan", LINK | DOOR | LOCK, S["ATTR_KEY_C"]),
@@ -301,12 +337,24 @@ def main():
                       col == want_col and map_structure(p, 0) == [], (col, map_structure(p, 0)[:3]))
                 check(f"K7 {tag}: all 12 plank cells attr {at:#x} on both screens + the shadow, paper 0",
                       got == {(at, at, at)} and at & 0x38 == 0, got)
+                g = tri(ARCH_R)
+                check(f"K9 {tag} (room_show): arch (30/31, 10) {at:#x} on both screens + shadow", g == {(at,) * 3}, g)
+                g = tri(LINTEL_R)
+                check(f"K9 {tag}: lintel (T_BRICK, row 9) not tinted", all(at not in x for x in g), g)
                 mm = p.z.read_memory(S["ROOM_MAP"], 576)
                 left = {attr_at(fc, c, r) for r in range(S["PLAY_ROWS"]) for c in (0, 1)
                         if mm[r * 32 + c] in (S["T_DOOR_L"], S["T_DOOR_R"])}
                 check(f"K7 {tag}: any other closed door keeps $06", left <= {S["ATTR_PLANK"]}, left)
                 bad = p.screen_vs_map(f"K7 {tag}")
                 check(f"K7 {tag}: screens == ROOM_MAP (room_model.plate_cells: the plate's own attr)", not bad, bad[:3])
+            # DOOR-FRAME: a sealed door and an ordinary closed door keep $06 (arch + planks)
+            for tag, eg in (("sealed", LINK | DOOR | S["EG_SEAL"]), ("ordinary", LINK | DOOR)):
+                p.wb(E_AB, eg)
+                show_a(f"K9 room_show A ({tag})")
+                g = tri(ARCH_R + [(c, r) for r in range(PLANK_TOP1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (30, 31)])
+                check(f"K9 {tag} door: arch + planks $06 on both screens + shadow", g == {(S["ATTR_PLANK"],) * 3}, g)
+                bad = p.screen_vs_map(f"K9 {tag}")
+                check(f"K9 {tag}: screens == ROOM_MAP", not bad, bad[:3])
             # through the vertical scroll: the D|C door (C's left door, storey 1) magenta
             p.wb(E_AB, LINK | DOOR | OPEN)
             ingame([0x3E, 0, 0xCD] + w16(S["room_show"]) + [0xCD] + w16(S["vis_reset"])
@@ -319,9 +367,9 @@ def main():
             fr, fc = p.frame(), p.composed_frame()
             sh = bank7(p, S["SHADOW_ATTR"], 768)
             m = p.z.read_memory(S["ROOM_MAP"], 576)
-            cells = [(c, r) for r in range(PLANK_TOP1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (0, 1)]
-            got = {(attr_at(fr, c, r), attr_at(fc, c, r), sh[r * 32 + c]) for c, r in cells}
-            check("K7 scroll B -> C: C's left door (plate (1, 14) + all 12 planks) magenta on both screens + shadow, "
+            cells = [(c, r) for r in range(PLANK_TOP1 - 1, PLANK_TOP1 + S["DOOR_PLANK_H"]) for c in (0, 1)]
+            got = {(attr_at(fr, c, r), attr_at(fc, c, r), sh[r * 32 + c]) for c, r in cells}   # + DOOR-FRAME arch
+            check("K7/K9 scroll B -> C: C's left door (plate (1, 14), all 12 planks + the 2 arch cells) magenta on both screens + shadow, "
                   "map == model",
                   got == {(S["ATTR_KEY_M"],) * 3} and m[PLATE_ROW1 * 32 + 1] == S["T_DOOR_LOCK"] and map_structure(p, 4) == [],
                   (got, m[PLATE_ROW1 * 32 + 1], map_structure(p, 4)[:3]))

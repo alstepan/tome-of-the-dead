@@ -348,6 +348,10 @@ ISR_ALT_LEN     EQU 0
 TRG             EQU tiles_common_glyphs + T_TRAP * 8
                 ASSERT {b TRG} == 0 && {b TRG+1} == 0 && {b TRG+2} == 0 && {b TRG+3} == 0 && {b TRG+4} == 0 && {b TRG+5} == 0
                 ASSERT {b TRG+6} == TRAP_GLY6 && {b TRG+7} == TRAP_GLY7
+                ; KEY-POLISH / DOOR-FRAME: lk_cell writes ATTR_PLANK on the arch + planks of an unlocked door
+TCA             EQU tiles_common_attrs
+                ASSERT {b TCA+T_DOOR_ARCH_L} == ATTR_PLANK && {b TCA+T_DOOR_ARCH_R} == ATTR_PLANK && {b TCA+T_DOOR_L} == ATTR_PLANK
+                ASSERT {b TCA+T_DOOR_R} == ATTR_PLANK && {b TCA+T_DOOR_LOCK} == ATTR_PLANK
                 ; 3F-B1: erase_rect's air path writes 8 zero lines without reading the glyph
                 ASSERT T_AIR == 0 && ({b tiles_common_glyphs}|{b tiles_common_glyphs+1}|{b tiles_common_glyphs+2}|{b tiles_common_glyphs+3}|{b tiles_common_glyphs+4}|{b tiles_common_glyphs+5}|{b tiles_common_glyphs+6}|{b tiles_common_glyphs+7}) == 0
                 ASSERT TILES_COMMON_LEN == TILE_COMMON * 9
