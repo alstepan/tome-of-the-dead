@@ -194,6 +194,12 @@ run length ~5,565/6,248 turns; BSIM1 ok (+30 HP Mage 50.5 %).
 respawns p 0.75 cap `RESPAWN_MAX` 6. Sim (`tools/balance_sim.py --ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5**
 (seed 1 alone: 24.9 / 26.8). Package 2 (W 43 / M 43) was judged too easy for the longer levels.
 
+> **Correction (2026-11-16, sim TIER_FOOD fix):** the sim omitted the tier-variant random-food drops
+> (Screech Bat, Black Widow, Skeleton Guard/Knight, Poltergeist: 1 in 4, tier6.asm). With them, package 3 is
+> **average W 32.5 / M 36.3, cautious 34.5 / 38.2** (10k x seeds 1+2); `--set param.TIER_FOOD=0` reproduces the
+> figures above. Best expert-bot combo: W 72.5 / M 81.1. New targets (user 2026-11-16): expert 30-40 %,
+> average 15-25 %, even W/M — retune pending (designer recommendations).
+
 **Balance gate (before any Z80; history, passed by package 2):** `tools/balance_sim.py` with 12-room levels, §3 table and §3.1 regen, 10k ×
 2 seeds, average policy. Pass = W and M ≥ 35 % and within ±3 of BAL-1 FINAL (W 41.1/41.5, M 40.1/38.8),
 gap ≤ 3; also the BSIM1 +30 HP Mage case must not fall below +0. Knobs in order: regen divisor, `XP_NEXT`
