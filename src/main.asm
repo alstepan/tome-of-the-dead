@@ -1390,13 +1390,32 @@ ovl_raw_ft:
 ; INSTR overlay ({b}, instr_ovl.asm in_stub), which installs them at its common exit.
 ; BEFORE the overlay in source order (its {b} reads these bytes).
 ;------------------------------------------------------------------------------
-ovl_raw_stub:
-                DISP check_paging
+; PKG5+FLY-CUT reclaim: the LOW-RAM INSTALLED BLOCK = tele_lri.asm (tp_safe / tp_msk / tp_ok) DISP'd at
+; tape_tab (start's block list: tape path + in_tut only, dead after that), a zero pad, then the stubs at
+; check_paging, contiguous: in_tut copies the whole block (LRI_LEN B) to tape_tab with one LDIR, AFTER
+; it read tape_tab. 0 resident bytes; nothing in it is live before the INSTR overlay ran (boot).
+; tests: stub.bin = the stubs (as before), lri.bin = tape_tab .. check_paging (tests/game.py #50).
+ovl_raw_lri:
+                DISP tape_tab
+lri_base:
+                INCLUDE "tele_lri.asm"
+lri_end:
+                ASSERT lri_end <= check_paging
+    IF check_paging - lri_end > 0
+                DS   check_paging - lri_end, 0
+    ENDIF
 tut_stub:
+                ASSERT tut_stub == check_paging
                 INCLUDE "tut/tut_stub.asm"
 tut_stub_end:
                 ENT
+ovl_raw_stub    EQU ovl_raw_lri + (check_paging - tape_tab)
+LRI_LEN         EQU tut_stub_end - lri_base     ; the copy: lri + pad + stubs
+LRI_CODE_LEN    EQU lri_end - lri_base
+LRI_ROOM        EQU check_paging - tape_tab     ; tape_tab's 46 B
 TUT_STUB_LEN    EQU tut_stub_end - tut_stub
+                SAVEBIN "build/ovl/lri.bin", ovl_raw_lri, LRI_ROOM
+                DISPLAY "GAME low-RAM installed block (tele_lri.asm): ", /D, LRI_CODE_LEN, " B at ", /H, lri_base, " (room ", /D, LRI_ROOM, ", free ", /D, LRI_ROOM - LRI_CODE_LEN, ")"
 TUT_STUB_ROOM   EQU sel_tab - check_paging      ; check_paging + str_lock (sel_tab is live: kept)
                 ASSERT TUT_STUB_LEN <= TUT_STUB_ROOM && TUT_STUB_LEN <= 58
                 SAVEBIN "build/ovl/stub.bin", ovl_raw_stub, TUT_STUB_LEN   ; C+TUT0: game.py #50's reference (the

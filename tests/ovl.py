@@ -36,7 +36,7 @@ STUB = S["LOWRAM_END_3B"]                     # free low RAM (the other suites' 
 BLOB_BANK = 7                                # BANK_SHADOW: screen 2, dead at the menu
 BLOB_AT = 0xD000
 SCR2_END = 0xDAFF
-RES = STUB + 0xC0                             # result bytes
+RES = STUB + 200                              # result bytes (PKG5+FLY-CUT: the TUT0 stub room's free tail; +0xC0 hit ts_icon)
 
 
 def w(v):

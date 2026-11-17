@@ -1,6 +1,6 @@
 ;==============================================================================
 ; dscl.asm — BALANCE-PKG5 (balance_v2 §8 MON_DMG_SCALE_D): the depth ramp on a
-; monster's melee damage (dsc_roll), + R6's tp_ok moved here for R6 room (C1).
+; monster's melee damage (dsc_roll). (tp_ok: tele_lri.asm since the PKG5+FLY-CUT reclaim.)
 ; Low-RAM cold block (INCLUDEd by lowram.asm): dsc_roll is called from bank-3
 ; dmg_roll (turn3.asm) on every monster melee roll; low RAM is mapped whatever
 ; bank sits at $C000 (bank 3 has no room for it).
@@ -51,25 +51,3 @@ dsc_roll:       ld   a, (LVL_DEPTH)
 ; 3.0 3.0); exact for x 0..15
 dsc_tab:        DB   64, 64, 64, 122, 109, 166, 179, 192, 192
                 ASSERT (dsc_tab >> 8) == ((dsc_tab + LEVELS) >> 8)
-
-;------------------------------------------------------------------------------
-; tp_ok — tele_pick's / tp_room's spot test (R6 fx6.asm, called with bank 6
-; paged; moved here verbatim by BALANCE-PKG5 for R6 room: C1).
-; D = storey, E = col: Z = LP_CMAP clear under cols E .. E+2.
-; Keeps BC, DE.  Clobbers: A, HL.   ~90 T (+ contention: low RAM)
-;------------------------------------------------------------------------------
-tp_ok:          ld   hl, LP_CMAP
-                inc  d
-                dec  d
-                jr   z, .s
-                ld   l, (LP_CMAP + LP_CMW) & $FF
-.s:             ld   a, l
-                add  a, e
-                ld   l, a
-                ld   a, (hl)
-                inc  l
-                or   (hl)
-                inc  l
-                or   (hl)
-                ret
-                ASSERT TELE_W == 3 && (LP_CMAP >> 8) == ((LP_CMAP + 2 * LP_CMW - 1) >> 8)

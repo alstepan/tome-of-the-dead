@@ -2241,7 +2241,12 @@ def tape_rest(h, p):
     stub = open(os.path.join(BUILD_DIR, "ovl", "stub.bin"), "rb").read()[:n0]
     h.expect("50 tape: TUT stubs installed over check_paging == ovl_raw_stub", bytes(l5[m0:m0 + n0]), bytes(stub))
     l5[m0:m0 + n0] = s5[m0:m0 + n0] = bytes(n0)
-    h.expect("50 bank 5 low-RAM cold code (bar the TUT stubs over check_paging) == .sna", l5 == s5, True)
+    # PKG5+FLY-CUT reclaim: in_tut also installs tele_lri.asm (+ a zero pad) over tape_tab .. check_paging
+    m1, n1 = S["lri_base"] - S["lowram_code"], S["LRI_ROOM"]
+    lri = open(os.path.join(BUILD_DIR, "ovl", "lri.bin"), "rb").read()[:n1]
+    h.expect("50 tape: tele_lri block installed over tape_tab == lri.bin", bytes(l5[m1:m1 + n1]), bytes(lri))
+    l5[m1:m1 + n1] = s5[m1:m1 + n1] = bytes(n1)
+    h.expect("50 bank 5 low-RAM cold code (bar the TUT stubs + tele_lri over tape_tab) == .sna", l5 == s5, True)
     # the D0 blob (bank 4 BLOB_ORG..$FFFF) is unpacked once per power-on by instr_ovl in_tut
     bo4 = 4 * 16384 + S["BLOB_ORG"] - 0xC000
     h.expect("50 bank 4 D0 blob (BLOB_ORG..$FFFF, unpacked at boot) == .sna",

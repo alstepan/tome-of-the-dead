@@ -133,7 +133,9 @@
   stubs (`src/tut/tut_stub.asm`: `ts_choice`, `ts_turn`, `ts_icon` (TUT0-R2), farb with C = `BANK_BLOB`) that the
   INSTR overlay installs at boot over `check_paging` .. `sel_tab` (tape-path-only code, dead
   after boot; nothing may call `check_paging` / read `str_lock` after boot, and no new code may
-  go there). Four bank-2 operand sites are SMC, flagged `; SMC:` in main.asm / io.asm / panel2.asm: **`es_go + 1`**
+  go there). PKG5+FLY-CUT reclaim: the same copy also installs `src/tele_lri.asm` over `tape_tab`
+  (dead once `in_tut` read it), main.asm "LOW-RAM INSTALLED BLOCK" (46 B room): cold code with no caller before a
+  game starts may go there; tests never use it as scratch. Four bank-2 operand sites are SMC, flagged `; SMC:` in main.asm / io.asm / panel2.asm: **`es_go + 1`**
   (enter_select's `jp start_game`; = `ts_choice` from boot until `blob_choice` puts
   `start_game` back), **`pl_et + 1`** (play_loop's `ld hl, end_turn`; = `ts_turn` only while
   D0 runs) and, TUT0-R2, **`pi_ic + 1`** (intent_tick's ICON MODE `ld hl, intent_icon7`, the

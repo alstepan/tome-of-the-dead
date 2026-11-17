@@ -2957,8 +2957,20 @@ when both halves own a ladder). R5 no ladder into the hero's half (a narrow-pit 
 nearest anyway, to the far lip. R6 stranded: step toward him and wait at the lip / face. Stateless, no RNG.
 Cost (measured, `tests/ai_seek2.py` U1, `tests/budget.py`): bank 7 `seek_col` <= 1.4k T per seeking climber per turn (the
 1-hop worst case, contended, far7 ~0.5k included; was `nearest_ladder` ~0.65k) and `pl_seg3` ~0.15k once a monster phase;
-budget scenarios +0.2k typical (+0.8k worst) a turn, worst real tick +0.18k. Flyers keep their rules: a Ghost / Bat on
-storey 0 is **pinned at a mid-block face** while the hero is on the other side (pits do not stop them); a separate item.
+budget scenarios +0.2k typical (+0.8k worst) a turn, worst real tick +0.18k. Flyers keep their rules, except FLY-CUT below.
+
+**FLY-CUT: flyers fly round a mid-room block (2026-11-17, roadmap 2b; `tests/fly_cut.py`).** A flyer stays in its storey
+band, so an L2 mid-block cut storey 0 for it (AI-SEEK2 Q3: a Ghost / Bat hovered at the face for 60+ turns). After its
+attack and ranged hooks, a flyer in a **mid-block room** (`FLY_CUT` = b − 1; pits never cut flyers) whose segment differs
+from the hero's target segment `PL_SEG`, **with `PL_SEG` a storey-0 half**, takes the walkers' ladder pick (`seek_col`):
+from a storey-0 half it flies to the internal ladder of its own half and straight **down its shaft hole**; on storey 1 it
+flies (cruising row 10, under the block) to the ladder whose top is the hero's half and straight **up**; in the hero's half
+the normal chase resumes. A body still in the floor row after a descent drops straight into its band first. Every flyer is
+3 cols wide (fits a shaft); bodies, the hero's climb path (cork) and solid cells still stop it (it waits). Unchanged: a hero
+on (or climbing to) storey 1 leaves a storey-0 flyer on its old rules; plain and pit rooms; closed doors still block flyers.
+Side effect, accepted: a storey-1 flyer in a mid-block room now rises to a hero standing on storey 0. No RNG (the Bat's
+jitter is skipped while it detours). Turns to contact (flyer x 6, hero x 26 across `b 16`): Bat 32, Ghost 34, awake
+Gargoyle 34, Fire Imp 33, Frost Wraith 68 (acts every 2); before: never.
 
 **Ranged (RANGED-SPEC, designer decision 2026-10-29; T7; supersedes the 4-line rule).**
 Shooters (one descriptor row each, R6; the Archmage's row is T11):

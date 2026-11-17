@@ -642,7 +642,7 @@ tele_pick:
                 ld   a, (LVL_FLAGS)
                 and  LF_UNIQUE
                 jr   z, .rn                    ; the lair while its boss lives
-.ok:            call tp_safe              ; C1 (HOT_COPY tele_hot.asm): NZ = pass 1 and not safe
+.ok:            call tp_safe              ; C1 (low RAM tele_lri.asm): NZ = pass 1 and not safe
                 jr   nz, .rn                   ; (FRESH, or residents left)
                 ld   a, b
                 ld   (de), a
@@ -795,7 +795,7 @@ tp_room:
                 ASSERT TELE_XHI == LP_XMIN + TELE_XN - 1 && TELE_MID - (TELE_XHI - TELE_MID) < LP_XMIN
 
 
-; (tp_ok: BALANCE-PKG5 moved it to the low-RAM cold block, dscl.asm, for R6 room: C1.)
+; (tp_ok: BALANCE-PKG5 moved it to low RAM for R6 room: C1; tele_lri.asm.)
 
 ; variables (written in play; r6.asm rules)
 fx_slot:        DB   0                         ; the bag slot being used
