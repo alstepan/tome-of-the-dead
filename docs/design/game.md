@@ -1072,7 +1072,7 @@ because the next evaluation sees their effect.
 | HP / MP at start | 24 / 6 | 16 / 12 (10 + Robe 2) |
 | atk / eva / DEF | 3 / 2 / 1 (Leather) | 1 / 1 / 0 |
 | Melee | Short Sword 1d6, reach 1 | Oak Staff 1d4, reach 1, own **STAFF_SWING** frame. Never greys out (the 0-MP fallback) |
-| MP regen (B20, designer 2026-10-19; LARGER-D package 3) | every **8** turns: +1 + `MAXMP` div 16 | every **7** turns (BALANCE-PKG4; history: 5 in LARGER-D package 3, 6 in B20): +1 + `MAXMP` div 16; Mana ½ = 3.5 turns via quarter-turn counting; Scarab ×5/8 (4.5 turns, `c/2 + 4` quarter-turns) |
+| MP regen (B20, designer 2026-10-19; LARGER-D package 3) | every **8** turns: +1 + `MAXMP` div 16 | every **9** turns (BALANCE-PKG5; history: 7 in BALANCE-PKG4, 5 in LARGER-D package 3, 6 in B20): +1 + `MAXMP` div 16; Mana ½ = 3.5 turns via quarter-turn counting; Scarab ×5/8 (4.5 turns, `c/2 + 4` quarter-turns) |
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
@@ -1192,7 +1192,7 @@ totals, so a hero who skips a few monsters still keeps pace; skipping a third of
 drops one level). L9 now comes early on D8 for thorough play.
 
 **Level-up** (each level; several at once loop): **Warrior max HP +6, max MP +1 · Mage max
-HP +2, max MP +2** (BALANCE-PKG4; history: W +5 / M +3); current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
+HP +4, max MP +2** (BALANCE-PKG5 M +4; BALANCE-PKG4 W +6 / M +2; history: W +5 / M +3); current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
 2026-11-05: Warrior +4 → +5, the compensation for the Black Widow's spit; `docs/design/widow_spit_sim.md`.) The class split
 replaces the Vigor/Power tomes, which are now rare (§5: books mostly teach or rank up
 abilities). Extra steps: **L4 atk +1 · L6 eva +1 · L8 atk +1** (mirrors
@@ -1241,8 +1241,8 @@ removed.
 | Ability | Rank 1 (§6.1/§6.2) | Rank 2 | Rank 3 |
 |---|---|---|---|
 | Spark | **2 MP**, r6, 1d4+1, confuse 1 in 4 | **4 MP**, r**9**, **1d8+2** | **6 MP**, r**10**, **1d8+4**, confuse 1 in 2 |
-| Firebolt | **5 MP**, r8, 1d8, burst **1d3** | **6 MP**, r8, **1d8+2**, burst **1d3** | **10 MP**, r10, **1d10+4**, burst **1d5**, burst **spares the caster** (BALANCE-PKG4; history: burst 1d4 / 1d4 / 1d6) |
-| Frost Shard | **3 MP**, r10, 1d6+1, 1 bounce, freeze 2 | **5 MP**, r10, **1d8+2**, 2 bounces, freeze 3 | **7 MP**, r12, **1d8+4**, 2 bounces, freeze 4 (bosses halved, §6.4) |
+| Firebolt | **5 MP**, r8, **1d8−1** (min 1), burst **1d3** | **6 MP**, r8, **1d8+1**, burst **1d3** | **10 MP**, r10, **1d10+3**, burst **1d5**, burst **spares the caster** (BALANCE-PKG5 bonus −1 a rank, history 1d8 / 1d8+2 / 1d10+4; BALANCE-PKG4 burst, history 1d4 / 1d4 / 1d6) |
+| Frost Shard | **3 MP**, r10, 1d6+1, 1 bounce, freeze 2 | **5 MP**, r10, **1d8+1**, 2 bounces, freeze 3 | **7 MP**, r12, **1d8+3**, 2 bounces, freeze 4 (bosses halved, §6.4; BALANCE-PKG5 r2 / r3 −1, history +2 / +4) |
 | Drain Life | **3 MP**, r6, 1d6+2 | **5 MP**, r8, **1d8+3** | **7 MP**, r8, **1d8+6** |
 | Lightning | **5 MP**, r16, 1d8+4, 1 bounce | **8 MP**, r16, **1d8+7**, 1 bounce | **11 MP**, r20, **1d10+9**, 2 bounces (loop guard 4 still binds) |
 | Power Strike | **2 MP**, +2 hit, ×2, stun 1 | **3 MP**, +3 hit, **×2½** (2d + d div 2), stun 1 | **4 MP**, +4 hit, **×3**, stun 2 (bosses 1) |
@@ -1492,8 +1492,8 @@ monster hit on the hero), with no "applied this turn" flag. A banked monster (ot
 | **FROZEN** | skip action; eva counts as **0** against it | timer; **any FIRE damage ≥ 1 thaws it** | Frost Shard 2 / 3 / 4 by rank (COLD hit); self after a bounce or reflection **1** (§6.4.1); **Frost Wraith touch (NEW-MON3): 1 in 4 → FROZEN 2** on the hero, only if ≥ 1 damage lands (hero COLD I / X: none; R halves the damage and the turns); the Wraith's bolt never freezes |
 | **ASLEEP** | skip action; eva 0 | timer, or **any HP loss** (incl. poison, aura) wakes it | Sleep scroll 8 (room), GAS trap 4 (hero), hunger faint 5 (hero, §7.1) |
 | **STUNNED** | skip action; eva 0; cannot parry | timer (**not** HP loss). **HOLD_GUARD:** cannot be stunned again until it has taken one action | Power Strike 1 (hit, no kill), Ogre SLAM hit 1 (hero), STUN trap 2–3 rolled (hero, §1.5.1) |
-| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch 1 in 4 → 4 (hero) |
-| **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) **and no spells** (Mage: all 5; user 2026-11-01) → illegal, no MP, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; thrown daggers, arrows and items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll 6 (room); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
+| **CONFUSED** | hero: each turn-costing walk/bump/jump/facing-icon action is **reversed with 1 in 3** (turns, then acts the other way); if the reversed action fails because of the direction the turn is spent (`YOU STUMBLE.`); a non-direction refusal costs no turn and faces back (§2.3, §6.4.2 R4). Whirlwind, climbs, page verbs, quick food/potion/scroll and 0-turn turnarounds never roll. Monster: 1 in 2 its action is replaced by a step in a random direction (illegal → wait; walkers still never step to `x == pit col`); a confused monster never shoots | timer; Cure (hero) | Spark 1 in 4 (rank 3: 1 in 2) → **4** (was 3, §6.4.1); Ghost touch **1 in 8** → 4 (hero; BALANCE-PKG5 §6 A, was 1 in 4) |
+| **FEAR** | hero: **no melee-reach action** (melee, bump attack, Power Strike, Whirlwind) **and no spells** (Mage: all 5; user 2026-11-01) → illegal, no MP, no turn, `YOU ARE TOO AFRAID TO FIGHT!`; thrown daggers, arrows and items allowed. Monster: steps away from the hero; cornered (no legal step away) it melees if the hero is in reach, else waits; never shoots | timer; Cure (hero) | Fear scroll **9** (room; BALANCE-PKG5 C4, was 6); Necromancer **Dark Bolt** hit 1 in 3 → 3 (hero) |
 | **POISON** | −1 HP every **4th** turn (step 1); **cannot eat** (§7.2) | timer; Cure | **adds per application, cap 30** (POIS1, §6.4.3): Spider bite **12**, Giant Rat 12, Spider Queen **18** (bite) / **12** (spit), Black Widow **24** (bite) / **6** (spit, WIDOW-SPIT), DART trap 12 |
 | **WEAK** | the hunger-WEAK penalties (§7: atk −2, eva −1, dmg −1 min 1 on **physical hits only**, §6.4.2 R1, no MP regen, no jump); **not cumulative** with hunger WEAK (the same penalties apply once) | timer; Cure | **Mummy curse** (below) 12 |
 
@@ -1573,7 +1573,7 @@ bank 2 ~150 B; apply/clear/messages/tint in bank 3 via `far3`, ~300 B). Strings 
 - Power Strike stun 1 / 1 / 2 (bosses — / — / 1; PHYS-R kinds — / — / 1; Ogre: none). It is a bonus on a ×2 hit.
 - Ogre SLAM stun 1 (hero).
 - Ghost CONFUSED 4 (hero; Gravecloak 2).
-- Necromancer FEAR 3 (hero) and Fear scroll 6 (room).
+- Necromancer FEAR 3 (hero) and Fear scroll 9 (room; BALANCE-PKG5, was 6).
 - Sleep scroll 8 (room). The first hit wakes, so the value is one free strike per sleeper plus repositioning.
 - GAS ASLEEP 4 (hero). It costs approach turns, and one near-sure hit wakes him.
 - Mummy WEAK 12. It covers the Mummy fight and about half of the next one.
@@ -1890,7 +1890,7 @@ the release tick (budget split). The rule is **logic early, visible output at im
   HUNGRY, halted when Weak. Mana potion +8. Amulet of Mana halves the regen (Scarab ×5/8, BALANCE-PKG4)
   interval.
 
-**Hunger** (`FOOD` 0–100, start 80): burns −1 per **6 turns**, a jump −2 extra. **Never fatal.**
+**Hunger** (`FOOD` 0–100, start **100**): burns −1 per **8 turns**, a jump −2 extra. **Never fatal.** (BALANCE-PKG5 F1 + F3; history: start 80, −1 per 6 turns.)
 
 The stage word is shown on the panel (row 21, 6 cells max, in the stage's attr). **Four
 distinct stages, each name ≤ 6 chars:**
@@ -1924,7 +1924,7 @@ counts; the Mummy WEAK **status** never causes a faint.
 | Feedback | log `YOU FAINT FROM HUNGER` (21, FONT6, new); the GAS one-step hero flash (`E_FLT` = `TRAP_FLASH_T`, attr `$44`, existing) then the ASLEEP tint `$41` and the ASLEEP panel icon (existing); SFX = the GAS trap's SFX (reuse). The food bar/word is unchanged (still WEAK `$42`) |
 | Danger music | none extra: HOLD already adds +2 to the horizon (§3.7) |
 
-**Numbers (normal burn, −1 FOOD / 6 turns):** WEAK warning line at FOOD 9 → first faint 50
+**Numbers (normal burn, −1 FOOD / 6 turns; BALANCE-PKG5: 8 turns, so every turn count below is ×4/3):** WEAK warning line at FOOD 9 → first faint 50
 turns later → faints at +80, +110, +140 … while unfed. Any food ends it (Carrot: FOOD 0 → 10 =
 HUNGRY; it falls back into WEAK after 6 turns, which restarts the 50-turn grace: a Carrot buys
 ≈ 56 faint-free turns). **Expected cost:** a level holds 4–5 floor food items (LARGER-D; was 3–4) plus drops
@@ -1971,7 +1971,7 @@ While POISON is set (`STS_POISON`), the hero **cannot eat** until it ends (timer
 | Paths | **every EAT**: the bag-page EAT verb, the icon-bar FOOD quick slot (§3.5), and any `bag_pick` FOOD mode. Potions, scrolls, equip, discard and all other verbs are unaffected |
 | Refusal | log `TOO SICK TO EAT` (15, new). It costs **0 turns**, consumes nothing and keeps the food in the bag. On the page the refusal is shown where `NO NEED` is (row 22) and the page stays open. Order: the POISON check runs **before** `NO NEED` (FOOD 100), so a poisoned hero at FOOD 100 sees `TOO SICK TO EAT`. The FOOD quick slot does not fall through to another class |
 | Ends | `THE POISON WEARS OFF` (timer, ≤ 30 turns after the last application, §6.4.3), or a Cure potion (`YOU ARE CURED`). He can eat on the next action. The quick POTION pick already reaches Cure when Heal and Mana would be refused (§8.11 (3)) |
-| Hunger keeps running | FOOD burns as usual (−1 / 6 turns), the stages apply as usual, and FED regen still runs. One capped poison window costs **≤ 5 FOOD** |
+| Hunger keeps running | FOOD burns as usual (−1 / 8 turns since BALANCE-PKG5), the stages apply as usual, and FED regen still runs. One capped poison window costs **≤ 5 FOOD** |
 | FAINT1 (§7.1) | unchanged and independent. A faint can land inside a poison window. A poison tick that costs HP wakes him (any HP loss). At 1 HP a tick costs nothing, so he sleeps the full 5 |
 | No spiral (proof) | (1) Poison is timed and capped at 30, so the lock lasts at most 30 turns after the last bite. (2) A 30-turn lock costs ≤ 5 FOOD and, with `FAINT_GAP` 30, **at most 1 faint**. (3) Neither poison nor hunger can kill: poison stops at 1 HP and hunger is never fatal. Only monsters kill, as always. (4) The lock only extends while he keeps being poisoned, i.e. while he fights poisoners or re-walks a known DART. Both are things he can stop doing |
 | Feedback | the POISON panel icon (`$44`) is already on screen and explains the refusal. There is no extra icon |
@@ -2007,12 +2007,14 @@ Weapons are class-locked; everything else is not.
   FEAR, §6.4; +4 HP). No harmful or throwable potions (designer decision 2026-10-03: a throw
   verb needs an aim mode and item projectile art; a known-bad potion is junk).
 - Scrolls (read on the page): **Teleport** (random free spot in a random room, never the lair
-  while its boss lives) · **Fear** (the room's monsters flee 6 turns) · **Sleep** (new, 3D/3E:
+  while its boss lives; **BALANCE-PKG5 C1: a VISITED room with no live residents first** — no lazy spawn on arrival, the
+  scroll and the trap alike; none (or none with a free spot) → the old rule; respawns can still refill it later) ·
+  **Fear** (the room's monsters flee **9** turns; BALANCE-PKG5 C4, was 6) · **Sleep** (new, 3D/3E:
   the room's monsters fall ASLEEP 8 turns, §6.4) · **Enchant** (if any worn item is cursed:
   **blesses every worn cursed item** instead (§8.7, `THE CURSE LIFTS. BLESSED!`); else
   weapon dmg +1, max +3).
   **[rev 6, 2026-10-20: Enchant = worn weapon `m` +1, max +3; no blessing; §8.11 "3E simplification". GEAR3, 2026-11-01: Enchant = a random worn weapon / armour / helmet (else a bag one) `m` +1, max +3: `docs/design/gear_rules.md` §3.]**
-  Floor scrolls pick the type uniformly from the four.
+  Floor scrolls pick the type from 8 weighted slots: **Teleport 3, Fear 2, Sleep 2, Enchant 1** (BALANCE-PKG5 C2; was uniform of 4).
 - The **key** opens the lair door and is consumed.
 
 **Quick slots auto-fill** (user):
@@ -2035,7 +2037,7 @@ is not a pause: music and SFX keep playing** (no `SND_HOLD`). Engineering detail
 
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
-**LARGER-D (T6, as built 2026-11-16): food ~~4–5~~ **3–5 (BALANCE-PKG4)** · potions 3 + rnd(2) = 3–4 (≥ 1 Heal) · scrolls 2 · arrows `1d4+6` · traps ×4/3 (§1.5).** The line below is the 3×3 history. Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
+**LARGER-D (T6, as built 2026-11-16): food ~~4–5~~ ~~3–5 (BALANCE-PKG4)~~ **3–4 (BALANCE-PKG5)** · potions 3 + rnd(2) = 3–4 (≥ 1 Heal) · scrolls ~~2~~ **2–3, weighted (BALANCE-PKG5 C2), D2: ≥ 1 Teleport (C3: the last one if none came before)** · arrows `1d4+6` · traps ×4/3 (§1.5). BALANCE-PKG5: any non-boss, non-respawn kill also drops a random food (of the 5) with 8 % (on top of the kind's drop row).** The line below is the 3×3 history. Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
 slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) + 1 more with 1 in 2 on D4–D7
 (rev 5, §5) · ~~other-class book 0–1~~ (cut, user 2026-10-20) ·
 key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entries on
@@ -2662,7 +2664,7 @@ the §8.8 map (colour/label word + POTION/SCROLL), 0 extra refs.
 **(2) Food odds and hunger.** Food entry type is **uniform over the 5 at every depth** (the
 `tools/items_model.py` rule `rnd(5)`, unchanged: 0 B of table, mean 23 FOOD per item, 3–4
 items ≈ 80 FOOD + drops ≈ 100 against ≈ 75 burned per level, §7). No depth weighting. Hunger
-numbers, complete: `FOOD_START` 80 · cap 100 (eating clamps) · −1 per 6 turns (jump −2 extra)
+numbers, complete: `FOOD_START` ~~80~~ **100** · cap 100 (eating clamps) · −1 per ~~6~~ **8** turns (jump −2 extra; BALANCE-PKG5)
 · stage by FOOD: FED ≥ 50, OK 25–49, HUNGRY 10–24, WEAK 0–9 · food values CARROT 10, APPLE 15,
 PEAR 20, CHEESE 30, MEAT 40 · never fatal. **Stage-change lines** (only on a downward crossing
 into HUNGRY / WEAK, and on an upward crossing into FED; crossing into OK and WEAK→HUNGRY print
@@ -2790,7 +2792,7 @@ unknown names, (3) `IT WAS A`, `cmb_cling`/`cmb_lifts`/`cmb_cursed_no`/shatter l
 
 ### 9.1 Roster (16 kinds + 2 unique bosses + Archmage → `kind_tab` 32, §11.2; NEW-MON3 adds Gargoyle, Fire Imp, Frost Wraith, as built 2026-11-15, `new_monsters.md`)
 
-Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) div 3.
+Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) div 3. **BALANCE-PKG5: the melee `dmg` column is also scaled by depth** — D1–D2 ×1, D3 ×1.9, D4 ×1.7, D5 ×2.6, D6 ×2.8, D7–D8 ×3.0: die faces and bonus each × the scale, round half up (e.g. a Mummy's 1d8 on D5 = 1d21; the Death Knight's 1d10+3 on D7 = 1d30+9), bosses and golden bodies included; the golden +1 and the SLAM ×1.5 come after; ranged / spell shots are not scaled (`src/dscl.asm` `dsc_roll`).
 
 | Kind | Body px | hp | atk | eva | DEF | dmg | W | Move / flags | Behaviour | Drop | Depths |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -2801,7 +2803,7 @@ Every monster gains **depth scaling**: hp + (depth − 1), atk + (depth − 1) d
 | Spider | 32×16 | 7 | 3 | 3 | 0 | 1d4 | 2 | walker, climber (own dorsal climb pair spider_climb1/2, STA|SYM; user 2026-10-30, was its rest pose) | hit **poisons**: POISON +12 per bite, cap 30 (= −1 HP / 4 turns; POIS1 §6.4.3) | — | D2, D4, D5, D7 |
 | Skeleton | 24×48 | 10 | 2 | 2 | 1 | 1d6 | 5 | walker, climber, opener | chase | — | D3, D5, D8 |
 | **Vampire** | 24×48 | 14 | 2 | 1 | 0 | 1d6 DRAIN | 5 | climber (VAMP-BOSS, user 2026-11-02: the shared climb pair), opener, acts every 2 (bat form: every turn) | **drain bite heals it** by the damage dealt (to max hp); **bat form** §9.2 | — | D3, D6, D8 |
-| Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch 1 in 4 → CONFUSED 4 (§6.4) | — | D3, D6–D8 |
+| Ghost | 24×32 | 8 | 2 | 3 | 0 | 1d4 DRAIN | 3 | flyer | drift; touch **1 in 8** → CONFUSED 4 (§6.4; BALANCE-PKG5 §6 A, was 1 in 4) | — | D3, D6–D8 |
 | Orc | 24×48 | 14 | 3 | 1 | 1 | 1d8 | 5 | walker, opener, climber (shared humanoid climb pair, 3F-T13bc) | chase | Meat 1/3 | D4, D6, D7, D8 |
 | Skeleton Archer | 24×48 | 8 | 2 | 2 | 0 | 1d4; arrow 1d6 PHYS r10 | **6** | walker, opener, climber (the Skeleton's climb pair, user 2026-10-29) | ranged | Arrows ×3 1/2 (W) | D4, D5 (ARCHER-DEPTHS H1, user 2026-10-29: not D7, §9.8) |
 | Mummy | 24×48 | 18 | 3 | 0 | 2 | 1d8 | 5 | walker, climber (shared humanoid climb pair, user 2026-10-29), acts every 2 | hit drains 5 FOOD; **curse** 1 in 3 → WEAK 12 (§6.4) | — | D5, D7 |
@@ -3215,12 +3217,12 @@ arrival, and it makes descending a valid escape.
 |---|---|---|---|
 | D1 | Rat 2, Bat 2, Slime 2, Goblin 2 | **20** (was 13) | Golden Goblin King |
 | D2 | Goblin 2, Spider 2, Bat 2, Rat 2 | **21** (was 14) | Golden Spider Queen |
-| D3 | Skeleton 1, Vampire 2, Ghost 3, Bat 1, **Goblin 1** | **21** (was 14) | Golden Vampire Lord |
-| D4 | Orc 2, Rat 2, Spider 1, Skeleton Archer 2, **Fire Imp 1** | **23** (was 15) | **Ogre Warlord** |
-| D5 | Mummy 2, Spider 1, Skeleton 1, Skeleton Archer 2, **Gargoyle 1**, **Frost Wraith 1** | **24** (was 16) | Golden Pharaoh |
-| D6 | Vampire 2, **Gargoyle 1**, **Fire Imp 1**, Ghost 1, Necromancer 1, Orc 2 | **23** (was 15) | Golden High Necromancer |
-| D7 | Orc 1, Ghost 1, Necromancer 3, **Frost Wraith 1**, **Mummy 1**, **Spider 1** | **23** (was 15) | **Death Knight** |
-| D8 | Necromancer 3, Skeleton 1, Ghost 1, Vampire 1, **Orc 1**, **Frost Wraith 1** | **17** + Archmage (+ ≤ 2 summons) (was 11 + Archmage) | Archmage |
+| D3 | Skeleton 1, Vampire 2, Ghost **2**, Bat 1, **Goblin 2** (BALANCE-PKG5 §6 A; was Ghost 3, Goblin 1) | **21** (was 14) | Golden Vampire Lord |
+| D4 | Orc 2, Rat 2, Spider 1, Skeleton Archer 2, **Fire Imp 1** | **25** (BALANCE-PKG5 M1; 23, was 15) | **Ogre Warlord** |
+| D5 | Mummy 2, Spider 1, Skeleton 1, Skeleton Archer 2, **Gargoyle 1**, **Frost Wraith 1** | **24** (was 16; BALANCE-PKG5 M1 asks 26: kept at the `LP_N_MAX` cap, `balance_v2.md` §8) | Golden Pharaoh |
+| D6 | Vampire 2, **Gargoyle 1**, **Fire Imp 1**, Ghost 1, Necromancer 1, Orc 2 | **25** (BALANCE-PKG5 M1; 23, was 15) | Golden High Necromancer |
+| D7 | Orc 1, Ghost 1, Necromancer 3, **Frost Wraith 1**, **Mummy 1**, **Spider 1** | **25** (BALANCE-PKG5 M1; 23, was 15) | **Death Knight** |
+| D8 | Necromancer 3, Skeleton 1, Ghost 1, Vampire 1, **Orc 1**, **Frost Wraith 1** | **17** + Archmage (+ ≤ 2 summons) (was 11 + Archmage; = M1's 18) | Archmage |
 
 Bold = joins or returns. **Alias rule:** the Imp (D4, D6) and the Wraith (D5, D7, D8) never share a depth (kind row 31, §11.2); the Gargoyle is D5, D6. The Archer stays off D7/D8 (ARCHER-DEPTHS H1, §9.8). Every depth from D4 has melee, ranged (Archer / Imp / Necromancer), a flyer and a climber.
 
@@ -4162,6 +4164,8 @@ event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) 
 monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
 
 **BALANCE-PKG4 (user 2026-11-16; as built; `balance_v2.md` §5):** FED regen 16 turns, food 3–5, time respawn trickle back on D1–D8 at ⅓ rate (period 48, chance 32/256, shared cap 6), Mage MP 7 turns, level-up HP W +6 / M +2, Scarab regen ×1.6, the §9.1 resist rows above, Firebolt burst 1d3 / 1d3 / 1d5. Sim `--ld-pkg4`: average W 20.6 / M 25.2, best expert W 34.3 / M 28.2.
+
+**BALANCE-PKG5 (user-approved playtest build 2026-11-17; as built; `balance_v2.md` §6–§8, combo `tools/balance_pkg5_final.json`):** hunger −1 / 8 turns, `FOOD_START` 100, floor food 3–4 + an 8 % random food drop on any non-boss non-respawn kill; D3 Ghost 3 → 2 / Goblin 1 → 2 slots, Ghost confuse 1 in 8; Teleport lands in a visited room with no residents first (C1); scrolls 2–3 from Teleport 3 / Fear 2 / Sleep 2 / Enchant 1, ≥ 1 Teleport on D2 (C2, C3); Fear 9 turns (C4); counts D4 / D6 / D7 25 (D5 kept 24, the `LP_N_MAX` cap); **monster melee damage ramp by depth D3–D8 ×1.9 / 1.7 / 2.6 / 2.8 / 3.0 / 3.0** (each die face count and the bonus × the scale, round half up, bosses and golden bodies included; the golden +1 and the Ogre's SLAM ×1.5 after it; ranged and spell shots unscaled); Mage MP regen 9 turns, level-up HP +4, Firebolt bonus −1 a rank, Frost r2 / r3 −1. Sim (PICKUP 0.75): average W / M 16.4 / 16.4, E1 37.6 / 43.6.
 
 **LARGER-D package 3 (user 2026-11-15; as built T5; its FED regen 12 / Mage MP 5 are history, see above):** monsters per level incl. boss now **20/21/21/23/24/23/23/18** (§9.4 `lp_dtab`; the MORE-MON counts below are history), `XP_NEXT` ×1.1 (§4.1), FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns. balance_sim (`--ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5** (target 20–30 %, even W/M, accepted by the user).
 

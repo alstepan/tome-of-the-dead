@@ -160,7 +160,7 @@ region** (R6, 2026-10-21; was the top of bank 6, `$F86B..$FFFF`):
 **3F-T2: `$D466..$DBFF` (R6 grew 8 pages: SRC6 `$DC00..$DCFF`, R6 `$DD00..`)**; SRC6 spike: `BOOT6_ADDR..SRC6_ADDR-1` = `$DC66..$E3FF` (default `SRC6_PAGES` 1; ASSERT `boot6_end == SRC6_ADDR`), `BOOT6_LEN` 1,946 B; before: `BOOT6_ADDR..R6_ADDR-1` = `$DD6B..$E4FF`, `BOOT6_LEN` **1,941 B** (phase lock: +3 B PHASE_TRAP clear; 1,938 before) (code 252 + data
 1,689; ASSERT `boot6_end == R6_ADDR`; `BANK_BOOT6` = `BANK_POOL2`). Own
 headerless tape block (SRC6 spike: it runs on through the SRC6 sources, `BOOT6_TAPE_LEN`), the 7th in `start`'s `tape_tab`; in the `.sna`
-preloaded. `boot` runs it through `farb` (C = `BANK_BOOT6`) twice, both before
+preloaded. **PKG5+FLY-CUT reclaim: ONE `farb` now — `boot6_init` ends with EI + the (moved) `build_bitrev` loop and falls into `boot6_tiles` -> `boot6_wait`, same order as below.** `boot` ran it through `farb` (C = `BANK_BOOT6`) twice, both before
 `alloc_reset`: `boot6_init` (under DI: the IM 2 install — vector table, ISR
 image → `ISR_ADDR`, I, IM 2 — and the power-on state + `KEYTAB`, the screen
 clear, the entity table clear) and `boot6_tiles` (after EI + `build_bitrev`:
@@ -1436,7 +1436,7 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | `$6D40..$6EBF` | `LVL_STATE` | 384 | **LARGER-D T2 (2026-11-15): reordered + sized for 12 rooms** (`ROOM_SLOTS` 12; **T4: `GRID_CELLS` 12, `EDGES_H` 8, `LVL_KEYROOM2` `$6EAE`**): `ROOM_DESC` `$6D40..$6DFF` (12 × 16, page `$6D` alone: `ld h, ROOM_DESC >> 8`, L = `$40 + 16 r` ≤ `$F0`), `FLOOR_LIST` `$6E00..$6E7F` (unchanged), header `LVL_HDR` `$6E80..$6E8F` (same internal offsets), `EDGE_TAB` `$6E90..$6E97` (`EDGE_SLOTS` 8, `EDGES_H` 6 used), `TRK_PHASE` `$6E98`, `TRK_PREV` `$6E99`, `TOME_HP` `$6E9A`, `TOME_FL` `$6E9B`, `DN_QN` `$6E9C`, `TRAP_LIST` `$6E9D..$6EAC` (`TRAP_MAX` 8 × 2) + `TRAP_N` `$6EAD` (kept right after the list: `tools/items_model.py` reads `TRAP_LIST..TRAP_N` as one range; the task table's `TRAP_N $6E9D` / list `$6EA0` swapped for that), **`LVL_KEYROOM2` `$6EAE` (LARGER-D T4: the colour-1 / magenta key room, `ROOM_NONE` = none)**, `$6EAF` spare, **`DG_PLAN` `$6EB0..$6EBF`** (16 B, DECOR2's per-build plan, reserved; replaces the `$6DF0` claim). Header `$6E80..` through `DG_PLAN` is one page (tome6 / sanct7 reach `EDGE_TAB` / `TOME_HP` with L only). Slots 9..11 are kept 0 by `attempt` / `tut_start` / `proto_level`. Before: `$6D40..$6E7F`, 320 B (header 16, `EDGE_TAB` 6 + per-level bytes `$6D56..$6D5A`, `ROOM_DESC` `$6D60` 9 × 16, `TRAP_LIST` `$6DF0` 6 × 2 + `TRAP_N` `$6DFC`, `FLOOR_LIST`). Byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6EC0..$6EFF` | `ORN_GLYPHS` | 64 | **LARGER-D T2: `$6EC0` (= `LVL_STATE_END`; was `$6E80`).** B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). (B3B-1: `LOWRAM_END_3B` was `$6EC0`; now `LP_END`) |
 | `$6F00..$6FC6` | `LP_STATE` | **LARGER-D T2: 199 B, one page `$6F` (12 rooms: `TRK_W` 12 B +19..+30, `ROOM_VISITS` +31, `LP_REC` +43, `LP_POS` +151; was `$6EC0..$6F59`, 154)**; **154 (ROOM-MEM2: + 36 B `LP_POS` `$6F36..$6F59`; was 118 / `$6F35`)**; 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (**`$6FC7`**, LARGER-D T2; was `$6F5A`): the test stubs moved up with it |
-| `$6FC7..$7004` (FLY-CUT release; was `$6FC7..$714D` before LARGER-D T5) | free | **62 release** (FLY-CUT; was 66; 391 before LARGER-D T5) (`LOWRAM_SPARE`) | **LARGER-D T5: −344 (`rsp0.asm` `rsp_run` / `rsp_w` 290 B + `lgkeyl.asm` `kins` / `kload` 52 B, both from B0_CODE2; the cold block now starts at `$714E`)**; LARGER-D T2: −109 (LVL_STATE +64, LP +45; was 846 kit)**. Older: **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
+| `$6FC7..$6FDC` (PKG5+FLY-CUT reclaim release; FLY-CUT `$6FC7..$7004`; was `$6FC7..$714D` before LARGER-D T5) | free | **22 release / 24 kit, trace** (PKG5+FLY-CUT reclaim, see its ledger; FLY-CUT 62; was 66; 391 before LARGER-D T5) (`LOWRAM_SPARE`) | **LARGER-D T5: −344 (`rsp0.asm` `rsp_run` / `rsp_w` 290 B + `lgkeyl.asm` `kins` / `kload` 52 B, both from B0_CODE2; the cold block now starts at `$714E`)**; LARGER-D T2: −109 (LVL_STATE +64, LP +45; was 846 kit)**. Older: **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
 | `$6FE4..$7FFF` (3F-T2, kit) | `lowram_code` (`start` first) | 4,124 | **3F-T2: code 3,619 B + 101 descriptors 505 B; spare after the (now `FRT_MAX` 128) descriptor reserve 135 B: 43 kit** (50 before the `SEQ_TRAP` path) (was 29: +160 reserve, code +139 net: the sequence-cache loader `sq_reset` / `sq_load` / `ksm_ptr` / `sq_fill` in, `gen_kind` + its loops → `gen_list`, `level_enter`'s FRT LDIR → R6). Before: **cold block**, ends exactly at `$8000` (`src/lowram.asm`): **3E-T2: code 3,169 B + 101 descriptors 505 B**; 3E-T1: code 3,126 B (was 3,889 at `$70CF`); before: code 3,238 B + 101 frame descriptors 505 B (D3-S2 +89 incl. the bitmap-shadow paths' removal: + `clear_screen` / `print_char` / `print_str`, − `room_show` / `room_shadow`'s shadow ornament; L2 engine +28: `pit_range` / `pit_w`; D3-4 +8: `start_game` → `gen_kind(HERO_KIND + K_FX_BASE)`; J1 +145: `try_jump` D 6 / 7 + `jump_pit` + `pit_w`; earlier: D3-TX `tx_dec` + `.txt`, B12 +21, B14 +175, C3-2 +1, C3-1 +33, C3-0 +3, B3B-13 +37) |
 | inside the cold block | A5 `zx0_code..zx0_code_end` | 107 | `zx0_frame` 39 + `dzx0_standard` 68 (ASSERT ≤ `ZX0_BUDGET` 128) |
 | `$6000..$65FF` (alias) | A5 `GEN_SCRATCH` | 1,536 | ZX0 unpack target **aliasing `ROOM_MAP`+`NEXT_MAP`** (ends exactly at `TILE_GLYPHS`, ASSERTed): the generator runs only at boot, hero start and (3F) level start, before the room map is built — never mid-room. Guard: `GEN_TRAP` (state block) counts `gen_frame` calls while `GAME_STATE` is PLAYING/TRANSITION; tests assert 0 |
@@ -7621,3 +7621,75 @@ Release build (`-DDEBUG_KIT=0`), delta vs main a5683c4:
   never picked up -> L76 in C); beat numbers shifted (B9G = 10). tests/tut0_level.py: 7 floor entries + TUT0_GEAR_FL.
   PNGs `build/tut_gear_{floor,page,worn}_{w,m}.png`.
 
+
+## BALANCE-PKG5 ledger (`feat/balance-pkg5`, 2026-11-17; `balance_v2.md` §6–§8, user-approved playtest build)
+
+No fixed runtime address moved except the low-RAM cold block's base (it grows downwards: `lowram_code` `$7009` -> **`$6FC8`**,
+so `boot` / `gen_idles` / the TUT0 boot stubs (`ts_choice`.., now `$7065`) shift -65; tests read them from the `.sym`).
+Release build (`-DDEBUG_KIT=0`), delta vs main 75f26ba:
+
+| Region | Before -> after (free) | What |
+|---|---|---|
+| Low-RAM cold block | spare 66 -> **1** | `src/dscl.asm`: `dsc_roll` 38 B + `dsc_tab` 9 B (the monster melee depth ramp, called by bank-3 `dmg_roll`), `tp_ok` 18 B (moved verbatim from R6 `fx6.asm` to pay C1) |
+| HOT_COPY | spare 23 -> **2** | `src/tele_hot.asm` (in the `panel_hot.asm` image): `tp_safe` 20 B + `tp_msk` 1 B (C1's room filter); its load image in the boot block (bank 6 `$C040` -> `$C02B`, dead after boot) |
+| `B0_CODE2` | free 31 -> **15** | `src/drop0.asm` `drop_any` 24 B (the 8 % food drop); **`TEXT_RES` -8 / `B0_FREE_RES` +8** (`B0_FREE_START` `$CF16` -> `$CF0E`, `POOL_START` `$EFBE` kept): the `-DANIM_TRACE_ON=1` test build's `B0_CODE2` (19 B free on main) needs it (2 B free now). Text 2,763 -> 2,765 B (headroom 25 -> 15; the kit's carve pad 7) |
+| Bank 3 | free 22 -> **6** (kit / trace 2) | `dmg_roll`'s EF_PLAYER gate + `call z, dsc_roll` (+7), `do_attack` keeps the on-hit byte in B (+1), `mon_drop .row` far6 `drop_row` then farb (BANK_TEXT) `drop_any` (+8) |
+| R6 | 10,749 B (free 3), unchanged | `tele_pick` C1: pass-1 mask + `call tp_safe` + the pass-2 restart (+18), `tp_ok` out (-18) |
+| Bank 1 | free 3, unchanged | items overlay raw 1,180 -> 1,179 B, packed 1,005 B: `ig_grp` without the fixed / span-3 counts and the DW pool pointer (descriptors 5 -> 3 B), + the C2 weights and the C3 D2 Teleport; scratch `ig_tf` (+1) |
+| Bank 2, bank 7 | unchanged | tables / constants only |
+
+- **Test stub window (tests/game.py `run_stub`, tests/lp.py, tests/tut0.py):** `LOWRAM_END_3B` .. **`gen_idles`** (was ..
+  `lowram_code`): the low-RAM spare plus the run-once power-on code `start` (tape entry) and `boot` (.sna entry), never re-entered
+  once a game runs (99 B now; the largest stub measured over the suites is 61 B, tests/world.py). main.asm ASSERTs
+  `gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN` (64). The `RES = STUB + 200` scratch bytes some suites use land in the TUT0 stub
+  room's free tail (`$708F`; room `$7065..$70A2`, stubs 37 B).
+- **Constants / tables:** `FOOD_PERIOD` 6 -> 8, `FOOD_START` 80 -> 100 (`item_defs.asm`); `SCR_FEAR_T` 6 -> 9 (`fx6.asm`, `ie_fear`
+  text); `MP_REG_M` 7 -> 9 turns, `LUP_M_HP` 2 -> 4 (`xp7.asm`); `kx_tab` Ghost on-hit chance 4 -> 8; `ab_rank` Firebolt bonus 0 / 2 / 4
+  -> **-1** (`$FF`, signed: `pf_bonus` wraps, deal_hit floors a 0 roll at 1) / 1 / 3, Frost r2 / r3 2 / 4 -> 1 / 3 (+ the `info_*`
+  rank lines); `lp_dtab` (`nm3_b0.asm`) D3 slot 5 Ghost -> Goblin, counts D4 / D6 / D7 23 -> 25 (D5 24, D8 18 kept); `LP_N_MAX` 24 -> 25
+  (`lpop3.asm`); `ig_grps` food `3` (3-4), scrolls `2, IT_SCR_LO, IG_SCR_K 8` (2-3 weighted).
+- **`dsc_roll` (low RAM, `dscl.asm`):** C = die, D = bonus of a monster -> each `(32 + x * w) >> 6`, w = `dsc_tab[LVL_DEPTH]`
+  (64 64 64 122 109 166 179 192 192 for depth 0..8; exact against the sim's `int(x * s + 0.5)` for x 0..15, `tests/dsc.py` D1/D2).
+  Clobbers A, B, E, HL: `do_attack` loads the kx on-hit byte into B (restored to E after the roll). ~0.3-0.7k T a monster melee roll.
+- **C1 `tp_safe` (HOT_COPY):** B = room -> Z keep: `(LP_REC[room].LR_HDR ^ LR_VISITED) & tp_msk == 0`; `tele_pick` sets
+  `tp_msk = TP_SAFE` ($87) for pass 1, falls back to 0 (today's rule) when no safe room has a spot (`.cur`).
+- **`drop_any` (B0_CODE2):** farb from bank-3 `mon_drop` after R6 `drop_row`: `rng_mod(25) < 2` -> `IT_FOOD_LO + rng_mod(5)`,
+  far6 `drop_put` (DROP_NEAR). Gameplay RNG: +1 draw a non-respawn kill (+1 more on a drop).
+- **Tests re-baselined:** hunger / equip / xp (FOOD 100, period 8, Mage 9 turns, level-up +4), combat_tables / itemtab /
+  balance_sim_selftest (ranks, Ghost 1 in 8, Fear 9; the sim reads RK_BONUS signed and floors a spell's damage at 1), proj3
+  (signed bonus, the drop_any draw in its mon_drop model), t12 (Fear 9), pickup3e (seeds where drop_any stays silent), tier6
+  (any food 8 %), boss (Ogre SLAM range at x1.7); gates: tools/levelcheck.py LP waits 15 % -> 16 %, tests/lp.py lp_enter mean
+  22.0k -> 22.5k (M1's denser rooms: 14.5 % / 21.55k -> 15.05 % / 22.13k). Goldens (the full FOOD bar at the start):
+  game_start, game_start_wizard, w15_panel_mage, abil_spark_cast. New: tests/dsc.py; tests/item_census.py `--depths 8` + the
+  per-level food / scroll ranges and the D2 Teleport check.
+
+## PKG5+FLY-CUT reclaim ledger (`feat/balance-pkg5`, 2026-11-17; merge of main eeb4dbd FLY-CUT into BALANCE-PKG5; no cut, behaviour identical)
+
+The merge overflowed HOT_COPY, bank 3, low RAM and `B0_CODE2` (free before -> after, release / `-DDEBUG_KIT=1` / `-DANIM_TRACE_ON=1`):
+
+| Region | Merged, before | After | What |
+|---|---|---|---|
+| HOT_COPY | -21 / -21 / -21 | **0 / 0 / 0** | `tele_hot.asm` (`tp_safe` 20 + `tp_msk` 1) out -> the low-RAM installed block (renamed `src/tele_lri.asm`) |
+| Bank 3 | -12 / -16 / -16 | **30 / 26 / 26** | `lgkey3.asm` `kbit` (24) + `tstb` (18) out: ONE copy in low RAM (`lgkeyl.asm`) for both key halves |
+| `B0_CODE2` | -4 / -4 / -17 | **37 / 37 / 24** | `lgkey0.asm` `kbit0` + `tstb0` out (42; the duplicates of the above); `pathm` / `pathm0` stay per bank, reading the low-RAM `kbit`. `POOL_START`, `TEXT_RES`, `B0_FREE_RES` untouched |
+| Low-RAM cold block | -3 / -1 / -1 | **22 / 24 / 24** | +20 `boot` (one farb: EI, `call build_bitrev`, 2 farbs out), +17 `build_bitrev`, +12 `init_kbd_mirror` (both boot-only -> boot block), +18 `tp_ok` (-> installed block); -42 `kbit` / `tstb` in |
+| Boot block (bank 6, dead after boot) | `$C014` (20 free) rel | **`$C012` (18) rel / kit, `$C002` (2) trace** | +22 code (`boot6_init` inlines `init_kbd_mirror`, EI + the bitrev loop, falls into `boot6_tiles` -> `boot6_wait`), -21 the smaller HOT image |
+| Low-RAM installed block (new) | - | **39 of 46 B** (7 free) at `tape_tab` (`$7038` rel) | `tele_lri.asm`: `tp_safe`, `tp_msk`, `tp_ok` |
+| R6, bank 1, bank 2, bank 7 | unchanged | | |
+
+- **Low-RAM installed block.** `tape_tab` (start's tape list, 46 B) is dead once `instr_ovl` `in_tut` has read the BOOT4 record.
+  main.asm "LOW-RAM INSTALLED BLOCK": `tele_lri.asm` is assembled DISP'd at `tape_tab` (`lri_base`), padded to `check_paging`,
+  followed by the TUT0 stubs (unchanged at `check_paging`). `in_tut` copies the whole block (`LRI_LEN`) with one LDIR after its
+  `tape_tab` reads (was: the stubs only). Same pattern and rules as the TUT0 stubs: 0 resident bytes, live only after boot's
+  INSTR overlay (`tp_*` have no caller before a game starts). tests: `build/ovl/lri.bin` (`LRI_ROOM` B) checked by game.py #50
+  (tape boot) and instr.py I8b2. **Tests must not use `tape_tab .. check_paging` as scratch.**
+- **Addresses moved (release):** the cold block's base `lowram_code` `$6FC4`-merged -> `$6FDD`; `gen_idles` `$7026` -> `$702B`;
+  `check_paging` / `ts_choice` `$7061` -> `$7066` (+5: the tail shrank 5 B net); stub room `$7066..$70A3`, stubs 37 B, free tail
+  `$708B..`. The tests' `STUB + 200` (`$708F`) scratch is still in that tail; tests/ovl.py moved its `RES` from `STUB + 0xC0`
+  (now inside `ts_icon`) to `STUB + 200`. The stub window `LOWRAM_END_3B .. gen_idles` = 100 B (ASSERT >= 64).
+- **Cycles.** No frame-tick or per-turn path changed. `tp_safe` runs from contended low RAM instead of HOT_COPY (teleport only,
+  ~+10-20 T a room tested). `tstb` for bank-0 `lgkey0` runs from contended low RAM (level generation only, behind the
+  card: ~+10 T a call worst); bank-3 callers unchanged (bank 3 is contended too). Boot: the bitrev loop runs from uncontended
+  bank 6 (faster).
+- **Merge resolutions:** `lowram.asm` / `panel_hot.asm` keep both sides; main.asm keeps BALANCE-PKG5's
+  `gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN` (64) stub-window ASSERT (replaces FLY-CUT's `LOWRAM_SPARE >= 61`).

@@ -427,6 +427,7 @@ dn_mbit:
                 and  e
                 ret
 
+                ; (tp_safe / tp_msk, BALANCE-PKG5 C1: in the boot-installed low-RAM block, tele_lri.asm)
 ;------------------------------------------------------------------------------
 ; fly_cut — FLY-CUT head (HOT_COPY's spare: uncontended, every flyer turn; the rest is lowram flyl.asm
 ; fly_cut2, contract there). In: IX = the flyer, TMP4 = its storey. CF = 1: no detour (no mid-block:

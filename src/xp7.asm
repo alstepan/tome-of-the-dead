@@ -10,10 +10,10 @@
 ; and Plate x 2 (10) stay exact with no toggle state (package 3). Warrior 8 turns unchanged.
 MP_RG_STEP      EQU 4               ; quarter-turns per turn
 MP_REG_W        EQU 8 * MP_RG_STEP  ; Warrior +1 MP per 8 turns (game.md §4)
-MP_REG_M        EQU 7 * MP_RG_STEP  ; Mage 7 turns (BALANCE-PKG4; was 5 in package 3, 6 before; larger_depths §3.2)
+MP_REG_M        EQU 9 * MP_RG_STEP  ; Mage 9 turns (BALANCE-PKG5 Mage tune; 7 in package 4, 5 in package 3, 6 before; larger_depths §3.2)
 LUP_W_HP        EQU 6               ; §4.1 level-up: Warrior max HP +6 (BALANCE-PKG4; was 5, WIDOW-SPIT 4), max MP +1
 LUP_W_MP        EQU 1
-LUP_M_HP        EQU 2               ; Mage max HP +2 (BALANCE-PKG4; was 3), max MP +2
+LUP_M_HP        EQU 4               ; Mage max HP +4 (BALANCE-PKG5: lifts the average Mage after the regen nerf; 2 in package 4, 3 before), max MP +2
 LUP_M_MP        EQU 2
 LVL_ATK1        EQU 4               ; §4.1 steps: L4 atk +1, L6 eva +1, L8 atk +1
 LVL_EVA1        EQU 6

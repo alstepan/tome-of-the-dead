@@ -1394,7 +1394,7 @@ def run_stub(p, code, org):
     """tests/game.py T.run_stub: raw Z80 at org (LOWRAM_END_3B: free low RAM up to lowram_code) up to its trailing
     `jr $`; True if it got there. The caller restores PC / SP."""
     code = bytes(code) + b"\x18\xfe"
-    assert org + len(code) <= S["lowram_code"], len(code)
+    assert org + len(code) <= S["gen_idles"], len(code)         # BALANCE-PKG5: + the run-once start / boot
     p.z.cmd("write-memory %d %s" % (org, " ".join(str(x) for x in code)))
     end = org + len(code) - 2
     p.z.cmd("set-breakpoint 3 PC=%d" % end)

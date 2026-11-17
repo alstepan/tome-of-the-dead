@@ -28,7 +28,8 @@ instr_main:
 ; length, so no byte here depends on a packed size) is ZX0-unpacked straight to
 ; BLOB_ORG (C+TUT0 merge: same bank, the block ends <= BLOB_ORG, ASSERTed, so no
 ; overlap and no bounce copy). (2) The stubs (in_stub, a copy of tut_stub.asm DISP'd
-; at check_paging) go over check_paging (tape path only, dead now). (3) es_go :=
+; at check_paging) go over check_paging (tape path only, dead now), PKG5+FLY-CUT: after
+; tele_lri.asm + a pad over tape_tab (read in (1), dead now): one LDIR. (3) es_go :=
 ; ts_choice (enter_select offers the tutorial). The raw blob's tail (BLOB_ORG +
 ; BLOB_LEN .. $FFFF) is zeroed: bank 4 there == the .sna's on a tape boot too.
 ; Clobbers: A, BC, DE, HL (ovl_run gives the caller's bank back).
@@ -53,18 +54,18 @@ in_tut:         ld   a, BANK_BLOB              ; = BANK_BOOT4 (main.asm ASSERT)
                 inc  de
                 ld   bc, BLOB_TAIL - 1
                 ldir
-                ld   hl, in_stub
-                ld   de, check_paging
-                ld   bc, TUT_STUB_LEN
+                ld   hl, in_stub               ; PKG5+FLY-CUT: tele_lri + pad + the stubs, over tape_tab ..
+                ld   de, lri_base              ; (= tape_tab: dead now, read above)
+                ld   bc, LRI_LEN
                 ldir
                 ld   hl, ts_choice
                 ld   (es_go + 1), hl           ; SMC target (main.asm enter_select)
                 ret
 BLOB_TAIL       EQU $10000 - BLOB_ORG - BLOB_LEN  ; the zeroed tail (ASSERTed >= 8)
                 ASSERT BLOB_TAIL >= 8
-in_stub:                                       ; = tut_stub.asm as assembled at check_paging (main.asm)
-                DUP  TUT_STUB_LEN, tsi
-                DB   {b ovl_raw_stub + tsi}
+in_stub:                                       ; = main.asm's installed block as assembled at tape_tab
+                DUP  LRI_LEN, tsi                  ; (tele_lri.asm, pad, tut_stub.asm at check_paging)
+                DB   {b ovl_raw_lri + tsi}
                 EDUP
 
 in_flow:

@@ -241,8 +241,8 @@ QS_SLOT0        EQU 6               ; IC1 / UB5: icon-bar slot of FOOD, the SAME
 ; kit_add then sets FOOD_START.
 ;------------------------------------------------------------------------------
 FOOD_MAX        EQU 100
-FOOD_START      EQU 80
-FOOD_PERIOD     EQU 6
+FOOD_START      EQU 100             ; BALANCE-PKG5: was 80 (balance_v2 §8)
+FOOD_PERIOD     EQU 8               ; BALANCE-PKG5 F1: 1 food per 8 turns, was 6 (food must stop killing, §7a)
 FOOD_JUMP       EQU 2
 HS_FED          EQU 0               ; FOOD >= HS_OK_BELOW
 HS_OK           EQU 1

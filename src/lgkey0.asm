@@ -5,8 +5,8 @@
 ; Bank-0 B0_CODE2 (main.asm): entered only by FARB0 ksel from bank-3 attempt
 ; (levelgen.asm step 5b, after lgkey3.asm kprep). B0_CODE2 rules: no SMC, no
 ; runtime-written bytes here (state: GEN_SCRATCH, layout + the "why masks" notes in
-; lgkey3.asm), never pages $C000, calls nothing outside this file (tstb0 / pathm0 /
-; kbit0 are this bank's copies of lgkey3's, the same macros). Draws NO rnd.
+; lgkey3.asm), never pages $C000, calls nothing outside this file but low RAM (pathm0 is this
+; bank's copy of lgkey3's pathm, the same macro; kbit / tstb / kins are low-RAM lgkeyl.asm). Draws NO rnd.
 ;
 ; ksel   In : kprep's output; LG_CNT (= n), LVL_DEPTH, LVL_START, LVL_LAIR,
 ;             LG_PASS (0 = pass 1, else pass 2 = final).
@@ -22,13 +22,8 @@
 ; any, 3 = 1 lock any.
 ; Cost: ~3-6k T per tested set (worst ~40 sets a pass); ktree0 ~8k T a tree (contended data).
 ;==============================================================================
-kbit0:          DUP  12, k
-                DW   1 << k
-                EDUP
-                ASSERT (kbit0 >> 8) == ((kbit0 + 23) >> 8)
 kcmp_tab:       DB   KL_RND, KC_PI, KC_E                          ; colour order (rnd, pi, e)
-tstb0:          KTSTB kbit0
-pathm0:         KPATHM kbit0
+pathm0:         KPATHM kbit                                       ; (kbit / tstb: low RAM lgkeyl.asm, shared)
 
 ;------------------------------------------------------------------------------
 ; ktree0: A = source room (FARB0 via lgkey3 ktree). Its full BFS tree over RD_EXITS into KT_DIST / KT_PAR row
@@ -266,7 +261,7 @@ kcons:          push ix
                 ret  nc
                 ld   (hl), a
                 ret
-.bit:           call tstb0              ; A = room, HL = mask: D = 2 D + (room in mask)
+.bit:           call tstb               ; A = room, HL = mask: D = 2 D + (room in mask)
                 add  a, $FF
                 rl   d
                 ret
@@ -354,7 +349,7 @@ kcons:          push ix
 .x:             pop  ix
                 ret
 .lair:          ld   a, (LVL_LAIR)
-                jp   tstb0
+                jp   tstb
 .kc:            ld   a, (de)            ; DE -> colour 0's byte: it, then colour 1's
                 ld   (hl), a
                 inc  l

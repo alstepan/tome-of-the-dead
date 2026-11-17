@@ -14,7 +14,7 @@ PROTO room A, every monster parked unless placed:
   D   page DRINK (page_post): Heal at HP 10 -> 22, consumed, the line, L 1
   R   READ Enchant (GEAR3: a random worn weapon / armour / helmet): m +1,
       "ENCHANTED: <name>", consumed; no candidate (fists, +3): "NOTHING HAPPENS",
-      still consumed (tests/gear3.py has the target-choice vectors). Fear: the room's living monsters FEAR 6
+      still consumed (tests/gear3.py has the target-choice vectors). Fear: the room's living monsters FEAR 9 (BALANCE-PKG5)
       (MIND overwritten), a DYING one / another room untouched, "THEY FLEE IN
       TERROR!"; Sleep: ASLEEP 8 + the sleep flash, a FROZEN one skipped, "THEY
       FALL ASLEEP!"; empty room -> "NOTHING HAPPENS"; kinds immune by kx_tab skipped
@@ -300,9 +300,9 @@ def run(h, p, check):
     r = fx(S["FX_READ"], 0)
     want_f = [sl for sl in mons[:3] if not imm(sl) & (S["IMMF_FEAR"] | 0x80)]
     st = {sl: (p.rb(STF + sl), p.rb(ST1 + sl)) for sl in mons}
-    okf = all(st[sl] == ((S["MIND_FEAR"], 0x06) if sl in want_f else ((S["MIND_CONFUSED"], 3) if sl == mons[0]
+    okf = all(st[sl] == ((S["MIND_FEAR"], S["SCR_FEAR_T"]) if sl in want_f else ((S["MIND_CONFUSED"], 3) if sl == mons[0]
                                                                          else (0, 0))) for sl in mons)
-    check("R3 Fear: the room's living, non-immune monsters FEAR 6 (CONFUSED overwritten), the dying one / "
+    check("R3 Fear: the room's living, non-immune monsters FEAR SCR_FEAR_T = 9 (BALANCE-PKG5; was 6) (CONFUSED overwritten), the dying one / "
           "another room untouched; 'THEY FLEE IN TERROR!'",
           okf and r == 1 and lines == ["YOU READ THE FEAR SCROLL",
                                        "THEY FLEE IN TERROR!" if want_f else "NOTHING HAPPENS"], (st, want_f, lines))

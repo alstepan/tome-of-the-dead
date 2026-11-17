@@ -981,14 +981,14 @@ def _x2(*k4):
 
 
 # NEW-MON3 T9: the new_monsters.md §5 lists (slots 0..n-1 distinct, fallback order; n..7 duplicates = weight),
-# weights = the tuned preset tools/balance_nm3.json (user 2026-11-13). K_ALIAS = Imp on D4 / D6, Wraith D5 / D7 / D8.
+# weights = the tuned preset tools/balance_nm3.json (user 2026-11-13; BALANCE-PKG5: D3 Ghost 3 -> 2 / Goblin 1 -> 2, counts D4 / D6 / D7 25). K_ALIAS = Imp on D4 / D6, Wraith D5 / D7 / D8.
 LP_TAB = {1: (_x2("K_RAT", "K_BAT", "K_SLIME", "K_GOBLIN"), "K_BOSS_D1", 20),
           2: (_x2("K_GOBLIN", "K_SPIDER", "K_BAT", "K_RAT"), "K_BOSS_D2", 21),
-          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GHOST", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 21),
-          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 23),
+          3: (("K_SKELETON", "K_VAMPIRE", "K_GHOST", "K_BAT", "K_GOBLIN", "K_GOBLIN", "K_VAMPIRE", "K_GHOST"), "K_BOSS_D3", 21),
+          4: (("K_ORC", "K_RAT", "K_SPIDER", "K_ARCHER", "K_ALIAS", "K_ORC", "K_ARCHER", "K_RAT"), "K_BOSS_D4", 25),
           5: (("K_MUMMY", "K_SPIDER", "K_SKELETON", "K_ARCHER", "K_GARGOYLE", "K_ALIAS", "K_MUMMY", "K_ARCHER"), "K_BOSS_D5", 24),
-          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 23),
-          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 23),
+          6: (("K_VAMPIRE", "K_GARGOYLE", "K_ALIAS", "K_GHOST", "K_NECRO", "K_ORC", "K_VAMPIRE", "K_ORC"), "K_BOSS_D6", 25),
+          7: (("K_ORC", "K_GHOST", "K_NECRO", "K_ALIAS", "K_MUMMY", "K_SPIDER", "K_NECRO", "K_NECRO"), "K_BOSS_D7", 25),
           8: (("K_NECRO", "K_SKELETON", "K_GHOST", "K_VAMPIRE", "K_ORC", "K_ALIAS", "K_NECRO", "K_NECRO"), "K_BOSS_D8", 18)}
 NM3_B_DEPTHS = L["NM3_B_DEPTHS"]          # bit d-1: row 31 is the Frost Wraith on depth d (defs.asm)
 NM3_WR_HP = L["NM3_WR_HP"]

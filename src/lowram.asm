@@ -74,17 +74,12 @@ boot:
                 ld   iy, IY_SYSVAR             ; the tape path's ROM IM1 needs it (conventions)
                 ld   a, BANK_POOL0
                 call page_bank                 ; a valid shadow for farb's restore
-                ld   hl, boot6_init            ; IM 2 (EI below, once the shadow is
-                ld   c, BANK_BOOT6             ; valid) + the power-on state
-                call farb
-                ei
-                call build_bitrev
-                ld   hl, boot6_tiles           ; the common set, ornament, the panel hot
-                ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
-                call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
-                ld   hl, boot6_wait            ; the loading picture + title tune until a key,
-                ld   c, BANK_BOOT6             ; (INSTR-BUILD overlay): before the boot
-                call farb                      ; pool, which overwrites its bank-4 BOOT4 streams
+                ld   hl, boot6_init            ; one farb (PKG5+FLY-CUT reclaim, was 3 + EI / build_bitrev
+                ld   c, BANK_BOOT6             ; here): IM 2 + the power-on state, EI (the shadow is valid),
+                call farb                      ; BITREV_TAB, boot6_tiles (common set, ornament, the panel hot
+                                               ; code, FONT6 planes), boot6_wait (the loading picture + title
+                                               ; tune until a key, INSTR-BUILD overlay): all before the boot
+                                               ; pool, which overwrites the boot block + its bank-4 BOOT4 streams
                 ; 3F-T1: the boot pool is the two select idles only; the hero
                 ; (start_game) and each level's monster kinds (level_enter)
                 ; are generated above them later
@@ -106,7 +101,9 @@ gen_idles:
                 jp   gen_frame
 
 ; tape_tab — start's blocks: bank, address, length (main.asm TAPE_BLOCKS, the
-; one list the SAVETAPs expand too)
+; one list the SAVETAPs expand too). Dead once instr_ovl in_tut read it at boot:
+; PKG5+FLY-CUT reclaim, the boot-installed tele_lri.asm lives here then (main.asm
+; "LOW-RAM INSTALLED BLOCK"; tests must not use it as scratch)
 TT_STRIDE       EQU 5
 tape_tab:       TAPE_BLOCKS 0                  ; main.asm: the same list the SAVETAPs use
                 DB   $FF                       ; end (no bank is $FF: TAPE_BLK ASSERTs < 8)
@@ -1895,17 +1892,7 @@ present_full:
                 ld   a, P7FFD_SCREEN7
                 jr   set_screen
 
-;==============================================================================
-; init_kbd_mirror — all released.  Clobbers: A, B, HL
-;==============================================================================
-init_kbd_mirror:
-                ld   hl, KBD_MATRIX
-                ld   b, KBD_MATRIX_LEN
-                ld   a, KBD_RELEASED
-.r:             ld   (hl), a
-                inc  hl
-                djnz .r
-                ret
+; (init_kbd_mirror: inlined in boot6_init, PKG5+FLY-CUT reclaim; boot only)
 
 ;==============================================================================
 ; BOOT-TIME GENERATOR (prototype §5.1/§5.2). Per frame: get the unshifted
@@ -2001,18 +1988,7 @@ alloc:
                 or   a                         ; CF = 0
                 ret
 
-; build_bitrev — BITREV_TAB[i] = i with bit order reversed.  Boot, ~20k T
-build_bitrev:
-                ld   hl, BITREV_TAB
-.next:          ld   a, l
-                ld   bc, 8 << 8
-.bit:           rra
-                rl   c
-                djnz .bit
-                ld   (hl), c
-                inc  l
-                jr   nz, .next
-                ret
+; (build_bitrev: boot6_init, PKG5+FLY-CUT reclaim; boot only)
 
 ; copy_virt_keep (= copy_virt3, the B3B-11b name its bank-3 callers use) —
 ; copy_virt for code running from a paged bank (far3 / far1 targets: panel_boot
@@ -2635,6 +2611,7 @@ page_run:
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
                 INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
+                INCLUDE "dscl.asm"             ; BALANCE-PKG5: dsc_roll, the monster melee depth ramp (from bank-3 dmg_roll)
                 INCLUDE "flyl.asm"             ; FLY-CUT: fly_cut, a flyer's detour round a mid-block (bank-3 ai_flyer)
 
 ;------------------------------------------------------------------------------

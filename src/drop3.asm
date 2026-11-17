@@ -71,7 +71,10 @@ mon_drop:
                 ld   hl, it_line
                 jp   far1
 .row:           ld   hl, drop_row              ; 3F-T5: the row scan + drop_tab are R6 (tier6.asm; bank 3 had 10 B free)
-                jp   far6
+                call far6                      ; (far6 keeps IX: drop_row / drop_put keep it)
+                ld   hl, drop_any              ; BALANCE-PKG5: + the 8 % food drop on any non-boss kill (bank-0
+                ld   c, BANK_TEXT              ; drop0.asm: FARB0 as a tail jump)
+                jp   farb
 
 ; uniq_tab (§8.6 / §8.11: 8 B): D1..D7 by depth - 1, then the D4 Mage variant
 uniq_tab:       DB   IT_H_KING, IT_A_SILK, IT_A_GRAVE, IT_W_CLEAVER

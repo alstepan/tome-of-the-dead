@@ -128,7 +128,7 @@ MELEE3F = {
 
 def kx_melee(k, sym):
     if k == 5:
-        return [TYPES.index("DRAIN") | sym["EFX_CONFUSED"] << sym["DH_EFX_SHIFT"], 4 << 4 | 4]
+        return [TYPES.index("DRAIN") | sym["EFX_CONFUSED"] << sym["DH_EFX_SHIFT"], 8 << 4 | 4]   # BALANCE-PKG5 §6 A: 1 in 8 (was 4)
     if k in MELEE3F:
         dty, efx, ch, tn = MELEE3F[k]
         v = TYPES.index(dty.split("|")[0]) if dty.split("|")[0] in TYPES else 0
@@ -151,8 +151,8 @@ STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, ev
 # Power Strike: die = multiplier code (0/1/2 = x2 / x2.5 / x3), bounces = extra to-hit (+2 base in ab_def).
 RANKS = {
     "Spark":     [(2, 6, 4, 1, 0, 0x44), (4, 9, 8, 2, 0, 0x44), (6, 10, 8, 4, 0, 0x24)],
-    "Firebolt":  [(5, 8, 8, 0, 0, 3), (6, 8, 8, 2, 0, 3), (10, 10, 10, 4, 0, 0x85)],
-    "Frost":     [(3, 10, 6, 1, 1, 2), (5, 10, 8, 2, 2, 3), (7, 12, 8, 4, 2, 4)],
+    "Firebolt":  [(5, 8, 8, -1 & 0xFF, 0, 3), (6, 8, 8, 1, 0, 3), (10, 10, 10, 3, 0, 0x85)],   # BALANCE-PKG5: bonus -1 a rank (r1 -1 = $FF, signed)
+    "Frost":     [(3, 10, 6, 1, 1, 2), (5, 10, 8, 1, 2, 3), (7, 12, 8, 3, 2, 4)],               # BALANCE-PKG5: r2 / r3 bonus -1
     "Drain":     [(3, 6, 6, 2, 0, 0), (5, 8, 8, 3, 0, 0), (7, 8, 8, 6, 0, 0)],
     "Lightning": [(5, 16, 8, 4, 1, 0), (8, 16, 8, 7, 1, 0), (11, 20, 10, 9, 2, 0)],
     "Power":     [(2, 1, 0, 0, 0, 1), (3, 1, 1, 0, 1, 1), (4, 1, 2, 0, 2, 2)],

@@ -182,7 +182,7 @@ def run(h, p, check):
     scene(K_WIZARD, hp=20, mp=5, maxmp=12)
     kill(54)
     st = hero_stats()
-    check("G2 Mage: L2, HP 20/20 -> 22/22, MP 5/12 -> 7/14", st == (2, 22, 22, 7, 14), st)   # BALANCE-PKG4: +2 (was +3)
+    check("G2 Mage: L2, HP 20/20 -> 24/24, MP 5/12 -> 7/14", st == (2, 24, 24, 7, 14) and S["LUP_M_HP"] == 4, st)   # BALANCE-PKG5: +4 (PKG4 +2, was +3)
 
     # ======================= S: steps, multi-level, cap, reset ===================
     scene(K_KNIGHT, hp=30, mp=0, maxmp=6)
@@ -205,7 +205,7 @@ def run(h, p, check):
 
     # ======================= M: MP regen ==========================================
     # B20 (game.md 4.0): Mage period 6; gain = 1 + MAXMP div 16 (MAXMP 16 -> +2), clamped
-    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 28, 2), (K_WIZARD, 28, 16)):   # MP_PER in quarter-turns, +4 a turn (Mage 7, BALANCE-PKG4; 5 in package 3)
+    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 36, 2), (K_WIZARD, 36, 16)):   # MP_PER in quarter-turns, +4 a turn (Mage 9, BALANCE-PKG5; 7 in PKG4, 5 in package 3)
         gain = 1 + (mx >> 4)
         scene(hero, mp=0, maxmp=mx)
         got = []
@@ -220,9 +220,9 @@ def run(h, p, check):
     # B20 clamp: MP + gain never overshoots MAXMP (MAXMP 17 gain 2; MAXMP 99 gain 7)
     for mx, mp0, want in ((17, 16, 17), (99, 98, 99)):
         scene(K_WIZARD, mp=mp0, maxmp=mx)
-        for i in range(7):
+        for i in range(9):
             p.turn("WAIT")
-        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 7th turn (no overshoot)",
+        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 9th turn (no overshoot; BALANCE-PKG5 Mage 9)",
               p.rb("MP") == want, p.rb("MP"))
     scene(K_WIZARD, mp=0, maxmp=12)
     p.wb(S["ST_FLAGS"], S["STS_WEAK"])

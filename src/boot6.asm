@@ -12,11 +12,11 @@
 ;
 ; Rules: bank 6 stays paged while this code runs (farb), so the data is read
 ; in place (no copy_virt / GEN_SRC staging) and the callees must not page
-; $C000 (clear_screen, init_kbd_mirror: bank 5 low RAM, they page nothing).
-;   boot6_init   boot, under DI: IM 2 install + the power-on state
-;   boot6_tiles  boot: common tiles + ornament, HOT_COPY image, planar FONT6
+; $C000 (clear_screen: bank 5 low RAM, pages nothing).
+;   boot6_init   boot, under DI: IM 2 install + the power-on state, EI, BITREV_TAB; falls into
+;   boot6_tiles  common tiles + ornament, HOT_COPY image, planar FONT6
 ;                (RECLAIM-D: the MEM-FT frame_tab -> FRT step is instr_ovl.asm in_ft)
-;   boot6_wait   boot: the picture's key wait + D0 set-up (INSTR-BUILD overlay, bank-4 BOOT4 stream)
+;   boot6_wait   then the picture's key wait + D0 set-up (INSTR-BUILD overlay, bank-4 BOOT4 stream)
 ; Was: low RAM (isr_install, isr_image, boot's state init, keytab_defaults)
 ; and bank 7 (init_tiles, panel_boot) + bank-1 vdata (tiles_common, orn_glyphs,
 ; panel_hot_img, font6x8).
@@ -27,10 +27,11 @@
 ; isr_install): fill the 257-B vector table (every byte ISR_VEC_BYTE, so
 ; whatever the floating bus puts on the data bus the CPU fetches ISR_ADDR),
 ; copy the ISR image to ISR_ADDR, I = the table page, IM 2; then the power-on
-; state (was inline in boot). Interrupts stay disabled: boot's EI comes after
-; (PORT_7FFD_SHADOW is valid: boot paged BANK_POOL0 before the farb).
+; state (was inline in boot), then EI, BITREV_TAB, and it falls into boot6_tiles ->
+; boot6_wait (PKG5+FLY-CUT reclaim: one farb from boot; PORT_7FFD_SHADOW is valid:
+; boot paged BANK_POOL0 before the farb, farb wrote BANK_BOOT6).
 ; Placement + protocol: docs/memory-map.md "Interrupts (A8)".
-; Clobbers: A, BC, DE, HL.   ~6.8k T (IM 2) + ~33k T (clear_screen etc.)
+; Clobbers: all but IX, IY (the chain ends in boot6_wait).   ~6.8k T (IM 2) + ~33k T + bitrev ~20k T + boot6_tiles + the overlay
 ;------------------------------------------------------------------------------
 boot6_init:
                 ld   hl, ISR_VEC_TABLE
@@ -110,7 +111,12 @@ boot6_init:
                 ld   (hl), $FF
                 ldir
     ENDIF
-                call init_kbd_mirror
+                ld   hl, KBD_MATRIX            ; (was init_kbd_mirror, low RAM: inlined, its only caller)
+                ld   b, KBD_MATRIX_LEN         ; all released
+                ld   a, KBD_RELEASED
+.km:            ld   (hl), a
+                inc  hl
+                djnz .km
                 ld   hl, keytab_defaults       ; C3-1: Q / A / O / P / SPACE
                 ld   de, KEYTAB
                 ld   bc, KEYTAB_N * KEYTAB_STRIDE
@@ -130,10 +136,23 @@ boot6_init:
 .dk:            ld   (hl), $FF
                 inc  l
                 djnz .dk
-                ret
+                ; PKG5+FLY-CUT reclaim: boot's one farb runs the whole boot block, in boot's old order:
+                ; EI, build_bitrev, boot6_tiles, boot6_wait (were EI + call build_bitrev + 2 farbs in low RAM)
+                ei                             ; the shadow is valid (farb wrote it): the ISR restores bank 6
+; build_bitrev (was low RAM) — BITREV_TAB[i] = i with bit order reversed (bank 5, any $C000 bank). ~20k T
+                ld   hl, BITREV_TAB
+.br:            ld   a, l
+                ld   bc, 8 << 8
+.bit:           rra
+                rl   c
+                djnz .bit
+                ld   (hl), c
+                inc  l
+                jr   nz, .br
+                ; fall through
 
 ;------------------------------------------------------------------------------
-; boot6_tiles — farb from boot (after EI). The common tile set ids 0..31
+; boot6_tiles — boot6_init falls into it (after EI). The common tile set ids 0..31
 ; (B3B-2 tiles_common: glyphs + depth-1 attrs; level_load_tiles re-themes the
 ; floor / wall ids per level) into TILE_GLYPHS / TILE_ATTRS, the row-17
 ; ornament into ORN_GLYPHS, the panel hot image into HOT_COPY, then the planar
@@ -178,11 +197,10 @@ boot6_tiles:
                 ld   a, c
                 cp   FONT6_FIRST + FONT6X8_COUNT
                 jr   nz, .ch
-                ret                            ; RECLAIM-D: boot6_ft (frame_tab -> the FRT rows)
-                                               ; is instr_ovl.asm in_ft now (its stream: bank 0)
+                ; fall through (PKG5+FLY-CUT reclaim; RECLAIM-D: boot6_ft is instr_ovl.asm in_ft now)
 
 ;------------------------------------------------------------------------------
-; boot6_wait — farb from boot after boot6_tiles, BEFORE the boot pool: the
+; boot6_wait — boot6_tiles falls into it, BEFORE the boot pool: the
 ; INSTR-BUILD overlay (instr_ovl.asm, unpacked from the bank-4 BOOT4 block into GEN_SCRATCH):
 ; the loading picture (L3d SCREEN$, still on the bank-5 screen) + "PRESS ANY
 ; KEY" with the title tune until a key (BOOT-ANYKEY, GS_ANYKEY; ITEM-INFO: no
