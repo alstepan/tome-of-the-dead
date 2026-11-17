@@ -7559,3 +7559,34 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
   first, `first_lines` B14 order, C27 + the digit operand, C28 label, `dec()` skips the mark, `TUT0_SCEN=name,...` runs a subset.
   tests/tut0_level.py: 6 floor entries. PNGs: `build/tut_key_floor.png`, `tut_key_locked.png`, `tut_key_unlocked.png`,
   `tut_last_line.png`.
+
+## DECOR2 ledger (`feat/decor2`, 2026-11-17; decor_rules2.md P1 + P2, model `tools/decorgen2.py` at `82f0a93`)
+
+**Status: a `-DDECOR2=1` TEST build. The shipped build (`DECOR2` 0, default) assembles the old deriver unchanged
+(`src/decor_gen1.asm` = the former `decor_gen.asm`, `dg_bad0.asm`, the old `dg_vars`): memory decision pending.**
+- **Code.** `src/decor_gen.asm` = the DECOR2 deriver (planner + executor, entry `decor_b0`, same contract: FARB0 from the
+  bank-3 `decor_room` stub, A = `dg_dst`, IX = descriptor). Exact port of `decorgen2.decorate` (same RNG stream): world.py
+  W13 on the DECOR2 build = ROOM_MAP + ANIM_LIST + the NEXT_MAP builds byte-identical on its 131 rooms and the 86 synthetic
+  maps through the Z80, plus 177 more rooms of 16 levels (scratch check). Levels with `LVL_KEYROOM` = `ROOM_NONE` (D0
+  tutorial, PROTO) keep the old algorithm inside it (the legacy path: records 0..7, `tools/decorgen.py`), so D0's searched
+  `RD_SEED`s stay valid. `main.asm` INCLUDEs one of the two files by `DECOR2`; `lowram.asm` assembles the matching `dg_vars`.
+- **Bytes (DECOR2 build).** `B0_CODE2` **+2,771 B** (deriver + tables 1,246 -> ~4,017; roughly P1 ~400 B, P2 ~2,370 B: the
+  composition planner, focal / face / span queries, pools, anchored patches, chain cluster, moss sweep, no-empty-storey);
+  `dg_vars` 30 -> 75 B (low-RAM spare 66 -> 22); `DG_PLAN` `$6EB0..$6EBF` = the row-3 run list of one storey (cached by
+  `dg_scs`); its own 64-B lookup `src/dg_bad2.asm` (`tools/decorgen2.py --asm-bad`: bit 0 decor, bit 1 ladder / hole, bit 2
+  air-like; the ring ANDs `dg_rmask` 3 / `RB_LAD` 2). `B0_CODE2` had **31 B free** (not the 980 B of the F2 entry: LARGER-D
+  T4 / T5 and later took it), so `defs.asm` `DG2_RES` (2,756) raises `B0_FREE_RES` / `POOL_START` (`$EFBE` -> `$FA82`) in
+  the DECOR2 build: POOL_CAP 22,594 -> 19,838, the level pool simulation no longer fits (straddle cliff) and the D0 tutorial
+  pool would run into `BLOB_ORG`. Hence TEST build: `-DDECOR2=1 -DPOOL_LVL_CHECK=0`, the D0 pool ASSERT is waived under
+  `DECOR2`, tut0 cannot run on it. The whole pool slack (2,320 B) is less than the cost: shipping needs a reclaim of
+  >= ~1.8 KB elsewhere (to keep ~1 KB pool slack) or a smaller rule set.
+- **Room build time** (decor_room only = build with RD_SEED minus build without, DI): 177 rooms of 16 levels (D1..D8 x 2):
+  old mean 74.1k / worst 104.6k T -> DECOR2 mean 99.9k / worst 161.9k T (+25.8k mean); W13's 10-room profile: 68.0k..106.2k
+  (mean 85.1k) -> 80.5k..119.7k (mean 98.6k).
+  Profile of the worst room (D1): `dg_ring` / `dg_chk` ~35k, the anchored patches ~50k (face walk + the 8-try fallback),
+  fill ~41k, `dg_rnd` ~29k (102 draws). Groups are checked then written (no map snapshot); the moss strip uses one row sweep
+  (`dg_msw`, ~0.3k T a col) instead of ~27 `dg_chk` calls; `dg_rnd`'s mod subtracts 8n first (<= ~19 steps, was <= 85).
+- **Tests.** `tests/room_model.py` follows the build (`.sym` `DG2_ON`): DECOR2 build -> decorgen2 unless keyless; shipped ->
+  decorgen. world.py W13's independent checker accepts the DECOR2 rules in a DECOR2 build (moss strips, cobweb cap 3, a pool
+  touching its light, the patch best-effort: the model leaves 1 of the sweep's 7,899 rooms without one); its synthetic maps
+  use the build's model.

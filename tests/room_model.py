@@ -188,7 +188,10 @@ def expected_cell(rmap, glyphs, attrs, orn, ink, c, r, logical_col=None):
     return bytes(g), attrs[t]
 
 
-DECOR2 = False                   # module default of render_room(decor2=): the DECOR2 model instead of decorgen
+DECOR2 = None                    # module default of render_room(decor2=): None = the build's rule: a -DDECOR2=1
+                                 # build (.sym DG2_ON, src/decor_gen.asm) runs DECOR2 (tools/decorgen2.py) unless the
+                                 # level has no key room (LVL_KEYROOM = ROOM_NONE: D0 / PROTO keep tools/decorgen.py);
+                                 # the shipped build runs decorgen.py; True / False force one deriver
 
 
 def room_role(blk, r):
@@ -299,7 +302,10 @@ def render_room(blk, r, decor=True, anim=None, decor2=None):
         for name, c, row in PROTO_DECOR.get(r, []):
             flat[row * COLS + c] = T[name]
     elif decor:
-        if DECOR2 if decor2 is None else decor2:
+        use2 = DECOR2 if decor2 is None else decor2
+        if use2 is None:
+            use2 = S.get("DG2_ON", 0) and blk[S["LVL_KEYROOM"] - BASE] != S["ROOM_NONE"]
+        if use2:
             flat, al, _objs = decorgen2.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed, True, room_role(blk, r))
         else:
             flat, al = decorgen.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed)

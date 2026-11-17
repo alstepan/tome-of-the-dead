@@ -256,8 +256,22 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; ledger"): append files to B0_CODE2 — no reserve to move, POOL_START (so the pool) unchanged.
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
+; DECOR2 (decor_rules2.md P1 + P2, src/decor_gen.asm): -DDECOR2=1 assembles the new deriver instead of the
+; shipped B3B-9 one (src/decor_gen1.asm). It is +DG2_RES B of B0_CODE2, which only the pool can give
+; (B0_CODE2 had 31 B free): a DECOR2=1 build raises POOL_START by DG2_RES and is a TEST build until
+; that memory decision (the level pool need exceeds POOL_CAP: -DPOOL_LVL_CHECK=0; the D0 tutorial's
+; pool would run into the blob: tut0 cannot run on it). Memory-map "DECOR2 ledger".
+    IFNDEF DECOR2
+DECOR2          EQU 0
+    ENDIF
+    IF DECOR2
+DG2_RES         EQU 2756
+    ELSE
+DG2_RES         EQU 0
+    ENDIF
+DG2_ON          EQU DECOR2                     ; test-observable (.sym): tests/room_model.py picks the model by it
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
-B0_FREE_RES     EQU 8408 - 16 - 32             ; 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
+B0_FREE_RES     EQU 8408 - 16 - 32 + DG2_RES      ; 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
                                                ; (3,200 B back to the pool; = $EFBE - B0_FREE_START $CEE6 after ITEM-INFO's -350). $F03E
                                                ; itself (X = 3,072) puts the bank-0 -> 4 straddle
                                                ; inside the hero session at 194 B waste (Mage 114): every level need +192 / +112, slack

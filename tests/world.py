@@ -369,6 +369,8 @@ def decor_objs(d):
             return {r0 * 32 + c0: comp_ids[0], r0 * 32 + c0 + 1: comp_ids[1], (r0 + 1) * 32 + c0: comp_ids[2]}
         if nm is None:
             return None
+        if nm == "MOSS" and S.get("DG2_ON", 0) and len(comp) in (2, 3):   # DECOR2 R2: a 2- / 3-cell tiled strip
+            return {r0 * 32 + c0 + k: i for k in range(len(comp))}
         return {(r0 + r) * 32 + c0 + c: v for (r, c), v in objs[nm].items()}
     return names, shape
 
@@ -422,7 +424,10 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
                 rr, cc = row + dr, c + dc
                 if 0 <= rr < 18 and 0 <= cc < 32 and base[rr * 32 + cc] in lad:
                     errs.append(("decor adjacent to a ladder", c, row))
-    # components (8-connected): one whole object each, by class
+    # components (8-connected): one whole object each, by class. DECOR2 (a -DDECOR2=1 build): a light pool
+    # may touch its own light (R6), so the components are taken per object name there.
+    dg2 = S.get("DG2_ON", 0)
+    wgrp = lambda nm: "WALL" if nm.startswith("WALL_") else nm     # noqa: E731  (the 3-cell composite = one)
     cells = {j for j in ch if m[j] not in drip and m[j] in names}
     seen, ncob, npatch_cells, npatch = set(), 0, 0, 0
     for j0 in sorted(cells):
@@ -431,7 +436,7 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
         comp, stack = set(), [j0]
         while stack:
             x = stack.pop()
-            if x in comp or x not in cells:
+            if x in comp or x not in cells or (dg2 and wgrp(names[m[x]]) != wgrp(names[m[j0]])):
                 continue
             comp.add(x)
             for dr in (-1, 0, 1):
@@ -477,12 +482,12 @@ def decor_rules(m, base, flags, al, d, sizes, need_patch=True):
             above = base[(r0 - 1) * 32 + c0] if r0 else None
             if top != 0 or not (ok_l or ok_r) or (above is not None and not floorish(above)):
                 errs.append(("cobweb outside a corner (row 0, brick column in rows 0..2, ceiling above)", c0, r0))
-    if ncob > 2:
+    if ncob > (3 if dg2 else 2):                    # DECOR2 R7: cap 3 in a DARK room
         errs.append(("more than 2 cobwebs", ncob))
     wall_cap = {2: 13}.get(d, 6)          # D2-DECOR: D2's wall-class budget is 13 (dg_wmax_tab), 6 elsewhere
     if npatch_cells > wall_cap:
         errs.append((f"more than {wall_cap} patch / pillar cells", npatch_cells))
-    if need_patch and not npatch:
+    if need_patch and not npatch and not dg2:     # DECOR2: best effort (decorgen2: no pool -> anchored, then the 8 tries)
         errs.append(("no back-wall patch in the room (>= 1 guaranteed)",))
     n = len(al) // 4
     ents = [al[k:k + 4] for k in range(0, len(al), 4)]
@@ -2945,7 +2950,10 @@ def run_gen_suites(p, check):
                 row = 9 * rng.randint(0, 1) + rng.randint(0, 6)
                 base[row * 32 + rng.randint(1, 30)] = rng.choice(struct)
             rs = room_model.desc(blk, r)[S["RD_SEED"]] | room_model.desc(blk, r)[S["RD_SEED"] + 1] << 8
-            m, al = room_model.decorgen.decorate(base, d, rs)
+            if S.get("DG2_ON", 0):                     # a -DDECOR2=1 build: the DECOR2 model (src/decor_gen.asm)
+                m, al, _objs = room_model.decorgen2.decorate(base, d, rs, True, room_model.room_role(blk, r))
+            else:
+                m, al = room_model.decorgen.decorate(base, d, rs)
             nsyn += 1
             fl = depth_flags(p, d)
             e = decor_rules(m, base, fl, al, d, {"wall": 0, "air": 0, "anim": 0, "large": 0}, need_patch=False)

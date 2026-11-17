@@ -563,3 +563,12 @@ anchored 57.4 %, near-dup rooms 0, decor cells 23.8 -> 28.3 per room (D2 22.8 vs
 lair framed 91 %. Z80 estimate in `B0_CODE2` (980 B free): P1 ~ +56 B code - 6 B data - 15..17 B reclaim = ~ +35 B
 net; P2 ~ 280-340 B planner + ~35 B executor + ~40 B no-empty-storey + 1 B D2 bonus = **~360-420 B**.
 Previews regenerated under `build/decor2/` (git-ignored; `tools/decor_preview.py build/decor2`).
+
+### 5c. Z80 port (DECOR2-2/3, `feat/decor2`, 2026-11-17)
+`src/decor_gen.asm` is an exact port of `decorgen2.decorate` (same RNG stream; W13 byte-compares 131 rooms + 86 synthetic
+maps, a scratch check 177 more), behind `-DDECOR2=1`; keyless levels (D0, PROTO) keep the old deriver inside it, so the
+metrics are the model's (60 seeds x D1..D8: anchored 57.7 %, empty storeys 0, near-duplicate rooms 0). **Cost vs §3 /
+§5b's estimate:** `B0_CODE2` +2,771 B (estimate P1 ~+35, P2 360-420) and 45 B more low-RAM state; and `B0_CODE2` had 31 B
+free, not 980. The pool's whole slack (2,320 B) cannot pay it, so the default build still ships the old deriver until a
+memory decision (memory-map "DECOR2 ledger"). Room build (177 rooms): mean 74.1k -> 99.9k T, worst 104.6k -> 161.9k T
+(the §3 gate was <= 135k worst).
