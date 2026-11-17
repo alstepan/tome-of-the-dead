@@ -99,7 +99,8 @@ def rank_row(abl, rank):
     """(range, die, bonus, bounces, effect) of ability abl at rank 1..3."""
     if abl in (DAGGER, BOW):
         return CT.AMMO[abl - DAGGER][1:]
-    return CT.RANKS[RANK_KEYS[abl]][rank - 1][1:]
+    r = CT.RANKS[RANK_KEYS[abl]][rank - 1][1:]
+    return r[:2] + (r[2] - 256 if r[2] >= 128 else r[2],) + r[3:]   # RK_BONUS signed (BALANCE-PKG5 Firebolt r1 -1)
 
 
 def row_addr(abl, rank):
@@ -164,7 +165,11 @@ def drop_roll(rng, T, hero):
     n = DROP_N.get(T.kind)
     if n is None and T.kind == K_ARCHER and (hero is None or hero.kind == K_KNIGHT):
         n = 2
-    return None if n is None else rng.mod(n) == 0
+    got = None if n is None else rng.mod(n) == 0
+    if rng.mod(25) < 2:                     # BALANCE-PKG5 drop0.asm drop_any: 8 % food after the kind row
+        rng.mod(5)
+        got = True
+    return got
 
 
 # ---- the model -----------------------------------------------------------------
@@ -647,7 +652,7 @@ def main():
                     if rx is None:
                         break                            # one open-corridor run per seed set
                     if rx is not None and hit_expected and d["flags"] & SPELLF:
-                        if res["tgt"] != 1 or not (1 + bonus <= res["lost"] <= die + bonus):
+                        if res["tgt"] != 1 or not (max(1, 1 + bonus) <= res["lost"] <= die + bonus):
                             table_bad.append(("spell must hit in range", ABL_NAMES[abl], rank, res["tgt"], res["lost"]))
                     if not hit_expected and res["tgt"] != NONE and not d["flags"] & PIERCEF:
                         table_bad.append(("out of range struck", ABL_NAMES[abl], rank))
@@ -671,8 +676,8 @@ def main():
                 if bad:
                     spread_bad.append((ABL_NAMES[abl], rank, bad))
                 seen.add(res["lost"])
-            if min(seen) != 1 + bonus or max(seen) != die + bonus:
-                spread_bad.append((ABL_NAMES[abl], rank, sorted(seen), (1 + bonus, die + bonus)))
+            if min(seen) != max(1, 1 + bonus) or max(seen) != die + bonus:      # a 0 roll hurts 1
+                spread_bad.append((ABL_NAMES[abl], rank, sorted(seen), (max(1, 1 + bonus), die + bonus)))
         check("P1 spell damage 1dN + bonus spans [1 + bonus, N + bonus] over 40 seeds (every spell rank)",
               not spread_bad, spread_bad[:4])
 
@@ -707,7 +712,7 @@ def main():
         case("P2 Drain on Rat: caster heals the HP lost", w, DRAINL, 1,
                  must=lambda res, w: w.bodies[0].hp == 100 + res["lost"] and res["lost"] >= 2)
         case("P2 Firebolt on Slime (W)", two(K_SLIME, FIREBOLT), FIREBOLT, 1,
-                 must=lambda res, w: res["lost"] >= 2 and res["lost"] % 2 == 0)   # BAL-1 FINAL B: Firebolt I is 1d8 +0, doubled
+                 must=lambda res, w: res["lost"] == 1 or (res["lost"] >= 2 and res["lost"] % 2 == 0))   # BALANCE-PKG5: Firebolt I 1d8-1, doubled; a 0 roll hurts 1
         case("P2 bow on Ghost (PHYS R)", two(K_GHOST, BOW), BOW, 1, seed=0x5A5A)
         case("P2 Spark confuses 1 in 4 (Goblin)", two(K_GOBLIN, SPARK), SPARK, 3, seed=0x4321)
         conf = 0

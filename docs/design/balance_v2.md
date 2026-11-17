@@ -296,7 +296,7 @@ average is back in band. Report the death-by-depth row, top 5 killers, the 7a fo
 Docs to sync on adoption: game.md §7 hunger period, §8 scroll pool + Fear 6 → 9 + Teleport landing, §8.5 food/scroll counts and the
 D2 guarantee, §6.4 FEAR row, §9.4 counts, §9.5 `RESPAWN_MAX`; larger_depths.md §3.
 
-## 8. Package 5 final: sim results and constant-to-asm map (junior sweep, 2026-11-17; nothing built)
+## 8. Package 5 final: sim results and constant-to-asm map (junior sweep, 2026-11-17; BUILT as BALANCE-PKG5, see the end of this section)
 
 Final combo = `tools/balance_pkg5_final.json` (run: `--ld-pkg4 --overrides tools/balance_pkg5_final.json --set param.PICKUP=0.75`).
 It is the §7 ladder (F1, A, C1–C4, M1) plus a damage ramp, a food shift from the floor to monster drops, and a Mage tune.
@@ -348,3 +348,25 @@ the next lever to try is a Mage-only spell MP cost, not HP or regen.
 | RESPAWN_MAX_D4 | not used in the final | – |
 
 Docs to sync on adoption: game.md §7 hunger period, §8 scrolls / Teleport / Fear 9, §8.5 counts and the D2 guarantee, §9.4 counts and the D3 row, §11 Ghost row, §4.1 level-up HP.
+
+**As built (BALANCE-PKG5, `feat/balance-pkg5`, 2026-11-17; memory-map "BALANCE-PKG5 ledger").** Every row above is in the asm
+with the sim's semantics, with these notes:
+- `MON_DMG_SCALE_D`: option (b), per hit, exact. Bank-3 `dmg_roll` calls low-RAM `dsc_roll` (`src/dscl.asm`) for a monster
+  attacker: die N and bonus B each become `(32 + x · w) >> 6` with w = s × 64 per depth (64 64 64 122 109 166 179 192 192 for
+  LVL_DEPTH 0..8), which equals the sim's `int(x · s + 0.5)` for every x in 0..15 (checked in Python; KT_DIE ≤ 10,
+  KT_BONUS ≤ 3). Golden +1 and SLAM ×1.5 after it (atk_mod), as the sim. 47 B low RAM + 7 B bank 3; ~0.3–0.7k T a monster
+  melee roll. No model deviation.
+- `DROP_ALL_P`: bank-0 `drop_any` (`src/drop0.asm`), after the kind's drop row: `rng_mod(25) < 2` (8 % exact), food
+  `rnd(5)`. EF_RESPAWN bodies (and so every summon) and the lair boss never roll; a same-kind escort of a boss does (the sim's
+  `m.boss` excludes it; negligible).
+- C1: `tp_safe` (HOT_COPY `src/tele_hot.asm`) — pass 1 takes rooms whose LP record header is exactly `LR_VISITED` (visited, 0
+  banked residents); no such room with a free spot → the old rule. "≥ 6 cols from any body" holds trivially (no body).
+- C2 / C3: `items_ovl.asm` `ig_grp`: scroll type `max(0, rnd(8) − 1) >> 1`; on D2 the LAST scroll is forced to Teleport if
+  none came before (the sim forces `scr[0]`: the same distribution for i.i.d. types). A dropped (unplaceable) scroll can take
+  the guarantee with it (rare; the sim has no placement).
+- M1: D4 / D6 / D7 25, **D5 kept 24** (manager: keep the cap). `LP_N_MAX` 24 → 25: the split places count − 2 units (boss +
+  escort in the lair), so 25 leaves 23 for the 8 × 3 = 24 slots of the smallest room set; 26 would also fit (24 = 24, zero
+  slack) but is not taken. tools/levelcheck.py LP waits 14.5 % → 15.05 % (gate 15 % → 16 %).
+- Firebolt r1 bonus −1 is signed in `ab_rank` (`$FF`); a 0 roll hurts 1 (deal_hit), and the sim now floors a spell's final
+  damage at 1 the same way (`strike`) and reads RK_BONUS signed.
+

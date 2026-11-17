@@ -189,6 +189,8 @@ unchanged; the mana-amulet player measured 63.7 % (amulet granted from D2, optim
 **Sim evidence** (10k x 2 seeds, package 2): W 43.1 / M 42.7, gap 0.4; monsters met per run 162/187 (today 111/113);
 run length ~5,565/6,248 turns; BSIM1 ok (+30 HP Mage 50.5 %).
 
+**Package 5 (BALANCE-PKG5, built for the playtest; user-approved 2026-11-17; `balance_v2.md` §6–§8):** hunger −1 / 8 turns and start food 100, floor food 3–4 + an 8 % food drop on any non-boss kill, scrolls 2–3 weighted (Teleport 3 / Fear 2 / Sleep 2 / Enchant 1) with ≥ 1 Teleport on D2, safe Teleport landing, Fear 9, D3 Ghost 2 / Goblin 2 slots and Ghost confuse 1 in 8, monsters D4 / D6 / D7 25 (D5 24: the cap), monster melee damage ×1.9 / 1.7 / 2.6 / 2.8 / 3.0 / 3.0 on D3–D8, Mage MP 9 turns / level-up HP +4 / Firebolt and Frost bonus −1. Package 4's food 3–5 and Mage 7 / +2 below are history.
+
 **Package 4 (BALANCE-PKG4, shipped; user 2026-11-16; `balance_v2.md` §5):** FED regen 16 turns (was 12), floor food 3–5 (was 4–5), time respawn trickle back on D1–D8 at ⅓ rate (48 turns, chance 32/256; shared cap 6), Mage MP 7 turns (was 5), level-up HP W +6 / M +2 (was +5 / +3), Scarab MP regen ×1.6 (was ×2), resist rows (Vampire FIRE N; Ghost / Poltergeist / Archmage SHOCK R; Gargoyle FIRE R COLD N; Necromancer / Bone Caller COLD N), Firebolt burst 1d3 / 1d3 / 1d5. Sim (`--ld-pkg4`, 10k × 2): average W 20.6 / M 25.2, best expert W 34.3 / M 28.2. The package-3 lines below, and the §3 table values for the changed knobs (food 4–5, Mage 5, FED 12), are **history**.
 
 **Package 3 (shipped; user 2026-11-15: target 20–30 %, even W/M):** monsters 20/21/21/23/24/23/23/18, `XP_NEXT`

@@ -7594,3 +7594,44 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
   never picked up -> L76 in C); beat numbers shifted (B9G = 10). tests/tut0_level.py: 7 floor entries + TUT0_GEAR_FL.
   PNGs `build/tut_gear_{floor,page,worn}_{w,m}.png`.
 
+
+## BALANCE-PKG5 ledger (`feat/balance-pkg5`, 2026-11-17; `balance_v2.md` §6–§8, user-approved playtest build)
+
+No fixed runtime address moved except the low-RAM cold block's base (it grows downwards: `lowram_code` `$7009` -> **`$6FC8`**,
+so `boot` / `gen_idles` / the TUT0 boot stubs (`ts_choice`.., now `$7065`) shift -65; tests read them from the `.sym`).
+Release build (`-DDEBUG_KIT=0`), delta vs main 75f26ba:
+
+| Region | Before -> after (free) | What |
+|---|---|---|
+| Low-RAM cold block | spare 66 -> **1** | `src/dscl.asm`: `dsc_roll` 38 B + `dsc_tab` 9 B (the monster melee depth ramp, called by bank-3 `dmg_roll`), `tp_ok` 18 B (moved verbatim from R6 `fx6.asm` to pay C1) |
+| HOT_COPY | spare 23 -> **2** | `src/tele_hot.asm` (in the `panel_hot.asm` image): `tp_safe` 20 B + `tp_msk` 1 B (C1's room filter); its load image in the boot block (bank 6 `$C040` -> `$C02B`, dead after boot) |
+| `B0_CODE2` | free 31 -> **15** | `src/drop0.asm` `drop_any` 24 B (the 8 % food drop); **`TEXT_RES` -8 / `B0_FREE_RES` +8** (`B0_FREE_START` `$CF16` -> `$CF0E`, `POOL_START` `$EFBE` kept): the `-DANIM_TRACE_ON=1` test build's `B0_CODE2` (19 B free on main) needs it (2 B free now). Text 2,763 -> 2,765 B (headroom 25 -> 15; the kit's carve pad 7) |
+| Bank 3 | free 22 -> **6** (kit / trace 2) | `dmg_roll`'s EF_PLAYER gate + `call z, dsc_roll` (+7), `do_attack` keeps the on-hit byte in B (+1), `mon_drop .row` far6 `drop_row` then farb (BANK_TEXT) `drop_any` (+8) |
+| R6 | 10,749 B (free 3), unchanged | `tele_pick` C1: pass-1 mask + `call tp_safe` + the pass-2 restart (+18), `tp_ok` out (-18) |
+| Bank 1 | free 3, unchanged | items overlay raw 1,180 -> 1,179 B, packed 1,005 B: `ig_grp` without the fixed / span-3 counts and the DW pool pointer (descriptors 5 -> 3 B), + the C2 weights and the C3 D2 Teleport; scratch `ig_tf` (+1) |
+| Bank 2, bank 7 | unchanged | tables / constants only |
+
+- **Test stub window (tests/game.py `run_stub`, tests/lp.py, tests/tut0.py):** `LOWRAM_END_3B` .. **`gen_idles`** (was ..
+  `lowram_code`): the low-RAM spare plus the run-once power-on code `start` (tape entry) and `boot` (.sna entry), never re-entered
+  once a game runs (99 B now; the largest stub measured over the suites is 61 B, tests/world.py). main.asm ASSERTs
+  `gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN` (64). The `RES = STUB + 200` scratch bytes some suites use land in the TUT0 stub
+  room's free tail (`$708F`; room `$7065..$70A2`, stubs 37 B).
+- **Constants / tables:** `FOOD_PERIOD` 6 -> 8, `FOOD_START` 80 -> 100 (`item_defs.asm`); `SCR_FEAR_T` 6 -> 9 (`fx6.asm`, `ie_fear`
+  text); `MP_REG_M` 7 -> 9 turns, `LUP_M_HP` 2 -> 4 (`xp7.asm`); `kx_tab` Ghost on-hit chance 4 -> 8; `ab_rank` Firebolt bonus 0 / 2 / 4
+  -> **-1** (`$FF`, signed: `pf_bonus` wraps, deal_hit floors a 0 roll at 1) / 1 / 3, Frost r2 / r3 2 / 4 -> 1 / 3 (+ the `info_*`
+  rank lines); `lp_dtab` (`nm3_b0.asm`) D3 slot 5 Ghost -> Goblin, counts D4 / D6 / D7 23 -> 25 (D5 24, D8 18 kept); `LP_N_MAX` 24 -> 25
+  (`lpop3.asm`); `ig_grps` food `3` (3-4), scrolls `2, IT_SCR_LO, IG_SCR_K 8` (2-3 weighted).
+- **`dsc_roll` (low RAM, `dscl.asm`):** C = die, D = bonus of a monster -> each `(32 + x * w) >> 6`, w = `dsc_tab[LVL_DEPTH]`
+  (64 64 64 122 109 166 179 192 192 for depth 0..8; exact against the sim's `int(x * s + 0.5)` for x 0..15, `tests/dsc.py` D1/D2).
+  Clobbers A, B, E, HL: `do_attack` loads the kx on-hit byte into B (restored to E after the roll). ~0.3-0.7k T a monster melee roll.
+- **C1 `tp_safe` (HOT_COPY):** B = room -> Z keep: `(LP_REC[room].LR_HDR ^ LR_VISITED) & tp_msk == 0`; `tele_pick` sets
+  `tp_msk = TP_SAFE` ($87) for pass 1, falls back to 0 (today's rule) when no safe room has a spot (`.cur`).
+- **`drop_any` (B0_CODE2):** farb from bank-3 `mon_drop` after R6 `drop_row`: `rng_mod(25) < 2` -> `IT_FOOD_LO + rng_mod(5)`,
+  far6 `drop_put` (DROP_NEAR). Gameplay RNG: +1 draw a non-respawn kill (+1 more on a drop).
+- **Tests re-baselined:** hunger / equip / xp (FOOD 100, period 8, Mage 9 turns, level-up +4), combat_tables / itemtab /
+  balance_sim_selftest (ranks, Ghost 1 in 8, Fear 9; the sim reads RK_BONUS signed and floors a spell's damage at 1), proj3
+  (signed bonus, the drop_any draw in its mon_drop model), t12 (Fear 9), pickup3e (seeds where drop_any stays silent), tier6
+  (any food 8 %), boss (Ogre SLAM range at x1.7); gates: tools/levelcheck.py LP waits 15 % -> 16 %, tests/lp.py lp_enter mean
+  22.0k -> 22.5k (M1's denser rooms: 14.5 % / 21.55k -> 15.05 % / 22.13k). Goldens (the full FOOD bar at the start):
+  game_start, game_start_wizard, w15_panel_mage, abil_spark_cast. New: tests/dsc.py; tests/item_census.py `--depths 8` + the
+  per-level food / scroll ranges and the D2 Teleport check.

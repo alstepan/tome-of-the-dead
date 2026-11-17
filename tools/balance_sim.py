@@ -410,6 +410,8 @@ class Data:
         for a, name in enumerate(ABIL):
             self.rank[name] = [dict(zip(("mp", "range", "die", "bonus", "bounces", "effect"), m[rk + (a * 3 + r) * 6:rk + (a * 3 + r) * 6 + 6]))
                                for r in range(3)]
+            for row in self.rank[name]:               # RK_BONUS is signed (BALANCE-PKG5 Firebolt r1 -1 = $FF; pf_bonus wraps)
+                row["bonus"] -= 256 if row["bonus"] >= 128 else 0
         am = sym["ab_ammo"] - C.BASE
         self.ammo = [dict(zip(("mp", "range", "die", "bonus", "bounces", "effect"), m[am + 6 * i:am + 6 * i + 6])) for i in range(2)]
         x = 27 + sym["xpn_tab"] - 0x4000
@@ -2438,6 +2440,7 @@ class Game:
             dmg, resp = self.apply_res(m, ty, roll)
             if resp in ("I", "X"):
                 return resp
+            dmg = max(1, dmg)                   # deal_hit: "a 0 roll still hurts 1" (BALANCE-PKG5: Firebolt r1 1d8-1 can roll 0)
         dealt = min(dmg, m.hp)
         if spell:
             self.mage_dmg[spell] += dealt

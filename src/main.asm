@@ -351,6 +351,11 @@ LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ASSERT lowram_code_end == $8000
 LOWRAM_SPARE    EQU lowram_code - LOWRAM_FREE_END   ; F1: no descriptor reserve here any more (FDESC_GROW is in B0_CODE2)
                 ASSERT lowram_code >= LOWRAM_FREE_END
+                ; BALANCE-PKG5: the tests' ZRCP stub window = LOWRAM_END_3B .. gen_idles: the spare + the run-once power-on
+                ; code (start: tape entry; boot: .sna entry; neither is re-entered once boot reached enter_select). The
+                ; largest stub measured is 61 B (tests/world.py); keep TEST_STUB_MIN of room (memory-map "Low RAM").
+TEST_STUB_MIN   EQU 64
+                ASSERT gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN
                 ; C+TUT0: in_tut finds the blob stream's trailer at this record's address + length
                 ASSERT {b tape_tab + TT_BOOT4_REC * TT_STRIDE} == BANK_BOOT4 && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 1} == BOOT4_ORG && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 3} == BOOT4_TAPE_LEN
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias

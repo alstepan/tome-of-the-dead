@@ -35,7 +35,7 @@ def test_tables(D):
         stem = {"Whirl": "Whirl"}.get(name, name)
         for r, row in enumerate(rows):
             got = D.rank[stem][r]
-            check("rank %s %d" % (name, r + 1), [got[k] for k in ("mp", "range", "die", "bonus", "bounces", "effect")] == list(row), str(got))
+            check("rank %s %d" % (name, r + 1), [got[k] & 0xFF for k in ("mp", "range", "die", "bonus", "bounces", "effect")] == list(row), str(got))
     check("xpn", D.xpn == C.XP_NEXT, str(D.xpn))
     check("ogre row", D.k[D.id("OGRE")]["hp"] == 36 and D.k[D.id("OGRE")]["res"][B.PHYS] == 0 and D.k[D.id("OGRE")]["res"][B.SHOCK] == 4)
     check("vampire fire N (package 4)", D.k[D.id("VAMPIRE")]["res"][B.FIRE] == 0)
@@ -163,8 +163,8 @@ def test_damage_pipeline(D):
         m.h.mp = 30
         m.cast("Firebolt", 1, D.rank["Firebolt"][0], [vamp], vamp)
         seen.add(500 - vamp.hp)
-    # Firebolt R1 1d8+0, +2 staff, neutral: d+2 = 3..10
-    check("firebolt N staff range", min(seen) == 3 and max(seen) == 10, str(sorted(seen)))
+    # Firebolt R1 1d8-1 (package 5; was 1d8+0), +2 staff, neutral: d+1 = 2..9
+    check("firebolt N staff range", min(seen) == 2 and max(seen) == 9, str(sorted(seen)))
     ghost = B.Mon(D, D.id("GHOST"), 1)         # SHOCK R (package 4; was X): half damage, no reflect
     ghost.hp = ghost.maxhp = 50
     ghost.x = 3
@@ -367,11 +367,12 @@ def test_pkg5(D0):
     base = B.ld_preset(True)
     D4 = B.Data(base)
     ghost = lambda D: D.k[D.kid["GHOST"]]
-    check("pkg4 ghost confuse 1 in 4", ghost(D4)["efx"] == 5 and ghost(D4)["ech"] == 4, str((ghost(D4)["efx"], ghost(D4)["ech"])))
+    # BALANCE-PKG5 built: the asm kx_tab the sim reads already carries option A's Ghost 1 in 8
+    check("pkg5 asm ghost confuse 1 in 8", ghost(D4)["efx"] == 5 and ghost(D4)["ech"] == 8, str((ghost(D4)["efx"], ghost(D4)["ech"])))
     DA = B.Data(B.merge(base, jl("A")))
     cnt = lambda D, d, n: D.lp[d].count(D.kid[n])
     check("A ghost confuse 1 in 8", ghost(DA)["ech"] == 8)
-    check("A D3 mix", (cnt(D4, 3, "GHOST"), cnt(D4, 3, "GOBLIN"), cnt(DA, 3, "GHOST"), cnt(DA, 3, "GOBLIN")) == (3, 1, 2, 2))
+    check("A D3 mix", (cnt(D4, 3, "GHOST"), cnt(D4, 3, "GOBLIN"), cnt(DA, 3, "GHOST"), cnt(DA, 3, "GOBLIN")) == (3, 1, 2, 2))   # (lists: the json preset, not the asm)
     check("A D4 count", D4.params["MON_COUNT"][3] == 23 and DA.params["MON_COUNT"][3] == 24 and DA.params["MON_COUNT"][2] == 21)
     check("A keeps other depths", all(DA.lp[d] == D4.lp[d] for d in (1, 2, 4, 5, 6, 7, 8)))
     DB = B.Data(B.merge(base, jl("B")))

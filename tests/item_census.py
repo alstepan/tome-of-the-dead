@@ -14,7 +14,7 @@ Monster drops are NOT pre-rolled: src/drop3.asm mon_drop -> src/tier6.asm drop_r
 censused.
 
 Run: ZRCP_PORT=<10991..10999> WZ_BUILD_DIR=<dir holding tome-of-the-dead.sna/.sym, ovl/> \
-     python3 tests/item_census.py [--seeds N]
+     python3 tests/item_census.py [--seeds N] [--depths 8]
 """
 import random
 import sys
@@ -30,7 +30,7 @@ import items_model as M                                 # noqa: E402
 import book_model as BM                                 # noqa: E402
 from game_lib import Harness, S, EMU_ARGS, F3           # noqa: E402
 
-DEPTHS = (1, 2, 3, 4)
+DEPTHS = tuple(range(1, 1 + (int(sys.argv[sys.argv.index("--depths") + 1]) if "--depths" in sys.argv else 4)))   # --depths 8: D1..D8
 FOODS = ("F_CARROT", "F_APPLE", "F_PEAR", "F_CHEESE", "F_MEAT")
 FVAL = {"F_CARROT": 10, "F_APPLE": 15, "F_PEAR": 20, "F_CHEESE": 30, "F_MEAT": 40}   # item_defs.asm
 NAMES = {}
@@ -73,6 +73,8 @@ def main():
     nseeds = int(sys.argv[sys.argv.index("--seeds") + 1]) if "--seeds" in sys.argv else 60
     tot = {(h, d): defaultdict(float) for h in ("W", "M") for d in DEPTHS}
     nl = defaultdict(int)
+    notele = defaultdict(int)
+    rng_ = defaultdict(lambda: (99, 0))
     with Harness() as h:
         h.launch(EMU_ARGS)
         p = IG.T(h)
@@ -84,8 +86,14 @@ def main():
             outs, _ = p.batch([c[0] for c in pend])
             for (_rec, key), out in zip(pend, outs):
                 nl[key] += 1
-                for name, n in census_block(out).items():
+                cb = census_block(out)
+                for name, n in cb.items():
                     tot[key][name] += n
+                notele[key] += cb.get("S_TELEPORT", 0) == 0            # BALANCE-PKG5 C3: 0 on D2
+                for kind in ("food", "scr"):                            # per-level count range (min, max)
+                    c = sum(v for n, v in cb.items() if n.startswith("F_" if kind == "food" else "S_"))
+                    lo, hi = rng_[key + (kind,)]
+                    rng_[key + (kind,)] = (min(lo, c), max(hi, c))
                 tot[key]["_entries"] += out[G.H["FLOOR_N"]]
             pend.clear()
 
@@ -115,6 +123,10 @@ def main():
                   f"{mean(k, 'P_CURE'):4.2f} | {mean(k, 'S_TELEPORT', 'S_FEAR', 'S_SLEEP', 'S_ENCHANT'):.2f} "
                   f"({mean(k, 'S_TELEPORT'):.2f} {mean(k, 'S_FEAR'):.2f} {mean(k, 'S_SLEEP'):.2f} {mean(k, 'S_ENCHANT'):.2f}) "
                   f"| {mean(k, 'BOOK'):.2f}  | {gear:.2f} | {mean(k, '_entries'):.1f}")
+    for hero in ("W", "M"):
+        print(f"  {hero} per-level food min-max " + " ".join(f"D{d} {rng_[(hero, d, 'food')][0]}-{rng_[(hero, d, 'food')][1]}" for d in DEPTHS))
+        print(f"  {hero} per-level scrolls min-max " + " ".join(f"D{d} {rng_[(hero, d, 'scr')][0]}-{rng_[(hero, d, 'scr')][1]}" for d in DEPTHS))
+        print(f"  {hero} levels with no Teleport scroll " + " ".join(f"D{d} {notele[(hero, d)]}/{nl[(hero, d)]}" for d in DEPTHS))
     rng = random.Random(7)
     for hero, kind in (("W", BM.K_KNIGHT), ("M", BM.K_WIZARD)):
         mc = book_mc(kind, {d: mean((hero, d), "BOOK") for d in DEPTHS}, rng)

@@ -166,8 +166,8 @@ def run(h, p, check):
     check("N1 Warrior start: atk 3 eva 2 1d6+0 DEF 1 MP 6/6 period 8 turns (MP_PER 32 quarter-turns), innate COLD R (NEW-MON3 T10a)", st == want, (st, want))
     scene(K_WIZARD)
     st = stats()
-    want = dict(atk=1, eva=1, die=4, bon=0, df=0, mp=12, maxmp=12, per=28, gmp=2, res=(0, 0, 0), imm=0)
-    check("N2 Mage start: atk 1 eva 1 1d4+0 DEF 0 MP 12/12 (10 + Robe) period 7 (MP_PER 28, BALANCE-PKG4)", st == want, (st, want))
+    want = dict(atk=1, eva=1, die=4, bon=0, df=0, mp=12, maxmp=12, per=36, gmp=2, res=(0, 0, 0), imm=0)
+    check("N2 Mage start: atk 1 eva 1 1d4+0 DEF 0 MP 12/12 (10 + Robe) period 9 (MP_PER 36, BALANCE-PKG5; 7 in PKG4)", st == want, (st, want))
 
     # ======================= M: MP clamp, periods, regen =========================
     put(["P_HEAL", "F_APPLE"])
@@ -185,16 +185,17 @@ def run(h, p, check):
     pers.append(p.rb("MP_PER"))
     fx(S["FX_REMOVE"], S["PG_SLOT_WORN"] + S["WS_CHARM"])
     pers.append(p.rb("MP_PER"))
-    check("M2 MP_PER: Mana amulet 14, + Plate 28, Plate alone 56 (quarter-turns: 3.5 / 7 / 14 turns; BALANCE-PKG4)", pers == [14, 28, 56], pers)
+    check("M2 MP_PER: Mana amulet 18, + Plate 36, Plate alone 72 (quarter-turns: 4.5 / 9 / 18 turns; BALANCE-PKG5 Mage 9)", pers == [18, 36, 72], pers)
     put(["C_SCARAB"], [None, "A_ROBE", None, None])
     fx(S["FX_EQUIP"], 0)
     p.wb("MP", 0)
     p.wb("MP_RG", 0)
     got = []
-    for _ in range(6):
+    for _ in range(12):
         p.turn("WAIT")
         got.append(p.rb("MP"))
-    check("M3 Scarab: Mage MP_PER 18 (c/2 + 4: 4.5 turns, BALANCE-PKG4): +1 on turns 5 and 9", got == [0, 0, 0, 0, 1, 1] and p.rb("MP_PER") == 18, (got, p.rb("MP_PER")))
+    check("M3 Scarab: Mage MP_PER 22 (c/2 + 4: 5.5 turns, BALANCE-PKG5): +1 on turns 6 and 11",
+          got == [0] * 5 + [1] * 5 + [2] * 2 and p.rb("MP_PER") == 22, (got, p.rb("MP_PER")))
 
     # ======================= E: equip / remove, F: round trip ====================
     scene(K_KNIGHT)

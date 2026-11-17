@@ -308,8 +308,11 @@ def run(p, check):
              + w16(S["deal_hit"]))
 
     def seed_for(n, win):
+        # BALANCE-PKG5: every non-boss kill then rolls drop0.asm drop_any (rng_mod 25 < 2 = a food): pick seeds
+        # where it does not fire, so these cases see the kind row alone
         for sd in range(1, 4000):
-            if (Rng(sd).mod(n) == 0) == win:
+            r = Rng(sd)
+            if (not n or (r.mod(n) == 0) == win) and r.mod(25) >= 2:
                 return sd
 
     def monster(kind, x, cls=K_KNIGHT, hp=5):
@@ -323,17 +326,19 @@ def run(p, check):
         place(sl, x, y, EF_ACTIVE | EF_HOSTILE | EF_LEFT, hp)
         return sl
 
-    def drop_case(tag, kind, cls, n, win, want_item, qty, x=18, pre=None):
+    def drop_case(tag, kind, cls, n, win, want_item, qty, x=18, pre=None, boss=False):
         scene(cls)
         sl = monster(kind, x, cls)
         if pre:
             pre()
         before = [entry(k) for k in range(S["FLOOR_MAX"])]
-        sd = seed_for(n, win) if n else 0x1234
+        sd = 0x1234 if boss else seed_for(n, win)
         p.wmem(S["RNG_STATE"], w16(sd))
         r = Rng(sd)
         if n:
             r.mod(n)
+        if not boss:
+            r.mod(25)                                     # BALANCE-PKG5 drop_any (no food: seed_for)
         r0 = ring()
         kill(sl)
         new = [(k, entry(k)) for k in range(S["FLOOR_MAX"]) if entry(k) != before[k]]
@@ -380,7 +385,7 @@ def run(p, check):
         p.wb("LP_BOSS", K_GOBLIN)
         p.wb("LVL_DEPTH", 1)
         p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") & ~S["LF_UNIQUE"] & 0xFF)
-    got, st, cx = drop_case("U1", K_GOBLIN, K_KNIGHT, 0, True, None, 0, pre=lair)
+    got, st, cx = drop_case("U1", K_GOBLIN, K_KNIGHT, 0, True, None, 0, pre=lair, boss=True)
     room = p.rb("CUR_ROOM") | S1
     want = dict(rng=st, new=[(got["new"][0][0] if got["new"] else None, [room, cx, IT["H_KING"], 1])],
                 lines=["A GATE GLEAMS, THE WAY DOWN", "BOSS DROPS KING HELM"])   # the D1 lair boss also opens the gate
@@ -391,6 +396,7 @@ def run(p, check):
     p.wmem(S["RNG_STATE"], w16(sd))
     r = Rng(sd)
     r.mod(4)
+    r.mod(25)                                             # BALANCE-PKG5 drop_any (no food)
     before = [entry(k) for k in range(S["FLOOR_MAX"])]
     kill(sl)
     new = [entry(k) for k in range(S["FLOOR_MAX"]) if entry(k) != before[k]]
