@@ -1681,6 +1681,7 @@ def scen_gear(h):
     for _ in range(3):
         T(p, "WAIT")
     waiting = tv(p, "TV_BEAT"), tv(p, "TV_STAGE")
+    p.wb(S["TV_FL"], tv(p, "TV_FL") & ~(1 << S["TFB_L76"]) & 0xFF)   # as if A's lessons were done (the short route said L76 in B)
     n0 = len(p.LOG)
     leg(p, run, 24)
     to_floor(p, 1)
@@ -1690,9 +1691,17 @@ def scen_gear(h):
         T(p, "L")
     T(p, "WAIT")
     after = [l.rstrip() for l in p.LOG[n0:]]
-    check("G8", "helmet never picked up: B9G waits at G0 with no line; entering C prints L76 (not L53), then B11",
+    check("G8", "helmet never picked up: B9G waits at G0 with no line; entering C prints L76 (not L53; TFB_L76 cleared as after a full A), then B11",
           waiting == (B9G, 1) and p.rb("CUR_ROOM") == 5 and line("TL_L76") in after and line("TL_L53") not in after
           and line("TL_L80") not in after and tv(p, "TV_BEAT") >= B11, (waiting, st(p), after[-6:]))
+    # G9 (review): A's lessons skipped (L76 on entering B) AND the helmet left unequipped: L76 stays once per D0, C says L53
+    p = start(h, 0)
+    run = Run(p)
+    ok = go_to_C(p, run, False)
+    T(p, "WAIT")
+    ls = [l.rstrip() for l in p.LOG]
+    check("G9", "skip route (A skipped, the helmet picked up, never equipped): L76 exactly once (entering B), entering C says L53",
+          ok and ls.count(line("TL_L76")) == 1 and line("TL_L53") in ls and helm(p) is not None, (ok, ls.count(line("TL_L76")), st(p)))
 
 
 def menu_kempston(p):
