@@ -390,7 +390,7 @@ RESPAWN_PERIOD  EQU 48              ; a check every 48 turns of the level (TRK_P
 RESPAWN_CHANCE  EQU 32              ; of 256: draw 1 < this -> a spawn try (BALANCE-PKG4: 96 -> 32 = the trickle at 1/3 rate; was 96 at 48 turns)
 RESPAWN_ITEM_W  EQU 2               ; room weight = min(RESPAWN_ITEM_CAP, 1 + 2 x un-picked floor items)
 RESPAWN_ITEM_CAP EQU 7
-TRK_PHASE       EQU EDGE_TAB + EDGE_SLOTS   ; $6E98: bits 0-6 turns since the last check 0..47, bit 7 TRK_DUE (EDGE_TAB spare; level_gen's
+TRK_PHASE       EQU EDGE_TAB + EDGE_SLOTS   ; $6E98: bits 0-5 turns since the last check 0..47, bit 6 TRK_TIME (time check due), bit 7 TRK_DUE (progress event due) (EDGE_TAB spare; level_gen's
                                     ; attempt zeroes EDGE_TAB..LVL_STATE_END: reset on level entry)   (test-observable)
 TRK_DUE         EQU %10000000       ; TRK_PHASE bit 7: end_turn counted the 48th turn, turn_input runs trk_run
 TRK_DUE_BIT     EQU 7

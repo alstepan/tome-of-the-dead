@@ -242,12 +242,15 @@ def time_off_cases(p, L, rnd):
     for _ in range(57):
         heal(p)
         p.turn("WAIT")
-    check("E1b 60 presses from 46: 2 checks eat 2 presses, so 58 turns: TRK_PHASE 104 mod 48 = 8, RESPAWN_MAX holds", p.rb("TRK_PHASE") == 8
+    check("E1b 57 more presses from phase 0: 48 turns + 1 press eaten by the 2nd check + 8 turns: TRK_PHASE 8, RESPAWN_MAX holds", p.rb("TRK_PHASE") == 8
           and p.rb("LP_RESPAWNS") <= S["RESPAWN_MAX"], (p.rb("TRK_PHASE"), p.rb("LP_RESPAWNS")))
     p.wb("TRK_PHASE", 0)
     p.wmem(S["SPQ_K"], [S["K_RAT"] | 0xE0, 15, 1])           # sp_run turn: counted like any other
     heal(p)
     p.turn("WAIT")
+    check("E1c rate = 1/3 of the old trickle: RESPAWN_CHANCE 32 / RESPAWN_PERIOD 48 == (96 / 48) / 3 per 256 turns "
+          "(the spawn draw itself is bit-checked against the model by the M cases)",
+          S["RESPAWN_CHANCE"] * 3 == 96 and S["RESPAWN_PERIOD"] == 48, (S["RESPAWN_CHANCE"], S["RESPAWN_PERIOD"]))
     check("E2 a turn with sp_run: TRK_PHASE 1, the queue emptied", p.rb("TRK_PHASE") == 1 and p.rb("SPQ_K") == 0,
           (p.rb("TRK_PHASE"), p.rb("SPQ_K")))
 

@@ -8,7 +8,7 @@
 ; never CUR_ROOM: lp_enter places it on the hero's next entry, §9.4.3). It runs
 ; at end_turn only (bank 7, after the exit / sp_run / TURN_COUNTER++), every
 ; RESPAWN_PERIOD turns of the level (TRK_PHASE, zeroed with LVL_STATE by
-; level_gen) — never in a cast / input tick.
+; level_gen) — never in a cast tick (BALANCE-PKG4: the check itself runs on the idle INPUT tick after the 48th turn, turn_input, alone).
 ;
 ; RNG: every draw is on RNG_STATE (gameplay stream, §9.5). The shared §9.6 roll
 ; tier_row steps GEN_RNG (gen_step), so trk_run copies RNG_STATE into GEN_RNG,

@@ -21,6 +21,8 @@ against a pre-T7 base proves the ranged hook neutral for every other kind (the
 shooter path itself: tests/ranged.py A, the model A/B).
 AI-L1: AI_EQUIV_LADDER=1 swaps in climber-heavy generated depths (2, 3, 5, 6, 7);
 a mismatch there must be two climbers contending for one shaft (the ladder queue).
+NOTE (BALANCE-PKG4): an A/B against a pre-2026-11-16 base is NOT behaviour-neutral by design: FED regen 16 (was 12), the time
+trickle and the resist rows change HP / spawns (run 0 drifts from turn 17: HP 24 vs 23). Use a base built after BALANCE-PKG4.
 """
 import hashlib
 import json

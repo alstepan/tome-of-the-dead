@@ -4087,7 +4087,7 @@ ranks and gear keep pace.
 | D3 | 3 | 32/8 · 22/16 | first undead: Frost/Drain are useless | Firebolt (Vampire W; ⅔); Whirlwind (½) or PS III |
 | D4 | 4 | 36/9 · 25/18 | archers, Ogre 43 hp; Black Widow acid | Spark (Ogre SHOCK W, always known); Drain on living; close doors; bow |
 | D5 | 5 | 40/10 · 28/20 | Mummy PHYS R, curse (WEAK 12, §6.4); first ALARM traps | Firebolt (Mage ~93 % by D5); Cure; Scarab next |
-| D6 | 6 | 47/12 · 31/22 | casters, ghost reflecting Lightning | Ring of the Grave; Firebolt on ghosts |
+| D6 | 6 | 47/12 · 31/22 | casters, ghost (SHOCK R since BALANCE-PKG4: Lightning at ½, no reflect) | Ring of the Grave; Firebolt on ghosts |
 | D7 | 7 | 54/14 · 34/24 | Death Knight (parry + notch, fire reflect); Necros 2 in 4 rolls (Dark Bolt + FEAR; no Archers, H1) | Spark / Lightning (W); Power Strike through parries; blessed weapon |
 | D8 | 8 | 61/16 · 37/26 | Archmage + summons + bouncing bolt; reflects Frost/Lightning | Mirror Helm; Firebolt (Mage ~98 %); potions saved |
 

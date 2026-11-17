@@ -687,6 +687,17 @@ def main():
                  must=lambda res, w: res["tgt"] == 0 and res["stop"] == PFS["BODY"] and w.bodies[1].hp == 50)
         case("P2 Lightning on Ghost (X): pierce stops, reverses", two(K_GHOST, LIGHTNING), LIGHTNING, 1,
                  must=lambda res, w: w.bodies[1].hp == 50 and res["tgt"] == 0)
+        # BALANCE-PKG4: the SHIPPED Ghost (SHOCK R): Lightning does half damage and does not bounce back
+        def _ghost_shock(resp):
+            p.z.cmd("set-memory-zone 0")
+            r0 = p.z.read_memory(_kxg, 1)[0]
+            p.wmem(_kxg, [(r0 & ~0xC0) | (resp << 6)])
+            p.z.cmd("set-memory-zone -1")
+            CT.KINDS[K_GHOST] = (_gk[0], {**_gk[1], "SHOCK": "X" if resp == X else "R"}) + tuple(_gk[2:])
+        _ghost_shock(R)
+        case("P2 Lightning on the shipped Ghost (SHOCK R): half damage (1d8+4 / 2 = 2..6), no reflect", two(K_GHOST, LIGHTNING), LIGHTNING, 1,
+                 must=lambda res, w: res["tgt"] == 1 and 2 <= res["lost"] <= 6 and w.bodies[0].hp == 200)
+        _ghost_shock(X)
         case("P2 Frost on Vampire (COLD I, defs.asm K_VAMPIRE 10; the Skeleton line is COLD R since BAL-1 FINAL B): stops, 0 dmg, no freeze", two(10, FROST), FROST, 1,
                  must=lambda res, w: res["tgt"] == 1 and res["lost"] == 0 and w.bodies[1].stf == 0)
         case("P2 Drain on Skeleton (I): no heal", two(K_SKELETON, DRAINL), DRAINL, 1,

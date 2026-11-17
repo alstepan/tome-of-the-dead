@@ -310,7 +310,7 @@ end_turn:
                 ld   (TURN_COUNTER), hl
                 ; BALANCE-PKG4: the time trickle at 1/3 rate (TRK_PHASE bits 0-5 count the level's turns, 6 = TRK_TIME,
                 ; 7 = TRK_DUE of the progress event). Period 48, chance 32/256 (= period 144 at 96/256; trk_run returns on
-                ; D0 and the D0 tutorial's LP_RESPAWNS = RESPAWN_MAX silences it too). ~25 T a turn
+                ; D0 and the D0 tutorial's LP_RESPAWNS = RESPAWN_MAX silences it too). ~64 T a turn
                 ld   hl, TRK_PHASE
                 ld   a, (hl)
                 and  TRK_CNT_MASK              ; (lp_transition's DUE, set by .ex above, is bit 7)
