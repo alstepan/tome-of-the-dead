@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 import decorgen  # noqa: E402
+import decorgen2  # noqa: E402  (DECOR2 reference model; docs/design/decor_rules2.md)
 import items_model as IM  # noqa: E402
 from game_lib import S  # noqa: E402
 
@@ -187,9 +188,19 @@ def expected_cell(rmap, glyphs, attrs, orn, ink, c, r, logical_col=None):
     return bytes(g), attrs[t]
 
 
-def render_room(blk, r, decor=True, anim=None):
+DECOR2 = False                   # module default of render_room(decor2=): the DECOR2 model instead of decorgen
+
+
+def room_role(blk, r):
+    """(room id, RD_FLAGS, key room?) = the `room` argument of decorgen2.decorate."""
+    key = r in (blk[S["LVL_KEYROOM"] - BASE], blk[S["LVL_KEYROOM2"] - BASE])
+    return r, desc(blk, r)[S["RD_FLAGS"]], key
+
+
+def render_room(blk, r, decor=True, anim=None, decor2=None):
     """decor=True applies the B3B-9 deriver (tools/decorgen.py); anim, if a list, receives
-    its ANIM_LIST bytes (the room built into ROOM_MAP)."""
+    its ANIM_LIST bytes (the room built into ROOM_MAP).  decor2 (default DECOR2): the DECOR2 model
+    (tools/decorgen2.py) with the room's role instead."""
     m = [[T["T_AIR"]] * COLS for _ in range(ROWS)]
     for row in range(ROWS):
         floor = row in (F0, F1)
@@ -288,7 +299,10 @@ def render_room(blk, r, decor=True, anim=None):
         for name, c, row in PROTO_DECOR.get(r, []):
             flat[row * COLS + c] = T[name]
     elif decor:
-        flat, al = decorgen.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed)
+        if DECOR2 if decor2 is None else decor2:
+            flat, al, _objs = decorgen2.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed, True, room_role(blk, r))
+        else:
+            flat, al = decorgen.decorate(flat, blk[S["LVL_DEPTH"] - BASE], seed)
         if anim is not None:
             anim[:] = al
     if xc and not grate_open:                  # 3F-T8: the SHUT gate, also after the decor
@@ -309,6 +323,21 @@ def render_room(blk, r, decor=True, anim=None):
 def glow_id(depth):
     """B12 GLOW: one common tile id on every depth (T_GLOW, common id 31)."""
     return S["T_GLOW"]
+
+
+def base_room(blk, r):
+    """The map the decor deriver sees (build_room_map before decor): render_room(decor=False) with the
+    lair gate's 3 hole cells restored (render_room stamps the gate over them after the decor; the ring
+    rule saw holes) and the GLOW cell cleared."""
+    flat = render_room(blk, r, decor=False)
+    xc = desc(blk, r)[S["RD_EXITCOL"]]
+    if xc:
+        for k in range(3):
+            flat[F1 * COLS + xc + k] = T["T_HOLE_L"] + k
+        g = (F1 - 1) * COLS + xc + 1
+        if flat[g] == glow_id(blk[S["LVL_DEPTH"] - BASE]):
+            flat[g] = T["T_AIR"]
+    return flat
 
 
 def read_block(p):

@@ -473,3 +473,93 @@ Not affected: menu / select / page / endcard hashes (no room decor). The `test` 
 
 
 **User addition (2026-11-09; priority: MORE OBJECT TYPES over density):** some levels feel empty — DECOR2 must also raise density where it reads empty (per depth / room role, measured by tools/decor_density.py) and plan MORE object types: list per depth the free per-level tile ids, an id-reclaim plan where none are free (D1/D3/D8), and an art brief for new objects (vignettes deferred earlier — revisit).
+
+
+---
+
+## 5a. Results of the Python model (DECOR2-1, 2026-11-16)
+
+Model: `tools/decorgen2.py` (P2 = P1 + R4..R7; the deployed `tools/decorgen.py` is untouched, old output
+bit-identical: sha256 of `render_room` over 8 depths x 300 seeds is unchanged). `tests/room_model.py`
+`render_room(..., decor2=)` / module `DECOR2` switch it in; `room_role()` and `base_room()` (the map the
+deriver sees, lair gate holes restored) were added. Tools: `tools/decor_density.py N --decor2 [--md]`,
+`tools/decor_sweep.py N --decor2`, `tools/decor_preview.py OUTDIR`. Same 1,000 seeds x D1..D8, 88,273
+non-Sanctum rooms, old vs new (all depths; per-depth columns in `decor_density.py --decor2`):
+
+| metric | old | new | target |
+|---|---|---|---|
+| speckle (1x1 patch cells) / room | 1.43 (67 % of rooms) | **0** | 0 |
+| anchored ratio (visible objs) | 11 % | 58 % | >= 70 % **(missed)** |
+| patches within 3 cols of a light / wall | 33 % | 93 % | - |
+| mirrored rooms, all / LIT-mood | 5.6 % / - | 66 % / **82 %** | 30-60 % / 100 % **(both missed)** |
+| near-duplicate rooms | 19.9 % | **0** (needs the DEDUP veto, below) | 0 |
+| fill gap min / median (unrelated mount/floor) | 1 / 6 | 3 / 9 | >= 3 / >= 5 |
+| storeys with a free run >= 8 cols | 94.6 % | 96.6 % | >= 90 % |
+| margin / pit-zone violations | 25,123 / 931 | **0 / 0** | 0 / 0 |
+| lair lights flank the grate | 0.2 % | 91 % | 100 % **(missed)** |
+| start room: storey-1 mount/floor objects | 9,045 | **0** | 0 |
+| dead ends with no light | 36 % | 69 % | ~2/3 |
+| lair / key rooms lit | 65 % / 63 % | 100 % / 98 % | 100 % |
+| cobwebs on storey 0 | 58 % | 79 % | >= 65 % |
+| moss cells in strips >= 2 | 0 % | 100 % | 100 % |
+| decor cells / room | 23.8 | 27.6 (+16 %; D2 -13 %, D4/D5/D7 +24..+35 %) | +-15 % |
+| objects / room, visible objs / room | 6.96, 3.44 | 6.57, 4.59 | - |
+| bare rooms | 0 | 0 | 0 |
+
+Budgets (large <= 2, glyph <= 4, wall <= max) and "decor only on T_AIR cells" are asserted for every room.
+Sweep: every per-level object, both cobweb glyphs and moss strips of 2 and 3 cells appear on D1/D2/D6.
+**Gate change:** the three common patch ids 28 / 29 / 30 now have ZERO placements on D2..D7 (only the D1 / D8
+composite uses them), so the sweep's "ZERO placements: none" holds only with those excluded (R1, expected;
+three common ids became free on D2..D7 only, not reclaimable while the D1/D8 composite uses them).
+Distinct ids per room: D4/D5/D7 rooms now show all 3 per-level objects in ~55 % of rooms (old ~25 %):
+more object types per room, but less room-to-room variety on the 3-object depths. D0 search (<= 10 ids on
+D1): 16 % of D1 rooms qualify (old 21 %), so the seed search still has candidates.
+
+**Rules that needed changing (model deviations, each small):**
+1. **Halo 3 does not kill near-duplicates** (it left 16 % of rooms): added a fill veto "same record, same
+   storey, <= 6 empty cols" (`DEDUP`, +~15..20 B Z80). With it near-dup = 0 and gap min 3.
+2. **FRAME pairs failed 30 %** (g = 2 hits a ladder / the margin): the pair now tries the other gap before the
+   SINGLE fallback (`PAIR_RETRY`, +~8 B). Remaining LIT misses are floor-light depths (support / pit zone, D3
+   65-70 %, D8 70 %) and grates / shafts near a wall.
+3. **Anchored >= 70 % is not reachable with the fill left on**: fill tries 3/4/3/3 give 63 % (density -> +7 %
+   over old, D2 -20 %), 6/8/6/6 give 58 %. The two goals conflict; the user priority (more density / types)
+   argues for keeping 6/8/6/6. **Decision for the user:** lower the target to ~55 % or fewer fill tries.
+4. Moss is exempt from the cols 3..28 margin (cols 2..29, like a texture; mock 1 shows moss at col 2).
+5. Key rooms: `RDF_KEY` is never set by levelgen; the key room is `LVL_KEYROOM` / `LVL_KEYROOM2`
+   (two per level possible). Z80 needs a room-id compare against those two bytes (~10 B).
+6. D8 pair light = `BRAZIER_BIG`, D2 = `BRAZIER` (floor pairs); SINGLE may pick any light of the depth.
+7. Lair: the storey-0 gallery on the torch axis worked; D4 preview shows it can still fail (span / ring) and
+   the storey stays empty.
+
+**LARGER-D check (3 x 4 grid, 12 rooms):** the doc's assumptions hold (RD_FLAGS / room id / descriptor
+layout, DG_PLAN at `$6EB0`). Changes: every level carries a Sanctum on D8 and 1-2 key rooms (colour 0 / 1);
+the lair grate and arrival shaft are found by a map scan, no descriptor read needed; rooms per level 10-12,
+so mood variety across a level (R4 `(rnd + room id) mod 3`) is fine.
+
+**Z80 cost estimate (confirm from `.sym`):** P1 as §3 (~+30 B code, -6 B data, paid by the in-file
+reclaims) **plus** DEDUP ~18 B and PAIR_RETRY ~8 B. P2 planner (mood, scans, FRAME / CENTRE / GALLERY /
+SINGLE, pools, anchored patch, chain cluster, moss strip, key-room test) ~280-340 B planner + ~35 B executor;
+since SIZE-T3 it fits next to the executor in bank-0 `B0_CODE2` (980 B free), so **Q1 (R6 page) is moot**.
+The model's atomic `group()` rolls back with a whole-map snapshot: the Z80 must check first, then write
+(a 576-B ldir snapshot would cost ~12k T per group). Room-build time: planner ~15-25k T (2 storey scans,
+~12 placement checks instead of ~13 fill tries; the fill shrinks 12 -> 6..8 tries); net within the +-15k T
+of §3, to be measured with the W13 profile (<= 135k T gate), not measured here.
+
+**Previews** (`/private/tmp/claude-501/-Users-alexs-sources-zxspectrum-tome-of-the-dead/08260ec9-f924-4341-b17d-64d2f00c753d/scratchpad/decor2/`):
+`decor2_sheet.png` and `d01_r1`, `d02_r6`, `d03_r9`, `d04_r9`, `d05_r8`, `d06_r6`, `d07_r10`, `d08_r4`
+(`_old.png` / `_new.png`): start (D1 CALM), plain LIT (D2), key room (D3), lair (D4), dead ends DARK (D5, D6),
+plain DIM (D7), plain LIT (D8); each has both storeys. Regenerate with `tools/decor_preview.py OUTDIR`.
+
+**Open questions for the user:** (a) anchored target 70 % vs density (item 3); (b) keep DEDUP and PAIR_RETRY
+(+~26 B); (c) D2 loses 13 % density (many small objects + wall budget 13): raise its fill tries?; (d) the
+3-object depths now show every object in most rooms: accept the lower variety?
+
+### 5b. User decisions applied (2026-11-17)
+All five recommendations accepted: anchored target **55 %** (model: 57.4 %); DEDUP + PAIR_RETRY kept (+26 B);
+D2 fill +3 tries (`FILL_BONUS`; D2 density now -7 % vs old, was -13 %); the rest as proposed. New rule
+**no empty storey** (`ensure_storeys`, after the fill: anchored patch, else unlit centrepiece, chain cluster,
+moss strip, lone chain): empty storeys 1.43 % -> **0** (D7 old 5.9 %). Re-run (1,000 seeds, 88,273 rooms):
+anchored 57.4 %, near-dup rooms 0, decor cells 23.8 -> 28.3 per room (D2 22.8 vs 24.6), LIT mirrored 82 %,
+lair framed 91 %. Z80 estimate in `B0_CODE2` (980 B free): P1 ~ +56 B code - 6 B data - 15..17 B reclaim = ~ +35 B
+net; P2 ~ 280-340 B planner + ~35 B executor + ~40 B no-empty-storey + 1 B D2 bonus = **~360-420 B**.
+Previews regenerated under `build/decor2/` (git-ignored; `tools/decor_preview.py build/decor2`).

@@ -8,7 +8,11 @@ placed it (frame-1 ids in ROOM_MAP; frame-2 ids reached through ANIM_LIST glyph 
 GLOW through render_room's open-exit pass, here forced open). Prints every object with ZERO
 placements: the dead-art candidates.  Needs a build (game_lib reads build/tome-of-the-dead.sym).
 
-    python3 tools/decor_sweep.py [seeds=2000]
+    python3 tools/decor_sweep.py [seeds=2000] [--decor2]
+
+--decor2 runs the DECOR2 model (tools/decorgen2.py, docs/design/decor_rules2.md §5) instead of the
+deployed decorgen.py; either mode also prints the per-depth distinct-ids-per-room histogram (how much
+the D0 seed search can choose from; the tutorial cap is <= 10 ids) and the moss strip widths seen.
 """
 import os
 import re
@@ -40,12 +44,19 @@ def objects():
 
 
 def main(argv):
+    if "--decor2" in argv:
+        RM.DECOR2 = True
+        argv = [a for a in argv if a != "--decor2"]
+        print("mode: DECOR2 (decorgen2.py)")
     n = int(argv[1]) if len(argv) > 1 else 2000
     obj = objects()
     hits = {d: defaultdict(int) for d in range(1, 9)}
     rooms = defaultdict(int)
     idhit = {d: defaultdict(int) for d in range(1, 9)}
     common = {d: defaultdict(int) for d in range(1, 9)}
+    nids = {d: defaultdict(int) for d in range(1, 9)}        # distinct decor ids per room -> rooms
+    moss = {d: defaultdict(int) for d in range(1, 9)}        # horizontal MOSS run length -> runs
+    moss_id = {d: next((t for t, nm in obj[d].items() if nm == "MOSS"), None) for d in range(1, 9)}
     off = S["LVL_FLAGS"] - RM.BASE
     for d in range(1, 9):
         for seed in range(1, n + 1):
@@ -66,6 +77,16 @@ def main(argv):
                     if al[k + 2] >= 16:
                         seen.add(al[k + 2])
                 names = {obj[d][t] for t in seen if t in obj[d]}
+                nids[d][len({t for t in seen if t in obj[d]})] += 1
+                if moss_id[d] is not None:
+                    for row in range(18):
+                        run = 0
+                        for c in range(33):
+                            if c < 32 and m[row * 32 + c] == moss_id[d]:
+                                run += 1
+                            elif run:
+                                moss[d][run] += 1
+                                run = 0
                 for t in seen:
                     idhit[d][t] += 1
                 for nm in names:
@@ -87,6 +108,13 @@ def main(argv):
         for t in COMMON_DECOR:
             if not common[d][t]:
                 dead.append((d, f"common {COMMON_DECOR[t]}", [t]))
+    print("distinct per-level decor ids per room (rooms with N ids; D0 search cap <= 10):")
+    for d in range(1, 9):
+        tot = sum(nids[d].values())
+        h = " ".join(f"{k}:{nids[d][k]}" for k in sorted(nids[d]))
+        print(f"D{d} median {sorted(k for k, v in nids[d].items() for _ in range(v))[tot // 2]}, "
+              f"<=10 ids {sum(v for k, v in nids[d].items() if k <= 10) / tot:.0%}: {h}")
+    print("moss run lengths (cells): " + "; ".join(f"D{d} {dict(sorted(moss[d].items()))}" for d in (1, 2, 6)))
     print("ZERO placements:", "; ".join(f"D{d} {nm} ids {ids}" for d, nm, ids in dead) or "none")
 
 
