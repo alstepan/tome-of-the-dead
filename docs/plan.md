@@ -38,6 +38,16 @@ and per-task evidence: `docs/history.md`.
 
 ## Active / next
 
+**CURRENT ORDER (manager, 2026-11-17; user: DECOR2 + Tutorial v2 before the release; run independent work in parallel):**
+- DONE 2026-11-16/17: panel keys 16×8 (#67), sim expert bot + TIER_FOOD (#68), MORROW-SPEAK balloon + cyan log ink (#69), BALANCE-V2 sim package 4 + `docs/design/balance_v2.md` (#70), TUT-KEY floor key + real B→C lock + ending on `ON THE GRATE, PRESS {D}` (#71). Test speed (B9b) was already done: gates use `tests/tut0_adv_par.py`.
+1. **TUT-GEAR** (in progress, staff, `feat/tut-gear`): beat B9G, class helmet on room B's floor, bag cursor + equip lines (`docs/design/tut_gear.md`); first a ~2k T D0 budget cut + reviewer ASSERTs.
+2. **BALANCE-PKG4** (in progress, staff, `feat/balance-pkg4`): package 4 constants in Z80 (targets: average bot 15–25 %, best expert 30–40 %, even W/M; user accepted the near miss) → user playtest in Fuse.
+3. **TOO WEAK TO LEAP** (roadmap 4b) ∥ **FLY-CUT** (2b) — after BALANCE-PKG4 merges (shared engine regions).
+4. **DECOR2** — Python model + previews done (`feat/decor2-model`, `tools/decorgen2.py`, decor_rules2.md §5a); user review of 5 questions pending → Z80 P1/P2 (~330–420 B in B0_CODE2).
+5. **Tutorial v2** (4c) remainder after TUT-GEAR (curses are cut).
+6. **v1.2 RELEASE** (6b) — each public step needs the user's OK.
+Backlog: bot planner ping-pong (tests/pt_bot.py, low), `PL_FRAME_ADD` "worst level D8" display bug, B21 budget scenario, stale suites d8_stress / endcard_k / roommem.
+
 **TUT0 — DEPTH-0 TUTORIAL: DONE — merged to main 7ab186f (PR #19, squash, 2026-11-11).** Spec `docs/design/tutorial_d0.md`, decisions `docs/design/tut0_split.md`. Blob in bank 4 (now `$E1B4`, 8 B free after the C merge), mentor Brother Morrow, Goblin, mercy heal, sandbox reset into D1; R4 key clarity (pinned goal line, ▶ ANY KEY, nudges 6/18). Playtest round 3: OK. Known/accepted: B3 inside ICON MODE leaves row 20 blank until the turn ends.
 
 **POST-TUT0 ROADMAP (user 2026-11-09, in this order; each starts after the previous merges):**

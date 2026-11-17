@@ -55,16 +55,17 @@ TV_GOB          EQU TUT_RAM + 18        ; the Goblin's slot in CUR_ROOM ($FF non
 TV_CUR          EQU TUT_RAM + 19        ; 7 B: hero x, y, CUR_ROOM, HP, MP, FOOD, Goblin HP ($FF none)
 TV_PRV          EQU TUT_RAM + 26        ; 7 B: the same at the previous turn
 TV_SNAP         EQU 7
-TV_BUF          EQU TUT_RAM + 33        ; 34 B: the expanded line (LOG_MAX + 0 + 1): tt_line / tt_goal
-TV_HQ           EQU TUT_RAM + 67        ; 1 = this turn's shown group holds (tt_group_h)  (test-observable)
-TV_GID          EQU TUT_RAM + 68        ; TUT0-F4 R4-3: the goal line drawn on row 20 (tut_goal id; $FF none)  (test-observable)
+TV_MARK         EQU TUT_RAM + 33        ; MORROW-SPEAK review A: MOR_MARK, then the line: tt_line queues TV_MARK..
+TV_BUF          EQU TV_MARK + 1         ; 34 B: the expanded line (LOG_MAX + 0 + 1): tt_line / tt_goal
+TV_HQ           EQU TUT_RAM + 68        ; 1 = this turn's shown group holds (tt_group_h)  (test-observable)
+TV_GID          EQU TUT_RAM + 69        ; TUT0-F4 R4-3: the goal line drawn on row 20 (tut_goal id; $FF none)  (test-observable)
                                         ; (TV_TRI / TV_HA gone: the prompt is fixed at HP_COL, cols 24-31 are ATTR_INFO_NOTE)
-TV_ISLOT        EQU TUT_RAM + 69        ; TUT0-R2 icon tour: the cursor slot of this session ($FF none)
+TV_ISLOT        EQU TUT_RAM + 70        ; TUT0-R2 icon tour: the cursor slot of this session ($FF none)
 TV_IREST        EQU TV_ISLOT + 1        ;   hook calls resting on it (saturates at REST_T)
 TV_ISAID        EQU TV_ISLOT + 2        ;   2 B: bit 0 entry pair said, bit s+1 slot s's line said,
                                         ;   bits 11 / 12 the B3 / B9 bag target held once (test-observable)
-TV_LMOR         EQU TV_ISAID + 2        ; MORROW-SPEAK: bit s = LOG_TXT slot s holds his pending line (tt_line / blob_log)
-TV_BSAY         EQU TV_LMOR + 1         ;   != 0: his line is the newest drawn (row 23)  (test-observable)
+TV_BSAY         EQU TV_ISAID + 2        ; MORROW-SPEAK: != 0: his line is the newest drawn (row 23)  (test-observable)
+                                        ; (review A: TV_LMOR gone, his lines carry MOR_MARK in-band: TV_MARK)
 TV_BCOL         EQU TV_BSAY + 1         ;   the balloon's left col (0 = none placed)    (test-observable)
 TV_BROW         EQU TV_BCOL + 1         ;   its top row
 TV_BKEY         EQU TV_BROW + 1         ;   placed for: TV_SPOT | facing left << 7
@@ -72,12 +73,14 @@ TV_BGLY         EQU TV_BKEY + 1         ;   glyphs in ids 15..18: 0 none (tt_ini
 TUT_RAM_END     EQU TV_BGLY + 1
 TUT_RAM_LEN     EQU TUT_RAM_END - TUT_RAM
                 ASSERT TUT_RAM >= ABIL_TGT + 2 + 15 && TUT_RAM_END <= PF_ROWF   ; KIT_LIST (15 B, kit builds) below
+                ASSERT TV_HQ == TV_BUF + LOG_MAX + 2
 TFB_MERCY       EQU 0                   ; mercy healed this turn (A = 1): its group next (A = 0)
 TFB_MSEEN       EQU 1                   ; the first mercy said L51
 TFB_ALT         EQU 2                   ; B9 entered unpoisoned: L32, advance when the Cure is held
 TFB_GRATE       EQU 3                   ; open the grate after this turn's hold (B14 G3 shown)
 TFB_GFLASH      EQU 4                   ; R4-4: the nudge's turn: the goal line FLASHes (cleared by tt_goal)
 TFB_L76         EQU 5                   ; R2: L76 (a lesson left undone in A) said, once per D0
+TFB_KNAG        EQU 6                   ; TUT-KEY: L77 said on this approach to the locked door (tt_knag)
 
 ST_PRE          EQU 0                   ; FH_IMPATIENT: L53 first
 ST_G0           EQU 1
@@ -125,6 +128,8 @@ TUT_B14         EQU 14
 TUT_B15         EQU 15
 TUT_EDGE_BC     EQU 3                   ; EDGE_TAB index of the B-C door (tut0_level.asm: LINK|DOOR|LOCK)
 TUT_EG_LOCK_BIT EQU 3
+TUT_KNAG_X      EQU 26                  ; TUT-KEY: hero x >= 26 on B's storey 1 = at the locked door (x <= 27: cols 30-31 are it)
+TUT_KNAG_RE     EQU 22                  ;   x < 22 (or another storey / room) re-arms L77 (B's L1 lands at x 24)
 STAND_Y0        EQU FLOOR_ROW0 - BH_K_KNIGHT   ; hero E_Y standing on storey 0 / 1
 STAND_Y1        EQU FLOOR_ROW1 - BH_K_KNIGHT
 TUT_CTL_N       EQU 5                   ; control bytes 1..5 = U D L R F
@@ -187,7 +192,7 @@ tt_mercy:
                 ; TUT0-F2 review 4: the EX_DOWN-from-C = grate-step rule above needs C in the
                 ; grid's middle row with no down-exit of its own
                 ASSERT TUT0_ROOM_C / GRID_W == 1 && TUT0_ROOM_C < GRID_CELLS
-                ASSERT ({b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} & RDX_D) == 0
+                ; (the RDX_D half: tut_blob.asm, after the level data — {b} of a later line reads 0 here)
 
 ; tt_reset — the D0 grate step (spec §5.2): the three SMC operands back, then
 ; exactly a menu START (start_game: new game, seed, D1; its pool overwrites
@@ -235,6 +240,7 @@ tt_after:
                 call tt_group
                 jr   .mn
 .sm:            call tt_machine
+                call tt_knag                   ; TUT-KEY: at the locked door without the key
                 call tt_repeat
 .mn:            ld   a, (TV_SHOWN)             ; TUT0-R2 budget: a hold follows -> the mentor's
                 ld   hl, TV_HQ                 ; talk pose (glyphs + stamp, ~10-17k) and the
@@ -489,9 +495,9 @@ tt_snap:
                 ASSERT E_KIND == 0 && E_FLAGS == 2 && E_Y == E_X + 1 && EF_ACTIVE == 1
 
 ;------------------------------------------------------------------------------
-; tt_glob — a room change: the map was rebuilt (re-stamp), entering B finds
-; the key (the B-C lock off: the engine has no D0 key logic; door_open reads
-; the edge only), the overtaken-beat jump (unless the current beat's own
+; tt_glob — a room change: the map was rebuilt (re-stamp; TUT-KEY: the key is
+; no longer granted on entering B, it lies on B's floor and the B-C lock is the
+; engine's: key_take / key_door), the overtaken-beat jump (unless the current beat's own
 ; ROOM trigger takes it); the Goblin's death jumps to B14; the Goblin hold.
 ; Clobbers: all but IY.
 ;------------------------------------------------------------------------------
@@ -506,12 +512,7 @@ tt_glob:
                 ld   (TV_STAMP), a
                 ld   (TV_BSAY), a              ; MORROW-SPEAK: a room change hides the balloon (the
                 ld   (TV_BCOL), a              ; map was rebuilt without it)
-                ld   a, c
-                cp   TUT0_ROOM_B
-                jr   nz, .nb
-                ld   hl, EDGE_TAB + TUT_EDGE_BC
-                res  TUT_EG_LOCK_BIT, (hl)
-.nb:            call tt_rec
+                call tt_rec
                 ld   a, (ix+TB_TRIG)
                 cp   TUT_TK_ROOM
                 jr   nz, .ov
@@ -1047,8 +1048,13 @@ tt_trig:
                 ld   l, a
                 jp   (hl)
 tt_ttab:        DW   tk_storey, tk_near, tk_xge, tk_arank, tk_food, tk_room, tk_pois, tk_pclr
-                DW   tk_ghurt, tk_pass, tk_gslp, tk_gdead, tt_no
-                ASSERT TUT_TK_EXIT == 12 && TUT_TK_GOB_DEAD == 11 && TUT_TK_STOREY == 0
+                DW   tk_ghurt, tk_pass, tk_gslp, tk_gdead, tt_no, tk_key
+                ASSERT TUT_TK_EXIT == 12 && TUT_TK_GOB_DEAD == 11 && TUT_TK_STOREY == 0 && TUT_TK_KEY == 13
+tk_key:         ld   a, (LVL_FLAGS)            ; TUT-KEY: the cyan key held (key_take; key_door clears it
+                and  LF_KEYC                   ; at the unlock, B10: B7 is long passed by then)
+                ret  z                         ; CF = 0 (and)
+                scf
+                ret
 tk_storey:      ld   a, (TV_CUR + 1)
                 call tt_sty
                 cp   (ix+TB_P2)
@@ -1281,6 +1287,50 @@ tt_repeat:
 .g:             ld   d, TL_L75
                 jr   tt_group
 
+;------------------------------------------------------------------------------
+; tt_knag — TUT-KEY (2026-11-16): no group yet this turn, the hero in B on
+; storey 1 at the B-C door (x >= TUT_KNAG_X) with the door still locked and the
+; key not held (it lies on B's floor, col 8; a leap from the arrival can pass
+; it): L77 THE KEY LIES IN THIS ROOM (scroll, no pointer), once per approach
+; (TFB_KNAG; re-armed at x < TUT_KNAG_RE, off storey 1 or out of B). The bump
+; itself costs no turn, so the blob cannot see it: the walk there is the cue.
+; Never a soft-lock: the key cannot leave B's floor but into the hero's held
+; bits (no bag item, no discard), which only the unlock spends.
+; Clobbers: A, BC, DE, HL (+ tt_group's when it speaks).   ~0.15k idle
+;------------------------------------------------------------------------------
+tt_knag:
+                ld   a, (TV_SHOWN)
+                or   a
+                ret  nz
+                ld   hl, TV_FL
+                ld   a, (CUR_ROOM)
+                cp   TUT0_ROOM_B
+                jr   nz, .re
+                ld   a, (TV_CUR + 1)
+                call tt_sty
+                dec  a
+                jr   nz, .re                   ; not standing on storey 1
+                ld   a, (P_ENTITIES + E_X)
+                cp   TUT_KNAG_RE
+                jr   c, .re
+                cp   TUT_KNAG_X
+                ret  c                         ; between: keep the state
+                ld   a, (EDGE_TAB + TUT_EDGE_BC)
+                and  EG_LOCK
+                ret  z                         ; unlocked
+                ld   a, (LVL_FLAGS)
+                and  LF_KEYC
+                ret  nz                        ; held: the bump unlocks (B10)
+                bit  TFB_KNAG, (hl)
+                ret  nz                        ; said on this approach
+                set  TFB_KNAG, (hl)
+                ld   de, (TL_L77 << 8) | TUT_NONE
+                ld   c, e
+                jp   tt_group
+.re:            res  TFB_KNAG, (hl)
+                ret
+                ASSERT TUT_KNAG_RE < TUT_KNAG_X && TUT_KNAG_X + TOME_HERO_W <= ROOM_COLS - DOOR_COLS
+
 ; tt_igrp — IX = record: D, E, C = its instruction group + rect (G2 / +13 for a
 ; G2PRE beat, else G0 / +12). Clobbers: nothing else.
 tt_igrp:
@@ -1342,8 +1392,12 @@ tt_group_h:
 
 ;------------------------------------------------------------------------------
 ; tt_line — A = TL_ id (bit 7: tut_cpairs class pair, W / M by HERO_KIND):
-; tt_exp, then log_push. A full ring first drains (tt_frame) so no line is
-; dropped. Clobbers: all (IX too, when it drains).
+; tt_exp, then log_push of MOR_MARK + the line (TV_MARK..; MORROW-SPEAK review
+; A: the owner travels IN the ring slot, blob_log tests and strips it, so an
+; engine line that replaces the newest pending slot (log_room / log_push_end)
+; overwrites the mark with its own text and is drawn as the engine's; the
+; marker + the queued bytes <= LOG_MAX: tutpack lint). A full ring first drains
+; (tt_frame) so no line is dropped. Clobbers: all (IX too, when it drains).
 ; tt_exp — the same id: the stream (resident-dictionary tokens, decoded at draw
 ; time by print6t) copied into TV_BUF with the control bytes 1..5 (U D L R F)
 ; expanded (tt_tok). Clobbers: A, BC, DE, HL.
@@ -1355,17 +1409,9 @@ tt_line:
                 jr   c, .ok
                 call tt_frame                  ; ring full: let the panel draw one
                 jr   .dr
-.ok:            ld   hl, TV_BUF
-                call log_push                  ; (never dropped: the ring had room) DE = its terminator,
-                ld   a, e                      ; in the slot it filled: slot = E >> 6
-                rlca
-                rlca
-                and  LOG_SLOTS - 1
-                call tt_lbit
-                or   (hl)
-                ld   (hl), a                   ; MORROW-SPEAK: the slot holds his line (blob_log)
-                ret
-                ASSERT LOG_SLOT_LEN == 64 && (LOG_TXT & $FF) == 0
+.ok:            ld   hl, TV_MARK
+                ld   (hl), MOR_MARK            ; (set every time: 2 B, no init order to keep)
+                jp   log_push                  ; (never dropped: the ring had room)
 tt_exp:
                 cp   TUT_CP
                 jr   c, .p

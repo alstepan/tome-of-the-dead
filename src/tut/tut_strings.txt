@@ -9,6 +9,9 @@
 # a chord is introduced as {X}+{Y} AT ONCE. L49, L62, L74 unused; L30 removed (R2).
 # R4-5 (2026-11-10): L02 L03 L07 L09 L12 L16 L20 L23 L28 L30b L40 L46 L60 L61 L72 I00b
 # reworded (L23: the shaft is a ladder top, entered with DOWN, not by walking on).
+# TUT-KEY (2026-11-16): L47 reworded (the grate shaft is entered with DOWN, as L23); L77 new.
+# MORROW-SPEAK review A: a log line's expanded bytes (keys at 5) must be <= LOG_MAX - 1
+# (tt_line prefixes his marker byte; linted by tools/tutpack.py).
 
 # --- log lines (shared) ---
 TL_L01 = A LIVING ONE, AT LAST. COME DOWN
@@ -63,7 +66,7 @@ TL_L43 = WHAT YOU TOOK HERE STAYS HERE
 TL_L44 = FIND THE KEY, SLAY THE BOSS
 TL_L45 = ITS GRATE IS YOUR WAY DOWN
 TL_L46 = PAUSE: HOLD {F}, PRESS {U}
-TL_L47 = STEP ON THE GRATE. GO, CHILD
+TL_L47 = ON THE GRATE, PRESS {D}
 TL_L48 = HURT? DRINK THE HEAL POTION
 TL_L50 = ENOUGH. I MEND YOU - THIS TIME
 TL_L51 = BELOW, NO ONE WILL
@@ -93,6 +96,8 @@ TL_L72 = PRESS {F}, THEN DRINK THE CURE
 TL_L73 = THAT ONE. NOW PRESS {F}
 TL_L75 = CHILD. FIRST, DO AS I SAID
 TL_L76 = YOU LEFT A LESSON UNDONE ABOVE
+# --- TUT-KEY (2026-11-16): B7's goal line + the keyless-door nudge (the key lies on B's floor) ---
+TL_L77 = THE KEY LIES IN THIS ROOM
 # --- R2 icon tour (s13.3): entry pair, slot lines (W / M where the class differs) ---
 TL_I00a = THE LIT ICON IS YOUR CHOICE
 TL_I00b = PICK: {L} {R}. LEAVE: {U}

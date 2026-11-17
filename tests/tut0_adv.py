@@ -353,6 +353,14 @@ def complete(c, rounds=10):
             U.walk_to(p, 5)
             U.to_floor(p, 1, room=4)
         elif room == 4:
+            if not p.rb("LVL_FLAGS") & S["LF_KEYC"] and p.rb(S["EDGE_TAB"] + 3) & S["EG_LOCK"]:
+                if U.storey(p) == 1:                     # TUT-KEY: the B-C door is locked: fetch the floor key (col 8)
+                    U.walk_to(p, 24)
+                    for _ in range(14):
+                        if U.storey(p) == 0:
+                            break
+                        T(c, "K")
+                U.walk_to(p, 8)
             if U.storey(p) == 0:
                 U.walk_to(p, 24)
                 U.to_floor(p, 1)

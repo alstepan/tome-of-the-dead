@@ -6,14 +6,17 @@
 ;  2. A 16x16 speech balloon (assets/gfx/mentor/balloon.asm, white on black, no
 ;     mask) beside his head while his latest line is the newest log line.
 ;
-; Line ownership: tt_line marks the ring slot its log_push filled (TV_LMOR, one
-; bit per LOG_TXT slot); blob_log, which draws every log line while D0 runs (the
-; il_go SMC: item_log's farb lands here instead of item_log0), takes the bit of
-; the slot it draws, draws through item_log0, then sets the two log rows' attrs
+; Line ownership (review A, in-band): tt_line queues MOR_MARK + the line, so the
+; owner is IN the LOG_TXT slot; blob_log, which draws every log line while D0
+; runs (the il_go SMC: item_log's farb lands here instead of item_log0), tests
+; the slot's first byte, strips the mark (the line one byte down: an LDIR in
+; the slot), draws through item_log0, then sets the two log rows' attrs
 ; (row 22 = the scrolled line's ink without BRIGHT, row 23 = this line's) and
 ; TV_BSAY (his line is the newest). The rows' attrs need no mark: item_log0 /
 ; log_scroll mark every inked cell of both rows (HUD4_PW), a blank cell's ink
-; never shows (paper 0 either way).
+; never shows (paper 0 either way). An engine line that replaces the newest
+; pending slot (log_room, log_push_end: the ring full) writes its own text over
+; the mark: drawn as the engine's (his replaced line is lost, LOG-FIX's rule).
 ;
 ; The balloon is a TILE STAMP like Morrow himself (survives every erase: the
 ; engine restores the cells from ROOM_MAP): it borrows the 4 ids of the D8
@@ -31,6 +34,8 @@
 ; the map is rebuilt), GS_PLAYING left; moved / mirrored when his spot / facing
 ; changes (tt_after's turn-end tt_bal).
 ;==============================================================================
+MOR_MARK        EQU 1                   ; review A: his line's first byte in the ring (a control byte: tt_exp
+                                        ; expands 1..5, the engine streams are 32..127 / tokens: never queued)
 MOR_ATTR_NEW    EQU $45                 ; his newest line (row 23): bright cyan = TUT_GOAL_ATTR
 MOR_ATTR_OLD    EQU $05                 ; scrolled to row 22: cyan, BRIGHT off (as ATTR_LOG_NEW -> _OLD)
 BAL_ID0         EQU T_LECT_TL           ; the 4 borrowed ids: TL TR / BL BR = balloon.asm's order
@@ -50,16 +55,30 @@ LOG22_ATTR      EQU SCREEN_ATTR + LOG_ROW * 32
 ;------------------------------------------------------------------------------
 ; blob_log — item_log's line while D0 runs (il_go: farb, C = BANK_BLOB; LOG_QN
 ; != 0). Clobbers: all but IX, IY (item_log's contract).
-; T: item_log0 (~23k for 32 chars) + FARB0 ~0.25k + ~0.6k per log row whose owner changed + tt_bal
-; (~0.3k unchanged; ~3-5k a placement, ~1.5k a hide).
+; T: item_log0 (~23k for 32 chars) + FARB0 ~0.25k + ~0.1k the mark test (+0.7k his line's strip) + ~0.6k per log
+; row whose owner changed + tt_bal (~0.3k unchanged; ~3-5k a placement, ~1.5k a hide). (A log item is drawn only in
+; a tick still in its 1st frame: panel_tick.)
 ;------------------------------------------------------------------------------
 blob_log:
                 ld   a, (LOG_Q + LQ_RD)        ; the slot item_log0 draws
-                call tt_lbit                   ; HL = TV_LMOR, A = its bit
-                and  (hl)
+                rrca
+                rrca                           ; x LOG_SLOT_LEN
+                ld   l, a
+                ld   h, LOG_TXT >> 8
+                ld   a, (hl)
+                cp   MOR_MARK
+                ld   a, 0
+                jr   nz, .own                  ; an engine line (or one written over his)
+                ld   d, h
+                ld   e, l
+                inc  l
+                ld   bc, LOG_MAX + 1
+                ldir                           ; his: the mark out (the line + 0 one byte down, in the slot)
+                dec  a                         ; A = $FF
+.own:           or   a
                 push af                        ; NZ: Morrow's line
-                xor  (hl)
-                ld   (hl), a                   ; the slot's bit spent
+                ASSERT LOG_SLOT_LEN == 64 && (LOG_TXT & $FF) == 0 && LOG_MAX + 2 <= LOG_SLOT_LEN
+                ASSERT MOR_MARK >= 1 && MOR_MARK <= TUT_CTL_N
                 FARB0 item_log0                ; scroll + the line (bank 4 back)
                 ld   hl, LOG23_ATTR            ; (a row's 24 attrs are always one value: col 0 stands
                 ld   a, (hl)                   ; for the row; a row already right is not rewritten,
@@ -129,7 +148,10 @@ tt_bal:
 
 ;------------------------------------------------------------------------------
 ; tt_bhide — the balloon out (if placed): its cells that still hold a balloon id
-; back to T_AIR + rect_repaint (the next render draws them); only the state when
+; back to T_AIR + rect_repaint (the next render draws them); inside a hold
+; (TV_HOLD: its frames present without rendering; review C) also tile_rect +
+; pmark_rect now, as tt_bput, unless a body touches the 2x2 (tt_bfree: then the
+; queued restore after the hold draws it, under the sprite); only the state when
 ; the room changed under it (tt_glob not run yet). Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 tt_bhide:
@@ -159,7 +181,15 @@ tt_bhide:
                 inc  l                         ; (x <= 30: no row / page cross from col x to x + 1)
                 call .cl
                 ld   de, (2 << 8) | 2
-                jp   rect_repaint
+                push bc
+                call rect_repaint
+                pop  bc
+                ld   a, (TV_HOLD)
+                or   a
+                ret  z
+                call tt_bfree                  ; CF: all 4 cells T_AIR now, no body on them
+                ret  nc
+                jp   tt_bdraw                  ; drawn now (a hold renders nothing)
 .cl:            ld   a, (hl)
                 sub  BAL_ID0
                 cp   4
@@ -256,20 +286,26 @@ tt_bput:
                 pop  bc                        ; render draws it: play ticks pay no tile_rect)
                 ld   a, (TV_HOLD)
                 or   a
-                jr   z, .nh
-                push bc                        ; a hold presents without rendering: drawn now
-                ld   de, (2 << 8) | 2
-                call tile_rect                 ; bank 5 (no body on it: tt_bfree)
-                pop  bc
-                ld   de, (2 << 8) | 2
-                call pmark_rect
-.nh:            pop  de
+                call nz, tt_bdraw              ; a hold presents without rendering: drawn now
+                pop  de
                 scf
                 ret
+; tt_bdraw — the 2x2 at C = col, B = row drawn from ROOM_MAP into bank 5 and
+; marked for present (no body on it: the callers' tt_bfree). Clobbers: A, DE, HL.
+tt_bdraw:
+                push bc
+                ld   de, (2 << 8) | 2
+                call tile_rect
+                pop  bc
+                ld   de, (2 << 8) | 2
+                jp   pmark_rect
 
 ; tt_bfree — C = col x, B = row: CF = 1 if x is 1..30, the 2x2's ROOM_MAP cells
-; are T_AIR and no EF_ACTIVE slot's box (cols E_X-1..E_X+4, rows E_Y..E_Y+5)
-; touches it. Clobbers: A, HL (BC, DE, IX kept).
+; are T_AIR and neither live body's box (cols E_X-1..E_X+4, rows E_Y..E_Y+5)
+; touches it. Review D: D0's only bodies are the hero (slot 0) and the Goblin
+; (TV_GOB, $FF out of C; tt_snap) — LP_TOTAL 1, no trickle, no follower — so
+; those two are tested, not the 16 slots (~1k T a candidate -> ~0.2k; up to 6
+; candidates a placement). Clobbers: A, HL (BC, DE, IX kept).   ~0.3k T
 tt_bfree:
                 ld   a, c
                 dec  a
@@ -287,33 +323,36 @@ tt_bfree:
                 or   (hl)                      ; (OR: CF = 0)
                 pop  de
                 ret  nz                        ; a cell not T_AIR
-                push ix
+                ld   hl, P_ENTITIES            ; the hero
+                call .one
+                ret  nc                        ; busy
                 push de
-                ld   ix, P_ENTITIES
-                ld   de, P_ENT_STRIDE
-                ld   h, P_MAX_ENT
-.e:             bit  0, (ix+E_FLAGS)           ; EF_ACTIVE
-                jr   z, .n
-                ld   a, (ix+E_X)
+                call tt_gobp                   ; NZ: HL = the Goblin's slot (DE scratch)
+                pop  de
+                scf
+                ret  z                         ; no Goblin here: free
+; .one — HL = a slot: CF = 1 if it is not EF_ACTIVE or its box does not touch the 2x2. Keeps BC, DE.
+.one:           inc  l
+                inc  l                         ; E_FLAGS
+                bit  0, (hl)                   ; EF_ACTIVE
+                scf
+                ret  z
+                inc  l                         ; E_X
+                ld   a, (hl)
                 sub  c
                 add  a, 4
                 cp   7
-                jr   nc, .n                    ; cols apart
-                ld   a, (ix+E_Y)
+                ccf
+                ret  c                         ; cols apart: free
+                inc  l                         ; E_Y
+                ld   a, (hl)
                 sub  b
                 add  a, 5
                 cp   7
-                jr   c, .x                     ; rows touch: busy
-.n:             add  ix, de
-                dec  h
-                jr   nz, .e
-                scf                            ; free
-                jr   .y
-.x:             or   a                         ; busy: CF = 0
-.y:             pop  de
-                pop  ix
+                ccf                            ; rows touch (CF was 1): busy, CF = 0
                 ret
                 ASSERT EF_ACTIVE == 1 && T_AIR == 0 && PLAY_ROWS >= 2 * STOREY_ROWS
+                ASSERT E_FLAGS == 2 && E_X == 3 && E_Y == 4 && (P_ENT_STRIDE & 7) == 0 && (P_ENTITIES & 7) == 0
 
 ; tt_bmap — C = col, B = row: HL = ROOM_MAP + 32 x row + col. Clobbers: A.
 tt_bmap:
@@ -376,21 +415,12 @@ tt_bgly:
                 jp   r20_fill
                 ASSERT (BITREV_TAB & $FF) == 0 && balloon_bal_tr == balloon + 8 && balloon_bal_br == balloon + 24
 
-; tt_lbit — A = ring slot 0..3: A = its TV_LMOR bit, HL = TV_LMOR. Clobbers: B.
-tt_lbit:
-                ld   hl, TV_LMOR
-                ld   b, a
-                inc  b
-                ld   a, $80
-.r:             rlca
-                djnz .r
-                ret
-
 ;------------------------------------------------------------------------------
 ; tt_unhook — every D0 exit (blob_choice: death, Quit, choice 2 / BREAK, the
 ; first offer too; tt_reset: the grate step): the SMC operands back (pl_et,
-; pi_ic, il_go) and the lectern's ids as boot left them (glyphs = bal_lect,
-; attrs ATTR_LECT_*, flags TF_SOLID | TF_ATTACK). Clobbers: A, BC, DE, HL.
+; pi_ic, il_go, TUT-KEY item_depth's digit) and the lectern's ids as boot left
+; them (glyphs = bal_lect, attrs ATTR_LECT_*, flags TF_SOLID | TF_ATTACK).
+; Clobbers: A, BC, DE, HL.
 ;------------------------------------------------------------------------------
 tt_unhook:
                 ld   hl, end_turn
@@ -401,6 +431,8 @@ tt_unhook:
                 ld   (il_go + 1), hl           ; SMC target (panel2.asm item_log, MORROW-SPEAK)
                 ld   a, BANK_TEXT
                 ld   (il_go + 4), a
+                ld   a, '0'
+                ld   (item_depth.d + 1), a     ; SMC target (panel_hot.asm item_depth, HOT_COPY; TUT-KEY)
                 ld   hl, bal_lect
                 ld   de, BAL_GLY
                 ld   bc, 32
@@ -417,13 +449,20 @@ tt_unhook:
                 ld   hl, tile_flags + BAL_ID0
                 ld   b, 4
                 jp   r20_fill
-; tt_hook — tut_d0: item_log's farb -> blob_log (with pl_et / pi_ic). Clobbers: A, HL.
+; tt_hook — tut_d0: item_log's farb -> blob_log (with pl_et / pi_ic); TUT-KEY:
+; item_depth's `add a, '0'` operand := '0' - 1, so every panel depth redraw while
+; D0 runs (PD_DEPTH: the key pickup / the unlock queue it for the key cells; D0
+; runs with LVL_DEPTH 1) prints "D0" — no "D1" flash between the bump's input
+; tick and the blob's turn end, 0 resident bytes. Clobbers: A, HL.
 tt_hook:
                 ld   hl, blob_log
                 ld   (il_go + 1), hl           ; SMC target (panel2.asm item_log)
                 ld   a, BANK_BLOB
                 ld   (il_go + 4), a
+                ld   a, '0' - 1
+                ld   (item_depth.d + 1), a     ; SMC target (panel_hot.asm item_depth: "D0")
                 ret
+                ASSERT LVL_DEPTH == LVL_HDR    ; D0's LVL_DEPTH = 1 (tut_blob.asm ASSERTs the image): 1 + '0' - 1 = '0'
                 ASSERT {b il_go} == $21 && {b il_go + 3} == $0E && {il_go + 1} == item_log0 && {b il_go + 4} == BANK_TEXT
 
 ; bal_lect — tiles_common_glyphs ids 15..18 (the Sanctum lectern), restored by
