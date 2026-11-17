@@ -197,7 +197,7 @@ BANK_BLOB       EQU BANK_POOL1      ; 4
 BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
 BOOT4_ORG       EQU BANK_WINDOW + $100
 INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
-BLOB_ORG        EQU $DF01           ; TUT-KEY: $DF37 -> $DF01 (raw blob 8,385 -> 8,439 B + 8 B tail: tt_knag, tk_key, the B14 / B7
+BLOB_ORG        EQU $DEB1           ; TUT-KEY-FLASH: $DF01 -> $DEB1 (tt_kflash +80 B raw; the pool tops stay >2.6k below). TUT-KEY: $DF37 -> $DF01 (raw blob 8,385 -> 8,439 B + 8 B tail: tt_knag, tk_key, the B14 / B7
                                     ; lines, the in-band owner mark; memory-map "TUT-KEY ledger"). MORROW-SPEAK: $E1B2 -> $DF37 (raw blob 7,750 -> 8,385 B + 8 B tail; the D0 pool top $D460 and
                                     ; boot4_end stay far below, ASSERTed). (UX1: tt_ptr's FARB0 ux_ptr +8 B, ITEM-INFO's dictionary -38 B: fits, unmoved); B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
                                     ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES

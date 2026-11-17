@@ -242,7 +242,8 @@ tt_after:
 .sm:            call tt_machine
                 call tt_knag                   ; TUT-KEY: at the locked door without the key
                 call tt_repeat
-.mn:            ld   a, (TV_SHOWN)             ; TUT0-R2 budget: a hold follows -> the mentor's
+.mn:            call tt_kflash                 ; TUT-KEY-FLASH: the key flashes on the floor, then on the panel
+                ld   a, (TV_SHOWN)             ; TUT0-R2 budget: a hold follows -> the mentor's
                 ld   hl, TV_HQ                 ; talk pose (glyphs + stamp, ~10-17k) and the
                 and  (hl)                      ; pointer (+ the panel drain) are done inside the
                 jr   nz, .hq                   ; hold (tt_holdm): frames, not this tick's work
@@ -1298,6 +1299,7 @@ tt_repeat:
 ; bits (no bag item, no discard), which only the unlock spends.
 ; Clobbers: A, BC, DE, HL (+ tt_group's when it speaks).   ~0.15k idle
 ;------------------------------------------------------------------------------
+
 tt_knag:
                 ld   a, (TV_SHOWN)
                 or   a
@@ -2073,3 +2075,55 @@ blob_icon:
                 ld   c, TUT_NONE
                 jp   tt_group
                 ASSERT TUT_TGF_POIS == 1 << TUT_TGF_POIS_BIT && ICON_SLOTS + 1 <= 13 && TUT_TG_STRIDE == 6
+
+;------------------------------------------------------------------------------
+; tt_kflash — TUT-KEY-FLASH (user 2026-11-17: the key clearly visible, flashing once taken): at every D0 turn
+; end. Key still on B's floor (LVL_KEYROOM == the room; key_take clears it): FLASH (attr bit 7) on its 4
+; cells + the key slot's ink in FI_INK (erase_rect / the sprite pass repaint from it, so a redraw keeps it).
+; Key held (LF_KEYC): a queued panel key redraw is drawn first (item_depth, it paints without FLASH), then
+; FLASH on the 2 panel key cells; key_door's unlock redraw (PD_DEPTH) blanks them as on D1+.
+; Clobbers: A, BC, DE, HL.   ~0.2k idle; ~3.5k the one turn a draw is pending
+;------------------------------------------------------------------------------
+TUT_KEY_COL     EQU 8                   ; the key's col (tools/tut0_level.py ITEMS)
+KF_ATTR0        EQU SCREEN_ATTR + (STOREY_AIR - 2) * 32 + TUT_KEY_COL
+tt_kflash:
+                ld   a, (LVL_FLAGS)
+                and  LF_KEYC
+                jr   z, .fl
+                ld   hl, PANEL_DIRTY
+                bit  PD_DEPTH_BIT, (hl)
+                call nz, item_depth            ; HL = PANEL_DIRTY (far6 key_pan nests)
+                ld   hl, KEY_PAN_ATTR
+                set  7, (hl)
+                inc  l
+                set  7, (hl)
+                ret
+.fl:            ld   a, (CUR_ROOM)
+                ld   hl, LVL_KEYROOM
+                cp   (hl)
+                ret  nz                        ; not the key room, or taken (ROOM_NONE)
+                ld   hl, KF_ATTR0
+                set  7, (hl)
+                inc  l
+                set  7, (hl)
+                ld   l, (KF_ATTR0 + 32) & $FF
+                set  7, (hl)
+                inc  l
+                set  7, (hl)
+                ld   a, (FI_TSLOT + IT_KEY)
+                cp   FI_SLOTS
+                ret  nc
+                rrca
+                rrca
+                rrca
+                ld   l, a                      ; slot * 32
+                ld   h, FI_INK >> 8
+                bit  7, (hl)
+                ret  nz                        ; the slot's ink flashes already
+                ld   b, ICONS16_BYTES
+.k:             set  7, (hl)
+                inc  l
+                djnz .k
+                ret
+                ASSERT (KF_ATTR0 & $FF) + 33 < $100 && (KF_ATTR0 >> 8) == ((KF_ATTR0 + 32) >> 8) && ICONS16_BYTES == 32
+                ASSERT (FI_INK & $FF) == 0 && (KEY_PAN_ATTR & $FF) + 1 < $100
