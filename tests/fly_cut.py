@@ -15,6 +15,8 @@ hero waits. Per turn: no body overlap, no body in a solid tile.
   H1       same room, the hero on storey 1: no detour (the flyer keeps its storey-0 rules, never leaves storey 0)
   P1       wide-pit room (no block): FLY_CUT = $FF; the Ghost flies straight over the pit (contact, never
            leaves storey 0)
+  D2       two flyers detouring at once: no overlap, both reach the hero
+  D3       the hero crosses halves mid-detour: the flyer re-targets, no stall > 6 turns
   K        FLY_CUT = b - 1 in a mid-block room, $FF in pit / plain rooms
 Prints turns-to-contact per kind (the before / after figure of the task). Build with -DDEBUG_KIT=0.
 Usage: ZRCP_PORT=n python3 tests/fly_cut.py"""
@@ -178,6 +180,89 @@ def case_k(p):
     check("K: FLY_CUT = $FF in a plain room", p.rb("FLY_CUT") == 0xFF, p.rb("FLY_CUT"))
 
 
+def contact_of(m, w, h, hero):
+    vov = m["Y"] < hero["Y"] + HERO_H and hero["Y"] < m["Y"] + h
+    gap = max(hero["X"] - (m["X"] + w), m["X"] - (hero["X"] + 3))
+    return vov and gap <= 1
+
+
+def case_d2(p):
+    """Two flyers detour at once (same half, both cut off): never overlap each other / the hero / a solid,
+    and both reach the hero."""
+    assert new_game(p, 3, 0x3C51), "no game"
+    k = S["K_GHOST"]
+    room = set_geometry(p, lad1=4, lad2=21, midb=16, midw=2)
+    f = room_cells(p)
+    place(p, room, (0, 28), (0, 6), k, False)
+    w, h = kwh(p, k)
+    fy = 9 * 0 + 1
+    p.set_ent(2, KIND=k, ROOM=room, FLAGS=1 | 4, HP=200, MAXHP=200, X=11, Y=fy, PX=88, PY=8 * fy,
+              MODE=0, REACT=0, FLT=0, AIDIR=1, POT=0)
+    p.wb(S["ST_FLAGS"] + 2, 0)
+    p.settle(2)
+    got, bad, trace2 = {1: None, 2: None}, None, []
+    for t in range(1, 101):
+        if p.rb("GAME_STATE") != 2:
+            break
+        p.turn("WAIT", max_ticks=200)
+        hero, ms = p.ent(0), {1: p.ent(1), 2: p.ent(2)}
+        fb = {i: (m["X"], m["Y"], w, h) for i, m in ms.items()}
+        if bad is None and overlap(fb[1], fb[2]):
+            bad = (t, "flyers overlap", fb)
+        for i, b in fb.items():
+            if bad is None and any(f(c, r) & TF_SOLID for c in range(b[0], b[0] + w) for r in range(max(0, b[1]), min(b[1] + h, S["PLAY_ROWS"]))):
+                bad = (t, "solid", i, b)
+            # reached = in contact, or back on storey 0 in the hero's half (past the block: the first one at the hero blocks the way)
+            if got[i] is None and (contact_of(ms[i], w, h, hero) or (storey_of(ms[i]["Y"], h) == 0 and ms[i]["X"] >= 18)):
+                got[i] = t
+        trace2.append((t, ms[1]["X"], ms[1]["Y"], ms[2]["X"], ms[2]["Y"]))
+        if all(got.values()):
+            break
+    print(f"  D2 trace {trace2[::4]}", flush=True)
+    print(f"  D2: contact turns {got}", flush=True)
+    check("D2: two detouring flyers never overlap each other / a solid", bad is None, bad)
+    check("D2: both reach the hero's half within 100 turns", all(got.values()), got)
+
+
+def case_d3(p):
+    """The hero crosses halves mid-detour: the flyer re-targets and does not stall."""
+    assert new_game(p, 3, 0x3C61), "no game"
+    k = S["K_GHOST"]
+    room = set_geometry(p, lad1=4, lad2=21, midb=16, midw=2)
+    f = room_cells(p)
+    place(p, room, (0, 26), (0, 6), k, False)
+    w, h = kwh(p, k)
+    moved, tr, bad, c, stall, worst, last = None, [], None, None, 0, 0, None
+    for t in range(1, 121):
+        if p.rb("GAME_STATE") != 2:
+            break
+        p.turn("WAIT", max_ticks=200)
+        m, hero = p.ent(1), p.ent(0)
+        pos = (m["X"], m["Y"])
+        tr.append(pos)
+        if moved is None and storey_of(m["Y"], h) == 1:
+            moved = t               # the detour is under way: the hero walks to the flyer's origin half
+            hy = stand_y(0, HERO_H)
+            p.set_ent(0, X=3, Y=hy, PX=24, PY=hy)
+            last, stall, worst = None, 0, 0
+        elif moved is not None:
+            stall = stall + 1 if pos == last else 0
+            worst = max(worst, stall)
+            if c is None and contact_of(m, w, h, p.ent(0)):
+                c = t
+        last = pos
+        fb = (m["X"], m["Y"], w, h)
+        if bad is None and any(f(cc, r) & TF_SOLID for cc in range(fb[0], fb[0] + w) for r in range(max(0, fb[1]), min(fb[1] + h, S["PLAY_ROWS"]))):
+            bad = (t, "solid", fb)
+        if c is not None:
+            break
+    print(f"  D3: detour at turn {moved}, contact at {c}, worst stall {worst}", flush=True)
+    check("D3: the flyer started a detour", moved is not None, tr)
+    check("D3: hero crossed halves: contact within 60 turns of the swap", c is not None and moved is not None and c - moved <= 60, (moved, c))
+    check("D3: no stall > 6 turns after the swap", worst <= 6, worst)
+    check("D3: no solid", bad is None, bad)
+
+
 with Harness() as hh:
     hh.launch(EMU_ARGS)
     p = Proto(hh)
@@ -191,8 +276,9 @@ with Harness() as hh:
             case_c(p, name, results)
         except AssertionError as e:
             check(f"C {name}: setup", False, repr(e))
-    if FLY_CUT is not None and not only:
-        for fn in (case_k, case_h1, case_p1):
+    fns = [f for f in (case_k, case_h1, case_p1, case_d2, case_d3) if f.__name__[5:] in os.environ.get("FLY_CUT_FN", f.__name__[5:]).split(",")]
+    if FLY_CUT is not None and (not only or os.environ.get("FLY_CUT_FN")):
+        for fn in fns:
             try:
                 fn(p)
             except AssertionError as e:

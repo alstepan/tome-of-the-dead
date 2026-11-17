@@ -1,6 +1,7 @@
 ; =============================================================================
 ; tut_beats.asm - TUT0-T8: the D0 tutorial beat table (blob, bank 4).
-; Spec: docs/design/tutorial_d0.md s3 (beats B0..B15), s6 (class pairs), s11
+; Spec: docs/design/tutorial_d0.md s3 (beats B0..B15 + TUT-GEAR's B9G between B9 and
+; B10: 17 records, index 10 = B9G, B10..B15 at 11..16; tut_turn.asm TUT_Bn), s6 (class pairs), s11
 ; (architect round); format: docs/design/tut0_split.md "Contracts shared by all
 ; tasks". Pure data, no code. Included only by the blob; the EQUs are TUT_-
 ; prefixed so they never clash with defs.asm. TL_* line ids come from T3's
@@ -29,7 +30,9 @@ TUT_TK_PASSIVE      EQU 9               ; never fires; ends when B13/B14 take ov
 TUT_TK_GOB_ASLEEP   EQU 10              ; p2 = cols: G0 shows when the awake Goblin is within p2; fires when it sleeps
 TUT_TK_GOB_DEAD     EQU 11              ; Goblin dead
 TUT_TK_EXIT         EQU 12              ; exit pending at end of turn
-TUT_TK_KEY          EQU 13              ; TUT-KEY: the cyan key held (LVL_FLAGS LF_KEYC: picked up from B's floor)
+TUT_TK_KEY          EQU 13              ; TUT-KEY: the cyan key held (LVL_FLAGS LF_KEYC: picked up from B's floor) and the
+                                        ; log ring drained (the engine's pickup line drawn: G1 one turn later, budget)
+TUT_TK_HELM         EQU 14              ; TUT-GEAR: a helmet worn (WORN + WS_HELM TYPE != IT_NONE)
 
 ; --- fail / skip handlers (+14) ----------------------------------------------
 TUT_FH_PITFALL        EQU 0             ; L69 + L10 (R2), beat stays
@@ -38,6 +41,8 @@ TUT_FH_TRAP_PASSED    EQU 2             ; L29 + L28 (B8); B9 then uses L32
 TUT_FH_NOT_POISONED   EQU 3             ; L32 on pickup, advance (B9)
 TUT_FH_IMPATIENT      EQU 4             ; L53 before G0 (B11)
 TUT_FH_VICTORY_EXTRAS EQU 5             ; tut_extras: L48 after G3 (HP<max + Heal), L52 after G4 (unread scroll)
+TUT_FH_GEAR           EQU 6             ; TUT-GEAR B9G (tt_step's pre-step, every stage up to WAIT): G0 waits for the class
+                                        ; helmet in the bag; worn before G0 -> G1 only; taken and gone (DISCARD) -> advance, silent
 TUT_FH_NONE           EQU TUT_NONE
 
 ; --- mentor poses (+5 bits 0..5 = FRAME index of the 3/4 art, aldous34.asm;
@@ -73,6 +78,7 @@ TUT_BF_GRATE    EQU 8                   ; GOB_DEAD: open the grate after tail pa
 TUT_BF_H0       EQU $10                 ; G0 holds
 TUT_BF_H1       EQU $20                 ; G1 holds
 TUT_BF_H2       EQU $40                 ; G2 holds (G2PRE or not)
+TUT_BF_R1G1     EQU $80                 ; TUT-GEAR: a G2PRE beat whose +13 rect belongs to G1 (the trigger group; G2 has none)
 
 ; --- class-pair ids: a line id with bit 7 set = tut_cpairs[id & $7F] (W, M) ---
 TUT_CP          EQU $80
@@ -82,6 +88,7 @@ TUT_CP_L36      EQU TUT_CP + 2
 TUT_CP_L38      EQU TUT_CP + 3
 TUT_CP_I01      EQU TUT_CP + 4              ; R2 icon tour: slot 1 (sword / staff)
 TUT_CP_I02      EQU TUT_CP + 5              ; slot 2 (Power Strike / Spark)
+TUT_CP_L83      EQU TUT_CP + 6              ; TUT-GEAR: WORN! DEF +1 (Helm) / MAX MP +1 (Hood)
 
 ; --- pointer rect ids (+12 / +13) -> tut_rects index -------------------------
 TUT_PR_BAG      EQU 0
@@ -91,6 +98,7 @@ TUT_PR_SCROLL   EQU 3
 TUT_PR_STATUS   EQU 4                   ; (TUT0-F2: the key-icon rect is gone, L24 reworded)
 TUT_PR_BARS     EQU 5
 TUT_PR_ROW20    EQU 6
+TUT_PR_HELM     EQU 7                   ; TUT-GEAR: the panel's worn helmet cell (rows 22-23, cols GEAR_COL + 2 * WS_HELM)
 TUT_R20_W       EQU 24                  ; ROW20 = cols 0..23 (TUT0-F4 R4-6, was 26; <= HP_COL, ASSERT tut_turn); = the goal line's width
 
 ; one record = 16 B (ASSERTed). Group = 2 line ids (second may be $FF).
@@ -101,7 +109,7 @@ TUT_R20_W       EQU 24                  ; ROW20 = cols 0..23 (TUT0-F4 R4-6, was 
         ENDM
 
 ; =============================================================================
-; Beat table: 16 x TUT_TB_STRIDE = 256 B, B0..B15 in order.
+; Beat table: 17 x TUT_TB_STRIDE = 272 B, B0..B9, B9G (TUT-GEAR), B10..B15 in order.
 ; Group timing: G0 = when the beat becomes current; G1 = on trigger; G2 = the
 ; turn after G1 (or after G0 with TUT_BF_G2PRE).
 ; =============================================================================
@@ -158,6 +166,13 @@ tut_beats:
         TBEAT TUT_RB, TUT_TK_POISON_CLR, 0, 0, TUT_SP_B2, TUT_PF_BLINK | TUT_POSE_PT_DN, \
               TL_L30b, TUT_NONE, TL_L31, TUT_NONE, TUT_NONE, TUT_NONE, \
               TUT_PR_BAG, TUT_NONE, TUT_FH_NOT_POISONED, 0
+; B9G Gear (B, TUT-GEAR 2026-11-16, docs/design/tut_gear.md s3): stays at B2, POINT_DN; G0 (the class helmet in the
+; bag, FH_GEAR's pre-step) L80 / L60 (hold, pointer BAG); G2 (next turn, pre-trigger) L81 / L82 (hold, no pointer; L82
+; = the goal line); a helmet worn: G1 class L83 W / M (scroll, pointer HELM: R1G1). Never picked up: waits (entering
+; C skips it with L76, tt_glob); discarded: advance, silent; worn before G0: G1 only
+        TBEAT TUT_RB, TUT_TK_HELM, 0, 0, TUT_SP_B2, TUT_POSE_PT_DN, \
+              TL_L80, TL_L60, TUT_CP_L83, TUT_NONE, TL_L81, TL_L82, \
+              TUT_PR_BAG, TUT_PR_HELM, TUT_FH_GEAR, TUT_BF_G2PRE | TUT_BF_R1G1 | TUT_BF_H0 | TUT_BF_H2
 ; B10 Door (B): blink -> B3, POINT right; L33; room = C (TUT-KEY: the B-C door is really locked: the
 ; key held since B7 unlocks it on the bump, lockl.asm key_door; keyless: tt_knag's L77)
         TBEAT TUT_RB, TUT_TK_ROOM, TUT_RC, 0, TUT_SP_B3, TUT_PF_BLINK | TUT_POSE_PT, \
@@ -189,7 +204,7 @@ tut_beats:
               TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, \
               TUT_NONE, TUT_NONE, TUT_FH_NONE, 0
 tut_beats_end:
-        ASSERT tut_beats_end - tut_beats = 16 * TUT_TB_STRIDE
+        ASSERT tut_beats_end - tut_beats = TUT_BEATS_N * TUT_TB_STRIDE
 
 ; =============================================================================
 ; Tail groups (TUT_BF_TAIL): pairs of line ids shown one group per turn after
@@ -221,12 +236,12 @@ tut_tail_hold:
 ; second line of the R4-4 nudge (L75 + goal). Existing lines (R4-5 rewordings); TUT-KEY: B7 = L77
 ; (where the key lies: it is on the floor now), B8 keeps L24 (held by then).
 ; B12 / B13 none (combat owns row 20: the target readout); B14 / B15 L47 while the grate is
-; open, to the exit (the B14 tail ends in B15 a few turns before the step). 16 B.
+; open, to the exit (the B14 tail ends in B15 a few turns before the step). TUT-GEAR: B9G = L82. 17 B.
 tut_goal:
         DEFB TL_L02, TL_L03, TL_L09, TL_L60, TL_L16, TL_L20, TL_L23, TL_L77     ; B0..B7
-        DEFB TL_L24, TL_L30b, TL_L33, TUT_CP_L35, TUT_NONE, TUT_NONE, TL_L47, TL_L47   ; B8..B15
+        DEFB TL_L24, TL_L30b, TL_L82, TL_L33, TUT_CP_L35, TUT_NONE, TUT_NONE, TL_L47, TL_L47   ; B8, B9, B9G, B10..B15
 tut_goal_end:
-        ASSERT tut_goal_end - tut_goal == 16
+        ASSERT tut_goal_end - tut_goal == TUT_BEATS_N
 
 ; FH_VICTORY_EXTRAS lines: [0] after G3 if HP < max and a Heal is held,
 ; [1] after G4 if the scroll is unread. 2 B.
@@ -234,7 +249,7 @@ tut_extras:
         DEFB TL_L48, TL_L52
 
 ; =============================================================================
-; Class pairs (W, M), indexed by TUT_CP_* & $7F: L14, L35, L36, L38, I01, I02. 12 B.
+; Class pairs (W, M), indexed by TUT_CP_* & $7F: L14, L35, L36, L38, I01, I02, L83 (TUT-GEAR). 14 B.
 ; =============================================================================
 tut_cpairs:
         DEFB TL_L14W, TL_L14M
@@ -243,6 +258,7 @@ tut_cpairs:
         DEFB TL_L38W, TL_L38M
         DEFB TL_I01W, TL_I01M
         DEFB TL_I02W, TL_I02M
+        DEFB TL_L83W, TL_L83M
 
 ; =============================================================================
 ; R2 icon tour (tutorial_d0.md s13.3): tut_tour = the generic line of each icon slot
@@ -259,7 +275,7 @@ tut_tour_end:
 ; line pair (2nd $FF = one line), flags (bits 0-2 = the lowest TV_STAGE: ST_G2P = G0 shown,
 ; ST_WAIT = G2 shown; the stage must also be <= ST_WAIT; TUT_TGF_POIS = only while poisoned),
 ; hold-first mask (a bit of TV_ISAID + 1: the first rest in that beat holds; 0 = never).
-; A target group is said on EVERY rest on its slot and never sets the slot's said bit. 36 B.
+; A target group is said on EVERY rest on its slot and never sets the slot's said bit. 42 B.
 TUT_TG_STRIDE   EQU 6
 TUT_TGF_POIS    EQU $40
 TUT_TGF_POIS_BIT EQU 6
@@ -270,18 +286,19 @@ TUT_SL_FOOD     EQU QS_SLOT0 + QS_FOOD  ; 6 (both heroes, UB5)
 TUT_SL_SCROLL   EQU QS_SLOT0 + QS_SCROLL ; 8
 TUT_SL_BAG      EQU ICON_SLOTS - 1      ; 9
 tut_tgt:
-        DEFB 3,  TUT_SL_BAG, TL_L12, TL_L61, ST_G2P, TUT_TGH_B3                 ; B3 BAG: the steps (hold first)
-        DEFB 5,  TUT_SL_FOOD, TL_L73, TUT_NONE, ST_WAIT, 0                        ; B5 FOOD (after G2)
-        DEFB 9,  TUT_SL_BAG, TL_L72, TUT_NONE, ST_G2P | TUT_TGF_POIS, TUT_TGH_B9  ; B9 BAG (poisoned; hold first)
-        DEFB 11, TUT_SL_POWER, TL_L73, TUT_NONE, ST_G2P, 0                        ; B11 class power
-        DEFB 12, TUT_SL_POWER, TL_L73, TUT_NONE, ST_G2P, 0                        ; B12 class power
-        DEFB 13, TUT_SL_SCROLL, TL_L73, TUT_NONE, ST_G2P, 0                        ; B13 SCROLL (after G0)
+        DEFB TUT_B3,  TUT_SL_BAG, TL_L12, TL_L61, ST_G2P, TUT_TGH_B3                 ; B3 BAG: the steps (hold first)
+        DEFB TUT_B5,  TUT_SL_FOOD, TL_L73, TUT_NONE, ST_WAIT, 0                        ; B5 FOOD (after G2)
+        DEFB TUT_B9,  TUT_SL_BAG, TL_L72, TUT_NONE, ST_G2P | TUT_TGF_POIS, TUT_TGH_B9  ; B9 BAG (poisoned; hold first)
+        DEFB TUT_B9G, TUT_SL_BAG, TL_L73, TUT_NONE, ST_G2P, 0                        ; B9G BAG (TUT-GEAR, after G0; scrolls)
+        DEFB TUT_B11, TUT_SL_POWER, TL_L73, TUT_NONE, ST_G2P, 0                        ; B11 class power
+        DEFB TUT_B12, TUT_SL_POWER, TL_L73, TUT_NONE, ST_G2P, 0                        ; B12 class power
+        DEFB TUT_B13, TUT_SL_SCROLL, TL_L73, TUT_NONE, ST_G2P, 0                        ; B13 SCROLL (after G0)
 tut_tgt_end:
 TUT_TGT_N       EQU (tut_tgt_end - tut_tgt) / TUT_TG_STRIDE
 
 ; =============================================================================
 ; Pointer rects (row, col, w, h) in character cells; the FLASH bit goes on every
-; cell of the rect. Stride 4, indexed by TUT_PR_*. 28 B. Panel (D5) / game.md
+; cell of the rect. Stride 4, indexed by TUT_PR_*. 32 B. Panel (D5) / game.md
 ; s3.3, s3.5: icon i (1-based) = cols 3(i-1)..+2, rows 18-19; food 7, potion 8,
 ; scroll 9, bag 10 on both bars.
 ; =============================================================================
@@ -294,4 +311,6 @@ tut_rects:
         DEFB 21,  0, 30, 1              ; HP / MP / FOOD bars + numbers + hunger word
         DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-23 (TUT0-F4 R4-6: the hold
                                         ; prompt owns 24-31; ASSERT tut_turn)
+        DEFB LOG_ROW, GEAR_COL + 2 * WS_HELM, 2, 2   ; TUT-GEAR HELM: the worn helmet's 16x16 cell (icons6.asm worn_draw)
 tut_rects_end:
+        ASSERT tut_rects_end - tut_rects == 4 * (TUT_PR_HELM + 1)

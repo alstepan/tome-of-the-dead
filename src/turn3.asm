@@ -611,7 +611,7 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 call ai_rhook
                 ret  c
                 ; FLY-CUT (game.md §9.2): the hero in the other storey-0 half of a mid-block room -> fly round
-                ; it through the ladder shafts (lowram fly_cut: seek_col's pick). No mid-block: +~50 T a turn
+                ; it through the ladder shafts (lowram fly_cut: seek_col's pick). No mid-block: +64 T a turn (measured)
                 call fly_cut                   ; (HOT_COPY head + lowram fly_cut2)
                 jr   c, .rules
                 jp   z, step_dy                ; at the shaft: straight down / up through its hole (E)

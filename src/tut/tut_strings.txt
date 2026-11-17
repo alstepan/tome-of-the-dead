@@ -10,6 +10,7 @@
 # R4-5 (2026-11-10): L02 L03 L07 L09 L12 L16 L20 L23 L28 L30b L40 L46 L60 L61 L72 I00b
 # reworded (L23: the shaft is a ladder top, entered with DOWN, not by walking on).
 # TUT-KEY (2026-11-16): L47 reworded (the grate shaft is entered with DOWN, as L23); L77 new.
+# TUT-GEAR (2026-11-16): L80-L82, L83W / L83M new (B9G).
 # MORROW-SPEAK review A: a log line's expanded bytes (keys at 5) must be <= LOG_MAX - 1
 # (tt_line prefixes his marker byte; linted by tools/tutpack.py).
 
@@ -98,6 +99,12 @@ TL_L75 = CHILD. FIRST, DO AS I SAID
 TL_L76 = YOU LEFT A LESSON UNDONE ABOVE
 # --- TUT-KEY (2026-11-16): B7's goal line + the keyless-door nudge (the key lies on B's floor) ---
 TL_L77 = THE KEY LIES IN THIS ROOM
+# --- TUT-GEAR (2026-11-16, docs/design/tut_gear.md): B9G, the bag page + EQUIP (L83 = a class pair) ---
+TL_L80 = NEW GEAR! OPEN THE BAG
+TL_L81 = CURSOR: {L} {R} {U} {D}
+TL_L82 = READ ITS STATS BELOW. EQUIP IT
+TL_L83W = WORN! DEF +1: BLOWS HURT LESS
+TL_L83M = WORN! MAX MP +1: MORE SPELLS
 # --- R2 icon tour (s13.3): entry pair, slot lines (W / M where the class differs) ---
 TL_I00a = THE LIT ICON IS YOUR CHOICE
 TL_I00b = PICK: {L} {R}. LEAVE: {U}
