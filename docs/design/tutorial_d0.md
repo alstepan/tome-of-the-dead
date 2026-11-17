@@ -86,7 +86,7 @@ col  0    5    10   15   20   25   30
 
 ```
  0   ##   [^]                         ##   ^ = up-exit {5,0} (cols 5-7) from room A
- 2   ##   @    M          m           ##   M = spot B1 (x=10)   m = spot B2 (x=21)
+ 2   ##   @  k M          m           ##   M = spot B1 (x=10)   m = spot B2 (x=21)   k = KEY col 8 (TUT-KEY)
  8   ==========t=====c======[ ]=====  ##   t = hidden DART trap col 13; c = CURE potion col 19;
      ##                               ##       L1 {24,1} cols 24-27
  11  ##                    M2         ##   M2 = spot B3 (x=22, storey 1)
@@ -94,7 +94,13 @@ col  0    5    10   15   20   25   30
  17  ===============================
 ```
 
-- Room B is the level's **key room** (key found on first entry, §1.1, no floor item).
+- Room B is the level's **key room**. **TUT-KEY (user-approved 2026-11-16): the cyan key is a floor item**
+  (IT_KEY, the floor_key icon, engine pickup `key_take`) at **storey 0, col 8** (cells 8-9): one step right of the
+  arrival (x 5) takes it, before Morrow's B1 box (10-12), the dart (13) and the Cure (19); never on a balloon spot
+  (the storey's top rows). The **B-C door is really locked** (engine `key_door`, as on D1+): a bump without the
+  key = `THE DOOR IS LOCKED` + thud, 0 turns; with it the door unlocks (1 turn, the key spent; arch / plates /
+  panel key cell as on D1+). The key never leaves B's floor except into the hero's held bits (no bag item, no
+  discard path), so there is no soft-lock; the sandbox reset regenerates every key / lock state for D1.
 - The trap is on the only storey-0 walk path to L1; it can be jumped (or sensed by the Mage, §1.5),
   which is allowed (§3 B8 alt line).
 
@@ -140,14 +146,14 @@ the group is current (§4.4).
 | B4 | Ladder (A) | blink → A3, IDLE | L16 `LADDER DOWN TO ME: PRESS ‹D›` | standing on storey 1 | L2 | fall from the pit also lands on storey 1: fires |
 | B5 | Panel + food (A) | A3, POINT_DN | L17 `BELOW YOU: LIFE, MANA AND FOOD` · L18 `YOUR BELLY SAYS OK, NOT FED` (pointer: row 21 bars + word); next turn L19 `EAT THE PEAR: THE FOOD ICON` · L20 `EAT: ‹D›+‹F›, THEN PICK FOOD` (pointer: FOOD icon) | `FOOD` rose this turn (any EAT: quick slot or page) → L21 `FED HEALS. THE STARVED FAINT` · L22 `EAT WHEN IT SAYS HUNGRY`; next turn tail (R2) **L70 `AT WEAK YOUR LEGS WILL NOT LEAP` · L71 `A LEAP THEN JUST DOES NOTHING`** (scroll). **Icon target FOOD:** L73 | PEAR col 17 | hero leaves A uneaten: skipped, **L76** on entering B |
 | B6 | Shaft (A) | A3, POINT (left) | L23 `AT THE SHAFT (LEFT) PRESS ‹D›` | room = B | down-exit | — |
-| B7 | Key (B) | fade-in B1, POINT_DN | (after the engine's key-found line) L24 `YOU HAVE THE KEY. ON TO THE DOOR` · L25 `IT OPENS ONE LOCKED DOOR` (no pointer: the build has no key icon; user option a, TUT0-F2) | standing on storey 0 | key room | — |
+| B7 | Key (B) | fade-in B1, POINT_DN | G0 **L77 `THE KEY LIES IN THIS ROOM`** (TUT-KEY); on the pickup (after the engine's `YOU FIND A CYAN KEY`) G1 L24 `YOU HAVE THE KEY. ON TO THE DOOR` · L25 `IT OPENS ONE LOCKED DOOR` (no pointer, TUT0-F2) | the key held (`LF_KEYC`; picked up from the floor, col 8) | KEY col 8 | keyless at the locked door (B, storey 1, x ≥ 26): **L77** once per approach (`tt_knag`; the bump itself costs no turn) |
 | B8 | Trap + status (B) | B1, IDLE | — (silent: the trap must surprise) | hero POISONED → L26 `HA! A DART. YOU ARE POISONED` · L27 `SEE THE ICON? YOU CANNOT EAT` (pointer: status icon cells row 21 cols 30–31); next turn L28 `TRAPS HIDE. WAIT (‹D›) TO SEEK` | hidden DART col 13 | not poisoned and `x ≥ 17` (jumped / sensed / searched): L29 `YOU PASSED A DART TRAP. LUCKY` + L28; B9 uses L32 |
 | B9 | Cure (B) | blink → B2, POINT_DN | poisoned: L30b `DRINK THE CURE: ‹D›+‹F›, BAG` (pointer: BAG icon; as built, both kits hold a Heal). **Icon target BAG (R2):** **L72 `PRESS ‹F›, THEN DRINK THE CURE`** (hold the first time) | POISON cleared (Cure, or the timer) → L31 `POTIONS: HEAL, MANA AND CURE` | CURE col 19 | not poisoned: L32 `KEEP THE CURE FOR POISON`, advance on pickup |
-| B10 | Door (B) | blink → B3, POINT (right) | L33 `GO DOWN, THEN WALK INTO THE DOOR` | room = C (the bump unlocks with the key: existing lines) | locked door | — |
+| B10 | Door (B) | blink → B3, POINT (right) | L33 `GO DOWN, THEN WALK INTO THE DOOR` | room = C (the bump unlocks with the key: the engine's `YOU UNLOCK THE DOOR`, 1 turn) | locked door | — |
 | B11 | The sleeping Goblin (C) | fade-in C1, POINT (right) | L34 `A GOBLIN, ASLEEP. SEE ITS HUE` · class L35/L36 W/M. **Icon target slot 2 (B11 + B12, R2):** L73 | Goblin HP < max (first damage wakes it, §6.4) | Goblin, scroll, Heal | arriving with earlier beats undone: L53 `IMPATIENT? THE GOBLIN WAITS` first |
 | B12 | Fight (C) | C1, TALK | L37 `IT WAKES! WATCH THE INFO LINE` (pointer: row 20) · class L38W/M | (passive; runs until B13/B14) | — | — |
 | B13 | Scroll (C) | C1, POINT_DN | when the awake Goblin is within 6 cols: L39 `IT COMES! READ THE SLEEP SCROLL` · L40 `ICONS ‹D›+‹F›, SCROLL, ‹F›` (R2 reworded; pointer: SCROLL icon). **Icon target SCROLL:** L73. The bag way (pick it → READ) also fires the trigger; L63 told it in B3 | Goblin ASLEEP → L41 `IT SLEEPS. HIT IT - IT WAKES` | — | Goblin dies first: the scroll lesson becomes L52 in B14 |
-| B14 | Victory + how to end the Tome (C) | blink → beside the grate, TALK | one group per turn, in this order: G1 L42 `WELL DONE. THE GRATE IS OPEN` · **L56 `ON 8, SLAY THE ARCHMAGE FIRST`**; G2 **L57 `HIT HIS TOME FIVE TIMES, FAST` · L58 `ITS AURA BURNS THOSE NEAR IT`**; G3 **L59 `ASHED, IT OPENS THE WAY OUT`** · L43 `WHAT YOU TOOK HERE STAYS HERE`; G4 L44 `FIND THE KEY, SLAY THE BOSS` · L45 `ITS GRATE IS YOUR WAY DOWN`; G5 L46 `PAUSE: HOLD ‹F›, PRESS ‹U›` · L47 `STEP ON THE GRATE. GO, CHILD` | Goblin dead (blob opens the grate) | — | The Tome method comes first (G1–G2 are out within the 1–3 steps from the Goblin's corpse to the grate), so it is the last thing read before D1. **Manager 2026-11-09: the blob opens the grate only after G3 has been shown** (the Tome method and the sandbox warning are mandatory; the blob already owns the grate-open, F3, so this costs 0 resident B); G4–G5 not yet shown when the hero steps on the grate are dropped. HP < max and a Heal held: one extra group L48 `HURT? DRINK THE HEAL POTION` after G3; unread scroll: L52 `KEEP SCROLLS FOR BAD FIGHTS` after G4 |
+| B14 | Victory + how to end the Tome (C) | blink → beside the grate, TALK | one group per turn, in this order: G1 L42 `WELL DONE. THE GRATE IS OPEN` · **L56 `ON 8, SLAY THE ARCHMAGE FIRST`**; G2 **L57 `HIT HIS TOME FIVE TIMES, FAST` · L58 `ITS AURA BURNS THOSE NEAR IT`**; G3 **L59 `ASHED, IT OPENS THE WAY OUT`** · L43 `WHAT YOU TOOK HERE STAYS HERE`; G4 L46 `PAUSE: HOLD ‹F›, PRESS ‹U›` · L44 `FIND THE KEY, SLAY THE BOSS`; G5 L45 `ITS GRATE IS YOUR WAY DOWN` · **L47 `ON THE GRATE, PRESS ‹D›`** (TUT-KEY 2026-11-16, user: the tutorial ended on the pause hint, and the grate shaft is entered with DOWN, not by stepping on it) | Goblin dead (blob opens the grate) | — | The Tome method comes first (G1–G2 are out within the 1–3 steps from the Goblin's corpse to the grate), so it is the last thing read before D1. **Manager 2026-11-09: the blob opens the grate only after G3 has been shown** (the Tome method and the sandbox warning are mandatory; the blob already owns the grate-open, F3, so this costs 0 resident B); G4–G5 not yet shown when the hero steps on the grate are dropped. HP < max and a Heal held: one extra group L48 `HURT? DRINK THE HEAL POTION` after G3; unread scroll: L52 `KEEP SCROLLS FOR BAD FIGHTS` after G4 |
 | B15 | Exit (C) | FADE out | — | the grate step (exit pending at end of turn) → **sandbox reset** (§5.2) → normal D1 entry | grate | — |
 
 **Always-on rules (all beats):**
@@ -162,7 +168,7 @@ the group is current (§4.4).
   counts — and its trigger not fired), its instruction is pinned on **row 20 cols 0–23** in
   Morrow's ink (attr `$45`); the log scrolls freely under it, so engine lines no longer bury it.
   One line id per beat (`tut_goal`, existing lines): B0 L02, B1 L03, B2 L09, B3 L60, B4 L16, B5
-  L20, B6 L23, B7/B8 L24, B9 L30b (only while POISONED), B10 L33, B11 class L35W/L35M, B12/B13 none
+  L20, B6 L23, B7 L77 (TUT-KEY), B8 L24, B9 L30b (only while POISONED), B10 L33, B11 class L35W/L35M, B12/B13 none
   (combat owns row 20), B14 and B15 L47 from the moment the grate opens to the exit. Hidden while
   the Goblin is awake and in story groups (the hold prompt is the cue). Redrawn at each turn end
   when its id changed or the engine redrew row 20; survives holds; in ICON MODE (no turn) the
@@ -379,7 +385,7 @@ icons). The 16 R4-5 rewordings are in the table below (same ids, no new text).
 | L44 | `FIND THE KEY, SLAY THE BOSS` | 27 |
 | L45 | `ITS GRATE IS YOUR WAY DOWN` | 26 |
 | L46 | `PAUSE: HOLD ‹F›, PRESS ‹U›` (R4) | 30 |
-| L47 | `STEP ON THE GRATE. GO, CHILD` | 28 |
+| L47 | `ON THE GRATE, PRESS ‹D›` (TUT-KEY; was `STEP ON THE GRATE. GO, CHILD`) | 25 |
 | L48 | `HURT? DRINK THE HEAL POTION` | 27 |
 | L50 | `ENOUGH. I MEND YOU - THIS TIME` | 30 |
 | L51 | `BELOW, NO ONE WILL` | 18 |
@@ -407,6 +413,7 @@ icons). The 16 R4-5 rewordings are in the table below (same ids, no new text).
 | L73 | `THAT ONE. NOW PRESS ‹F›` (icon target confirm: B5 FOOD, B11/B12 slot 2, B13 SCROLL) | 25 |
 | L75 | `CHILD. FIRST, DO AS I SAID` (Nudge, §13.5) | 26 |
 | L76 | `YOU LEFT A LESSON UNDONE ABOVE` (entering B with B2–B5 open, §13.5) | 30 |
+| L77 | `THE KEY LIES IN THIS ROOM` (TUT-KEY: B7 G0 + goal; the keyless-door nudge) | 25 |
 | **R2 icon tour (§13.3)** | | |
 | I00a | `THE LIT ICON IS YOUR CHOICE` (first ICON MODE entry, line 1) | 27 |
 | I00b | `PICK: ‹L› ‹R›. LEAVE: ‹U›` (first ICON MODE entry, line 2; R4) | 31 |
@@ -549,7 +556,7 @@ needs no hook (status rewrite in H-T2).
 24. **Nudge (R4):** at B4, Waits with the hero > 4 cols from the mentor → L75 + L16 (the goal) in
     one group on off-task turn 6; again on 18; nothing more up to turn 100. No L75 in B8, B12, B15, nor while the
     Goblin is awake.
-25. **Left lesson:** skip the book and the pear, take the shaft → L76 once in B, before L24; going
+25. **Left lesson:** skip the book and the pear, take the shaft → L76 once in B, before L77 (B7 G0, TUT-KEY); going
     back up and down again prints no second L76.
 26. **Joystick-only (Kempston), extends 11:** tour lines show stick words; the in-mode hold is
     dismissed by the stick and the dismissing input neither moves the cursor nor exits ICON MODE.
@@ -640,7 +647,7 @@ overtaken-beat jump, `TUT_BF_FIRST`, tests C3 and the B11/B14 code paths keep th
 ### 13.1 Rename
 
 Mentor = **Brother Morrow** (§4.1). Changed strings: L05, L06, TS_CHOICE3. Every other line is
-already name-free and keeps the voice (CHILD in L47, L75). Art unchanged.
+already name-free and keeps the voice (CHILD in L75; TUT-KEY reworded L47). Art unchanged.
 
 ### 13.2 Pointer vs cursor (request 2)
 
@@ -1085,5 +1092,8 @@ other line is unchanged).
     fills his left: the arrival balloon sits behind him (right side, tail toward him).
   - Moves / re-mirrors when his spot or facing changes (turn end).
 - **Engine.** A tile stamp like Morrow himself (borrowed lectern ids 15..18, restored at every
-  D0 exit); item_log's line goes through the blob while D0 runs (a 4th SMC operand `il_go`).
+  D0 exit); item_log's line goes through the blob while D0 runs (a 4th SMC operand `il_go`). Review A
+  (TUT-KEY round): the owner travels in-band — his queued line starts with a marker byte that
+  `blob_log` tests and strips, so an engine line replacing his pending line (ring full) is drawn
+  as the engine's.
   0 resident bytes; memory-map "MORROW-SPEAK ledger"; tests `tests/tut0.py` S1-S4.

@@ -1979,10 +1979,14 @@ def run_tut0(h):
                 p.wb("MUS_REQ", int(MUS_POKE, 0))
                 p.tick(6)
             run = tut0.Run(p)
-            acc = {"totals": [], "isr": [], "inp": [], "held": 0, "rsync": 0, "kinds": [], "pre": [], "post": []}
+            acc = {"totals": [], "isr": [], "inp": [], "held": 0, "rsync": 0, "kinds": [], "pre": [], "post": [], "tag": [],
+                   "split": []}
 
             def absorb(st):
                 acc["totals"] += [t for t, _ in st.ticks]
+                tag = tut0.st(p).split(" x ")[0]                  # TUT-KEY: the turn's end state (BUDGET_TUT0_TOP report)
+                acc["tag"] += [f"{tag} tick {i}/{len(st.ticks)}" for i in range(len(st.ticks))]
+                acc["split"] += [sp for _, sp in st.ticks]
                 acc["inp"] += ["resolve_monsters" in sp for _, sp in st.ticks]   # ADAPT-DEFER: BUDGET3 class
                 acc["isr"] += st.isr_in
                 acc["held"] += st.held
@@ -2026,6 +2030,12 @@ def run_tut0(h):
             print(f"[info] tut0 {name}: {len(real_in)} input ticks, max real {max(real_in, default=0)}; 3-frame ticks "
                   f"{sum(1 for r in real + real_in if r > BUDGET)} of {len(totals)}", flush=True)
             rows.append((name, len(totals), max(work), max(real), acc["held"], ok and dead and used and left))
+            if os.environ.get("BUDGET_TUT0_TOP"):                # TUT-KEY: the N heaviest play ticks, with the turn's beat
+                wl = [(t - i, k) for k, (t, i, f) in enumerate(zip(totals, isr, inp)) if not f]
+                for w_, k in sorted(wl, reverse=True)[:int(os.environ["BUDGET_TUT0_TOP"])]:
+                    sp = acc["split"][k]
+                    top = sorted(((v, n_) for n_, v in sp.items() if isinstance(v, int)), reverse=True)[:6] if isinstance(sp, dict) else sp
+                    print(f"[info] tut0 {name} top: {w_} T at {acc['tag'][k]}; split {top}", flush=True)
             print(f"== tut0 {name}: {len(totals)} play ticks ({acc['held']} hold ticks dropped, {acc['rsync']} resync ticks"
                   f" dropped; {len(acc['pre'])} pre-hold parts measured, worst {max(acc['pre'] or [0])} T; {len(acc['post'])} post-resync parts measured, worst {max(acc['post'] or [0])} T), worst work {max(work)} T"
                   f" (cap {CAP}), worst real {max(real)} T (budget {BUDGET}), mean {sum(totals) // len(totals)} T;"

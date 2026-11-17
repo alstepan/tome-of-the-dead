@@ -49,8 +49,12 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   MORROW-SPEAK (tutorial_d0.md s15): S1 the balloon / log-ink sampler at every turn / hold of each full run (bal_check);
   S2 both facings in front of him, PNGs build/morrow_speak_face_{left,right}.png; S3 static (balloon bytes, the lectern
   copy); S4 room change / off-screen (scen_speak); C27 also il_go + the lectern ids restored
+  TUT-KEY (2026-11-16): TK1 the key on B's floor (col 8), TK2 keyless at the door -> L77, TK3 the locked bump (0 turns),
+  TK4 the pickup (L24 / L25, panel key cell, D0), TK5 the unlock (1 turn, key spent) + into C, TK6 the log ends on G5
+  (L45 / L47); PNGs build/tut_key_{floor,locked,unlocked}.png, build/tut_last_line.png. S5 (review A): an engine line
+  replacing his newest pending line is drawn as the engine's. C27 also item_depth's digit operand
 
-Usage: ZRCP_PORT=10778 WZ_BUILD_DIR=<dir>/build python3 tests/tut0.py [--update-golden] [--only C3,C5]
+Usage: ZRCP_PORT=10778 WZ_BUILD_DIR=<dir>/build [TUT0_SCEN=key,speak] python3 tests/tut0.py [--update-golden] [--only C3,C5]
 Output: one line per check, then `tut0: N failed of M: ids`.
 """
 import os
@@ -98,11 +102,14 @@ for _l in open(os.path.join(REPO, "src/tut/tut_strings.txt")):
 
 
 def dec(bs):
-    """A dictionary-token stream (log_push's HL) -> text."""
+    """A dictionary-token stream (log_push's HL) -> text. MORROW-SPEAK review A: Morrow's lines are queued from
+    TV_MARK = MOR_MARK (a byte < 32, never displayed: blob_log strips it) + the line: skipped."""
     out = []
     for a in bs:
         if a == 0:
             break
+        if a < 32:
+            continue
         if a < 0x80:
             out.append(chr(a))
         else:
@@ -182,7 +189,7 @@ class TP(Proto):
                     r = self.z.cmd("get-registers")
                     hl = int(re.search(r"HL=([0-9a-fA-F]{4})", r).group(1), 16)
                     self.LOG.append(dec(self.z.read_memory(hl, 40)))
-                    self.LOGM.append(hl == S["TV_BUF"])          # MORROW-SPEAK: tt_line pushes from TV_BUF only
+                    self.LOGM.append(hl == S["TV_MARK"])         # MORROW-SPEAK: tt_line pushes from TV_MARK only (review A)
                     continue
                 break
 
@@ -902,7 +909,7 @@ def fight(p, run, use_scroll, n=70):
     return bool(p.rb("ST1_KILLS")), used
 
 
-def after_fight_to_exit(p, run, heal=False, waits=0):
+def after_fight_to_exit(p, run, heal=False, waits=0, png=None):
     """The Goblin is dead: (optionally) heal and wait out `waits` turns, then walk STRAIGHT to the grate and step into it
     (the grate opens after the 3rd victory group). run.exit_mark = len(p.LOG) before the turn that leaves D0.
     True once the D1 start was seen (es_go = start_game, playing)."""
@@ -920,6 +927,14 @@ def after_fight_to_exit(p, run, heal=False, waits=0):
         run.exit_mark = len(p.LOG)
         T(p, "L" if e["X"] < gx else "H")
     run.blob_check("at the grate")
+    if png:                                                      # TUT-KEY: the last tutorial lines (G5: L45 / L47), drawn
+        for _ in range(60):
+            if p.rb("LOG_QN") == 0 and not p.rb("PANEL_DIRTY") & S["PD_LOG"]:
+                break
+            p.tick()
+        p.tick(3)
+        run.last_png = bal_png(p, png)
+        run.last_rows = [l.rstrip() for l in p.LOG[-2:]]
     for _ in range(10):                                          # DOWN into the grate (shut until the 3rd group is shown)
         run.grate_post.append(p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"])
         run.exit_mark = len(p.LOG)
@@ -998,7 +1013,7 @@ def first_lines(hero):
     return ["L01", "L03", "L05", "L54", "L65", "L08", "L67", "L11", "L60", "L13", "L14" + c, "L63", "L16", "L17", "L19", "L21",
             "L70", "L23", "L24",
             "L26", "L28", "L30b", "L31", "L33", "L34", "L35" + c, "L37", "L38" + c, "L39", "L41", "L42", "L56", "L57",
-            "L58", "L59", "L43", "L44", "L46", "L47"]
+            "L58", "L59", "L43", "L46", "L44", "L45", "L47"]      # TUT-KEY: G4 L46 / L44, G5 L45 / L47 (the grate last)
 
 
 def log_order(p, keys, scheme="keys"):
@@ -1088,7 +1103,7 @@ def scen_plain(h):
     check("C1", "`2` at the choice -> D1 exactly as a plain START (state + screen; decor / drip phase tolerated)", not bad, bad)
     check("C6", "after `2`: no more offer (es_go = start_game), D1 hooks (pl_et = end_turn)",
           w2(p, S["es_go"] + 1) == S["start_game"] and w2(p, S["pl_et"] + 1) == S["end_turn"], hex(w2(p, S["es_go"] + 1)))
-    check("C27", "after choice `2` (D1): pi_ic = intent_icon7, pl_et = end_turn", hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
+    check("C27", "after choice `2` (D1): " + HOOKS_OFF, hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
     SHARED["choice2"] = (d2, a2)
     p = start(h, 0, path="choice")                               # ENTER = TUTORIAL (the newcomer nudge)
     ok = press_start(p, "ENTER", "tut_d0")
@@ -1156,7 +1171,11 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
           "-> L41 (the Goblin ASLEEP fired B13)", used and line("TL_L41", scheme) in fl, fl[-8:])
     check("C24", f"{tag}: no L75 nudge while the Goblin is awake (from its wake, B12, to its death)",
           run.wake_mark is not None and line("TL_L75", scheme) not in awake, (run.wake_mark, awake[:6]))
-    left = after_fight_to_exit(p, run, heal=True)
+    left = after_fight_to_exit(p, run, heal=True, waits=4 if final else 0, png="tut_last_line.png" if final else None)
+    if final:
+        check("TK6", "final run: waiting out B14 (4 turns), the log ends on G5 = L45 / L47 'ON THE GRATE, PRESS A' before the "
+              f"step (PNG {getattr(run, 'last_png', None)})",
+              getattr(run, "last_rows", None) == [line("TL_L45", scheme), line("TL_L47", scheme)], getattr(run, "last_rows", None))
     for _ in range(400):                                         # the reset's D1 start
         p.tick()
         if p.rb("GAME_STATE") == GS_PLAYING and w2(p, S["pl_et"] + 1) == S["end_turn"]:
@@ -1200,7 +1219,7 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
               (p.rb("FOOD"), p.rb("ARANK"), p.rw("TURN_COUNTER"), p.rb("ST1_KILLS")) == (S["FOOD_START"], 0, 0, 0)
               and e1["HP"] == e1["MAXHP"], (p.rb("FOOD"), p.rb("ARANK"), p.rw("TURN_COUNTER"), p.rb("ST1_KILLS")))
         check("C6", "after D1 entry: the offer is spent (es_go = start_game)", w2(p, S["es_go"] + 1) == S["start_game"])
-        check("C27", "after D1 entry (the grate reset): pi_ic = intent_icon7, pl_et = end_turn", hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
+        check("C27", "after D1 entry (the grate reset): " + HOOKS_OFF, hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
         # C14: no mentor in D1 (map ids carrying his glyphs, screen cells carrying them)
         mg = SHARED["mentor_glyphs"]
         fr1 = p.frame()
@@ -1258,13 +1277,15 @@ def scen_speak(h):
     leg(p, run, 5)
     inb = to_floor(p, 1, room=4)
     to_floor(p, 0)
+    T(p, "L")                                                    # TUT-KEY: the key (col 8) -> his B7 group (L24 / L25)
     shown = [tv(p, "TV_BCOL")]
     for _ in range(3):
         if shown[-1]:
             break
-        T(p, "WAIT")                                             # the Repeat near him re-shows his group
+        T(p, "WAIT")
         shown.append(tv(p, "TV_BCOL"))
     fr_b = bal_png(p, "morrow_speak_room_b.png")
+    walk_to(p, 5)                                                # back onto the up-exit's ladder col
     up = False
     for _ in range(20):
         if p.rb("CUR_ROOM") == 1:
@@ -1288,6 +1309,191 @@ def scen_speak(h):
           inb and any(shown) and up and st_a == (0, 0, [], []) and not any(waits) and down_ok
           and (st_b[1] == 0 or st_b[2]), (inb, shown, up, st_a, waits, down_ok, st_b, fr_b))
     bal_report(run, "S4 route")
+
+# --- TUT-KEY (2026-11-16): the key on B's floor, the real B-C lock; S5 (MORROW-SPEAK review A) ------------------
+KEY_COL = 8                                                      # tools/tut0_level.py ITEMS: (ROOM_B, 0, 8, IT_KEY)
+
+
+def key_entry(p):
+    """FLOOR_LIST entries (index, col, storey) holding IT_KEY in room B."""
+    fl = p.z.read_memory(S["FLOOR_LIST"], S["FLOOR_MAX"] * 4)
+    return [(i, fl[4 * i + 1], fl[4 * i] >> 7) for i in range(S["FLOOR_MAX"])
+            if fl[4 * i] != S["FL_EMPTY"] and fl[4 * i] & S["FL_ROOM_MASK"] == 4 and fl[4 * i + 2] == S["IT_KEY"]]
+
+
+def bc_edge(p):
+    return p.rb(S["EDGE_TAB"] + 3)
+
+
+def key_held(p):
+    return bool(p.rb("LVL_FLAGS") & S["LF_KEYC"])
+
+
+def drain_log(p, n=80):
+    for _ in range(n):
+        if p.rb("LOG_QN") == 0 and not p.rb("PANEL_DIRTY") & (S["PD_LOG"] | S["PD_DEPTH"]):
+            break
+        p.tick()
+    p.tick(3)
+
+
+def panel_key(p):
+    """(attrs of the cyan panel key cells, any ink in them, the depth text cells == 'D0')."""
+    fr = p.frame()
+    c0 = S["KEY_PAN_COL"]
+    at = [G.attr_at(fr, c, 21) for c in (c0, c0 + 1)]
+    ink = any(any(G.cell_bytes(fr, c, 21)) for c in (c0, c0 + 1))
+    d0 = row_bytes(fr, 18, 30, 2) == text6("D0", 0, 2)
+    return at, ink, d0
+
+
+def climb_to(p, s, n=16):
+    """UP until standing on storey s."""
+    for _ in range(n):
+        if p.ent(0)["Y"] == STAND_Y[s]:
+            return True
+        T(p, "K")
+    return p.ent(0)["Y"] == STAND_Y[s]
+
+
+def run_stub(p, code, org):
+    """tests/game.py T.run_stub: raw Z80 at org (LOWRAM_END_3B: free low RAM up to lowram_code) up to its trailing
+    `jr $`; True if it got there. The caller restores PC / SP."""
+    code = bytes(code) + b"\x18\xfe"
+    assert org + len(code) <= S["lowram_code"], len(code)
+    p.z.cmd("write-memory %d %s" % (org, " ".join(str(x) for x in code)))
+    end = org + len(code) - 2
+    p.z.cmd("set-breakpoint 3 PC=%d" % end)
+    p.extra_probes = {end}
+    p.z.cmd("set-register PC=%d" % org)
+    p.z.cmd("run %d" % 4000000)
+    pc = p.pc()
+    p.z.cmd("set-breakpoint 3")
+    p.extra_probes = set()
+    return pc == end
+
+
+def scen_key(h):
+    """TK1-TK5 (TUT-KEY) + S5 (review A). The short route into B; the key lies at col 8 (TK1, PNG tut_key_floor);
+    the hero LEAPS over it from the arrival and goes to the B-C door keyless: L77 once (TK2), the bump = THE DOOR IS
+    LOCKED, 0 turns, the door shut (TK3, PNG tut_key_locked); back up, the key taken walking over it: L24 / L25 after
+    the engine's line, the cyan panel key cell, the digit still D0 (TK4); the bump with the key: 1 turn, unlocked,
+    the key spent, the panel cell blank, D0 (TK5, PNG tut_key_unlocked); S5 at the open door; then into C."""
+    p = start(h, 0)
+    run = Run(p)
+    settle_holds(p)
+    to_floor(p, 0)
+    leg(p, run, 12)
+    to_floor(p, 1)
+    leg(p, run, 5)
+    inb = to_floor(p, 1, room=4)
+    to_floor(p, 0)
+    drain_log(p)
+    ke = key_entry(p)
+    png_floor = bal_png(p, "tut_key_floor.png")
+    check("TK1", f"room B: the key is a floor item at col {KEY_COL} storey 0 (FLOOR_LIST {ke}), not held; the B-C edge "
+          f"locked (${bc_edge(p):02X}); B7 waits for it (PNG {png_floor})",
+          inb and [(c, st_) for _, c, st_ in ke] == [(KEY_COL, 0)] and not key_held(p) and bc_edge(p) & S["EG_LOCK"]
+          and tv(p, "TV_BEAT") == 7, (inb, ke, key_held(p), hex(bc_edge(p)), st(p)))
+    x0 = p.ent(0)["X"]
+    T(p, "K", "L")                                               # the leap over cols 8-9 (the dart may poison)
+    leaped = p.ent(0)["X"] > KEY_COL + 1 and not key_held(p)
+    walk_to(p, 24)
+    to_floor(p, 1)
+    n0 = len(p.LOG)
+    walk_to(p, 27)
+    l77, l75 = line("TL_L77"), line("TL_L75")
+
+    def n77():                                                   # L77 alone (tt_knag), not the nudge's L75 + L77
+        ls = [l.rstrip() for l in p.LOG[n0 - 1:]]
+        return sum(1 for i in range(1, len(ls)) if ls[i] == l77 and ls[i - 1] != l75)
+    said = n77()
+    T(p, "WAIT")
+    said2 = n77()
+    check("TK2", "keyless at the door (storey 1, x 27): L77 'THE KEY LIES IN THIS ROOM' once (not again on a Wait); B7 still "
+          "current; its G0 and goal line = L77", leaped and said == 1 and said2 == 1 and tv(p, "TV_BEAT") == 7
+          and BLOB_IMAGE[S["tut_goal"] - S["BLOB_ORG"] + 7] == S["TL_L77"],
+          (x0, leaped, said, said2, st(p)))
+    drain_log(p)
+    tc, n1 = p.rw("TURN_COUNTER"), len(p.LOG)
+    T(p, "L")                                                    # the bump
+    drain_log(p)
+    locked = [l.rstrip() for l in p.LOG[n1:]]
+    png_locked = bal_png(p, "tut_key_locked.png")
+    check("TK3", f"the bump without the key: '{locked}', 0 turns (TURN_COUNTER {tc} -> {p.rw('TURN_COUNTER')}), still in B, "
+          f"the edge locked and shut (PNG {png_locked})",
+          locked == ["THE DOOR IS LOCKED"] and p.rw("TURN_COUNTER") == tc and p.rb("CUR_ROOM") == 4
+          and bc_edge(p) & S["EG_LOCK"] and not bc_edge(p) & S["EG_OPEN"], (locked, tc, p.rw("TURN_COUNTER"), hex(bc_edge(p))))
+    walk_to(p, 24)
+    up = climb_to(p, 0)
+    n2 = len(p.LOG)
+    walk_to(p, KEY_COL + 1)                                      # walking left over it (x 9 covers col 9)
+    for _ in range(3):
+        if key_held(p):
+            break
+        T(p, "H")
+    drain_log(p)
+    got = [l.rstrip() for l in p.LOG[n2:]]
+    at, ink, d0 = panel_key(p)
+    want = ["YOU FIND A CYAN KEY", line("TL_L24"), line("TL_L25")]
+    check("TK4", f"walking over it takes the key: LF_KEYC, the entry gone, the log '{got[-3:]}' (the engine's line, then L24 / "
+          "L25), B7 passed, the cyan key cell (attr ATTR_KEY_C) on the panel, the depth still 'D0'",
+          up and key_held(p) and not key_entry(p) and got[-3:] == want and (tv(p, "TV_BEAT") >= 8 or tv(p, "TV_STAGE") >= 4)
+          and at == [S["ATTR_KEY_C"]] * 2 and ink and d0, (up, key_held(p), key_entry(p), got, st(p), at, ink, d0))
+    walk_to(p, 24)
+    to_floor(p, 1)
+    walk_to(p, 27)
+    drain_log(p)
+    n3 = len(p.LOG)
+    said3 = line("TL_L77") in [l.rstrip() for l in p.LOG[n2:]]
+    tc = p.rw("TURN_COUNTER")
+    T(p, "L")                                                    # the bump with the key
+    drain_log(p)
+    unl = [l.rstrip() for l in p.LOG[n3:]]
+    at, ink, d0 = panel_key(p)
+    png_unl = bal_png(p, "tut_key_unlocked.png")
+    check("TK5", f"the bump with the key: '{unl[:1]}', 1 turn, the edge unlocked + open (${bc_edge(p):02X}), the key spent (LF_KEYC "
+          f"clear), the panel cell blank, the depth 'D0'; no L77 with the key (PNG {png_unl})",
+          unl[:1] == ["YOU UNLOCK THE DOOR"] and p.rw("TURN_COUNTER") == tc + 1 and not bc_edge(p) & S["EG_LOCK"]
+          and bc_edge(p) & S["EG_OPEN"] and not key_held(p) and at == [S["ATTR_HUD"]] * 2 and not ink and d0 and not said3,
+          (unl, tc, p.rw("TURN_COUNTER"), hex(bc_edge(p)), key_held(p), at, ink, d0, said3))
+    # S5 (review A): an engine line replaces his newest pending line (ring full: log_room, as a hit / death line does)
+    drain_log(p)
+    drop0 = p.rb(S["LOG_Q"] + S["LQ_DROP"])
+    pc0, sp0 = p.pc(), int(re.search(r"SP=([0-9a-fA-F]{4})", p.z.cmd("get-registers")).group(1), 16)
+
+    def w(a):
+        return [a & 0xFF, a >> 8]
+    code = ([0x21] + w(S["str_unlock"]) + [0xCD] + w(S["log_push"])) * 2           # 2 engine lines
+    for tl in ("TL_L24", "TL_L25"):                                                # his group (tt_line, the real path)
+        code += [0x3E, S[tl], 0x21] + w(S["tt_line"]) + [0x0E, S["BANK_BLOB"], 0xCD] + w(S["farb"])
+    code += [0xCD] + w(S["log_room"]) + [0x21] + w(S["str_key_c"]) + [0xCD] + w(S["log_push"])   # the result line
+    p.z.cmd("set-breakpoint 20")
+    ran = run_stub(p, code, S["LOWRAM_END_3B"])
+    qn = p.rb("LOG_QN")
+    p.z.cmd("set-register SP=%d" % sp0)
+    p.z.cmd("set-register PC=%d" % pc0)
+    p.z.cmd("set-breakpoint 20 PC=%d" % S["log_push"])
+    p.extra_probes = {S["log_push"]}
+    p.LOG += ["YOU UNLOCK THE DOOR", "YOU UNLOCK THE DOOR", line("TL_L24"), "YOU FIND A CYAN KEY"]
+    p.LOGM += [False, False, True, False]
+    drain_log(p)
+    run.note()
+    fr = p.frame()
+    a22, a23 = G.attr_at(fr, 0, 22) & 0x3F, G.attr_at(fr, 0, 23) & 0x3F
+    check("S5", "review A: 2 engine lines + his group (tt_line) fill the ring, then log_room + an engine line replace his newest: "
+          "drawn as the engine's (row 23 white, row 22 his L24 in cyan), TV_BSAY 0, no balloon, LQ_DROP + 1",
+          ran and qn == 4 and (a22, a23) == (MOR_INK, LOG_INK) and tv(p, "TV_BSAY") == 0 and tv(p, "TV_BCOL") == 0
+          and p.rb(S["LOG_Q"] + S["LQ_DROP"]) == drop0 + 1,
+          (ran, qn, hex(a22), hex(a23), tv(p, "TV_BSAY"), tv(p, "TV_BCOL"), drop0, p.rb(S["LOG_Q"] + S["LQ_DROP"])))
+    for _ in range(4):
+        if p.rb("CUR_ROOM") == 5:
+            break
+        T(p, "L")
+    check("TK5", "through the unlocked door into room C", p.rb("CUR_ROOM") == 5, st(p))
+    bal_report(run, "TK route")
+    check("C10", f"TK route: blob bytes == the image at {run.blob_n} checks", not run.blob_bad, run.blob_bad)
+
 
 def menu_kempston(p):
     """The menu's CONTROLS item (key 3) cycles KEYS -> KEMPSTON."""
@@ -1460,7 +1666,7 @@ def scen_death(h):
     check("C9", "end card -> menu -> `1`: the tutorial is offered again (choice screen, offer armed, D0 hook undone)",
           ok and p.rb("GAME_STATE") == GS_SELECT and w2(p, S["es_go"] + 1) == S["ts_choice"] and w2(p, S["pl_et"] + 1) == S["end_turn"],
           (ok, p.rb("GAME_STATE"), hex(w2(p, S["es_go"] + 1)), hex(w2(p, S["pl_et"] + 1))))
-    check("C27", "after a D0 death -> menu -> `1`: pi_ic = intent_icon7, pl_et = end_turn", hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
+    check("C27", "after a D0 death -> menu -> `1`: " + HOOKS_OFF, hooks_off(p), hex(w2(p, S["pi_ic"] + 1)))
     golden(h, "tut0_choice", p.frame())                     # the same choice screen as the first offer
     assert press_start(p, "1", "tut_d0")
     p.tick(3)
@@ -1638,14 +1844,20 @@ def scen_static():
           "balloon.asm == the approved 16x16 picture in balloon.grid", bl == b"".join(LECT) and bi == b"".join(BAL_R)
           and gb == BAL_R, (bl.hex(), bi.hex(), gb))
     free = S["BLOB_RES"] - S["BLOB_LEN"]
-    check("C28", f"blob BLOB_LEN <= BLOB_RES with >= 8 B free ({free}; C+TUT0: BLOB_ORG $E1B4 moved up into the old 444 B reserve, "
-          f"user decision; the in-place delta no longer binds); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
+    check("C28", f"blob BLOB_LEN <= BLOB_RES with >= 8 B free ({free}; BLOB_ORG ${S['BLOB_ORG']:04X}: the blob's size "
+          f"+ the 8-B tail below $10000; the in-place delta no longer binds); TUT_RAM_END ${S['TUT_RAM_END']:04X} <= PF_ROWF "
           f"${S['PF_ROWF']:04X}", free >= 8 and S["TUT_RAM_END"] <= S["PF_ROWF"], free)
 
 
+HOOKS_OFF = ("pi_ic = intent_icon7, pl_et = end_turn, il_go = item_log0 / BANK_TEXT, the lectern ids back (lect_ok), "
+             "item_depth's digit operand '0'")
+
+
 def hooks_off(p):
+    """C27: every D0 SMC operand undone (pl_et, pi_ic, MORROW-SPEAK il_go, TUT-KEY item_depth.d + 1) + the lectern ids."""
     return (w2(p, S["pi_ic"] + 1) == S["intent_icon7"] and w2(p, S["pl_et"] + 1) == S["end_turn"]
-            and w2(p, S["il_go"] + 1) == S["item_log0"] and p.rb(S["il_go"] + 4) == S["BANK_TEXT"] and lect_ok(p))
+            and w2(p, S["il_go"] + 1) == S["item_log0"] and p.rb(S["il_go"] + 4) == S["BANK_TEXT"] and lect_ok(p)
+            and p.rb(S["item_depth.d"] + 1) == ord("0"))
 
 
 def scen_tour(h, hero, scheme="keys"):
@@ -1823,7 +2035,7 @@ def scen_tour(h, hero, scheme="keys"):
 
 
 def scen_left(h):
-    """C25: skip the book and the pear, take the shaft -> L76 once in B, before L24; up to A and down again: no second L76.
+    """C25: skip the book and the pear, take the shaft -> L76 once in B, before L77 (B7's G0); up to A and down again: no second L76.
     C22 run A is the pit-fall route (scen_skip). C27 after Quit."""
     p = start(h, 0)
     run = Run(p)
@@ -1845,9 +2057,9 @@ def scen_left(h):
         T(p, "WAIT")
     lines = [l.rstrip() for l in p.LOG]
     n76 = lines.count(line("TL_L76"))
-    check("C25", "book + pear skipped, the shaft -> L76 once in B, before L24; up to A and down again: no second L76",
-          in_b and up and p.rb("CUR_ROOM") == 4 and n76 == 1 and line("TL_L24") in lines
-          and lines.index(line("TL_L76")) < lines.index(line("TL_L24")), (in_b, up, p.rb("CUR_ROOM"), n76, lines[-8:]))
+    check("C25", "book + pear skipped, the shaft -> L76 once in B, before B7's G0 (TUT-KEY: L77); up to A and down again: "
+          "no second L76", in_b and up and p.rb("CUR_ROOM") == 4 and n76 == 1 and line("TL_L77") in lines
+          and lines.index(line("TL_L76")) < lines.index(line("TL_L77")), (in_b, up, p.rb("CUR_ROOM"), n76, lines[-8:]))
     # C27: Quit from the pause (FIRE + UP -> QUIT) -> menu -> 1 START: the choice; both D0 operands back
     p.hold("FIRE", "K")
     p.tick(3)
@@ -1864,7 +2076,7 @@ def scen_left(h):
     p.tick(3)
     p.release()
     p.tick(3)
-    check("C27", "after Quit (pause) -> menu -> `1`: the choice screen; pi_ic = intent_icon7 and pl_et = end_turn",
+    check("C27", "after Quit (pause) -> menu -> `1`: the choice screen; " + HOOKS_OFF,
           at_menu and w2(p, S["es_go"] + 1) == S["ts_choice"] and hooks_off(p), (paused, at_menu, hex(w2(p, S["pi_ic"] + 1))))
 
 
@@ -1967,27 +2179,25 @@ def scen_keys(h):
 
 def main():
     t0 = time.monotonic()
+    scen = [("static", lambda h: scen_static()), ("plain", scen_plain),
+            ("full_w", lambda h: scen_full(h, 0, "icon", "Warrior", True)),
+            ("full_m", lambda h: scen_full(h, 1, "I", "Mage", False)),
+            ("skip", scen_skip), ("hold_mercy", scen_hold_mercy), ("death", scen_death), ("garbage", scen_garbage),
+            ("full_k", lambda h: scen_full(h, 0, "icon", "Kempston Warrior", False, scheme="kemp", via_menu=menu_kempston)),
+            ("redef_menu", lambda h: scen_redef(h, ["W", "X", "K", "L", "M"], menu_redefine(["W", "X", "K", "L", "M"]),
+                                                "REDEFINE menu W X K L M")),
+            ("redef_poke", lambda h: scen_redef(h, ["W", "S", "K", "L", "M"], menu_poke_keytab(["W", "S", "K", "L", "M"]),
+                                                "KEYTAB W S K L M")),
+            ("visual_w", lambda h: scen_visual(h, 0)), ("visual_m", lambda h: scen_visual(h, 1)),
+            ("tour_w", lambda h: scen_tour(h, 0)), ("tour_m", lambda h: scen_tour(h, 1)),
+            ("tour_k", lambda h: scen_tour(h, 0, scheme="kemp")), ("left", scen_left), ("keys", scen_keys),
+            ("speak", scen_speak), ("key", scen_key)]
+    pick = set(filter(None, os.environ.get("TUT0_SCEN", "").split(",")))   # TUT-KEY: a subset by name (default: all)
     with Harness() as h:
         h.launch(EMU_ARGS)
-        scen_static()
-        scen_plain(h)
-        scen_full(h, 0, "icon", "Warrior", True)
-        scen_full(h, 1, "I", "Mage", False)
-        scen_skip(h)
-        scen_hold_mercy(h)
-        scen_death(h)
-        scen_garbage(h)
-        scen_full(h, 0, "icon", "Kempston Warrior", False, scheme="kemp", via_menu=menu_kempston)
-        scen_redef(h, ["W", "X", "K", "L", "M"], menu_redefine(["W", "X", "K", "L", "M"]), "REDEFINE menu W X K L M")
-        scen_redef(h, ["W", "S", "K", "L", "M"], menu_poke_keytab(["W", "S", "K", "L", "M"]), "KEYTAB W S K L M")
-        scen_visual(h, 0)
-        scen_visual(h, 1)
-        scen_tour(h, 0)
-        scen_tour(h, 1)
-        scen_tour(h, 0, scheme="kemp")
-        scen_left(h)
-        scen_keys(h)
-        scen_speak(h)
+        for name, fn in scen:
+            if not pick or name in pick:
+                fn(h)
     fails = sorted({c for c, ok, _ in CHECKS if not ok})
     nbad = sum(1 for c in CHECKS if not c[1])
     print(f"tut0: {nbad} failed of {len(CHECKS)}" + (f": {fails}" if fails else "") + f"  ({time.monotonic() - t0:.0f}s)", flush=True)

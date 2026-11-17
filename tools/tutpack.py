@@ -27,6 +27,9 @@ Width rules (a line must be <= 32 under BOTH):
              SP / CS / SS spelled SPACE / CAPS / SYM by the blob, SPACE widest); chord = 11
   STICK      token = 5 chars (UP DOWN LEFT RIGHT FIRE, RIGHT widest); chord = 11
 Lint (R4-2): a log line (TL_) never begins with a control token.
+Lint (MORROW-SPEAK review A): a log line's bytes as the blob queues them (dictionary tokens 1 B,
+each control token expanded to its widest name, W_KEYS / W_STICK) are <= LOG_MAX - 1 = 31:
+tt_line queues MOR_MARK + the line through log_push, which keeps at most LOG_MAX bytes.
 
 Usage: tools/tutpack.py [--report]
 """
@@ -51,6 +54,7 @@ ID_RE = re.compile(r"^(TL_L\d\d[WMb]?|TL_I\d\d[abWM]?|TS_[A-Z0-9_]+)$")
 W_KEYS = 5      # KEYS rule: token width (REDEFINE names, SPACE spelled out: R4-2)
 W_STICK = 5     # STICK rule: token width (widest stick word)
 LINE_MAX = 32
+LOG_MAX = 32    # level_defs.asm LOG_MAX: log_push copies at most this many bytes
 
 
 def fail(msg):
@@ -256,6 +260,13 @@ def main():
         print(f"tutpack: OVER {LINE_MAX}: {k} keys={w[0]} stick={w[1]}")
     if over:
         fail(f"{len(over)} line(s) exceed {LINE_MAX} chars under a width rule")
+    # MORROW-SPEAK review A: the marker byte + the queued bytes must fit log_push's LOG_MAX
+    def queued(s):
+        nc = sum(1 for b in s[:-1] if 1 <= b <= 5)
+        return len(s) - 1 - nc + nc * max(W_KEYS, W_STICK)
+    long_ = [(k, queued(s)) for (k, _), s in zip(pairs, streams) if k.startswith("TL_") and queued(s) > LOG_MAX - 1]
+    if long_:
+        fail(f"queued bytes > {LOG_MAX - 1} (tt_line's marker + log_push's LOG_MAX): {long_}")
 
 
 if __name__ == "__main__":

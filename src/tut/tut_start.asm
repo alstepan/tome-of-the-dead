@@ -289,22 +289,11 @@ tut_d0:
                 ld   e, TX_NONE
                 ld   hl, level_show            ; leaves bank 7: farb gives bank 4 back
                 call farb4
-                ; --- panel depth "D0" (item_depth's draw; its dirty bit dropped) ---
+                ; --- panel depth "D0" + the (blank) key cells: item_depth itself (its dirty bit dropped), with
+                ; TUT-KEY's digit operand patched first (tt_hook: every later PD_DEPTH redraw prints D0 too) ---
+                call tt_hook                   ; MORROW-SPEAK: item_log -> blob_log; TUT-KEY: the "D0" digit
                 ld   hl, PANEL_DIRTY
-                res  PD_DEPTH_BIT, (hl)
-                ld   hl, P_NUMBUF
-                ld   (hl), 'D'
-                inc  l
-                ld   (hl), '0'
-                inc  l
-                ld   (hl), 0
-                ld   l, P_NUMBUF & $FF
-                ld   b, ICON_ROW
-                ld   e, DEPTH_COL * 8
-                call print6
-                ld   bc, (ICON_ROW << 8) | DEPTH_COL
-                ld   de, (2 << 8) | 1
-                call pmark_rect
+                call item_depth                ; (far6 key_pan nests; bank 4 back)
                 ; --- the turn engine's state, B0's lines, the mentor at A1 (T7) ---
                 call tt_init
                 ; --- run ---
@@ -312,7 +301,6 @@ tut_d0:
                 ld   (pl_et + 1), hl           ; SMC target: end_turn -> the turn stub
                 ld   hl, ts_icon
                 ld   (pi_ic + 1), hl           ; SMC target: intent_icon7 -> the icon stub (R2)
-                call tt_hook                   ; MORROW-SPEAK: item_log -> blob_log
                 call play_go
                 ld   sp, WORKSTORE_TOP
                 ld   hl, play_loop

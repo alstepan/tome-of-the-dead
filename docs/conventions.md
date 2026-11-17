@@ -141,10 +141,12 @@
   real `intent_icon7`, then `blob_icon`) and, MORROW-SPEAK, **`il_go + 1` / `il_go + 4`**
   (panel2.asm item_log's `ld hl, item_log0` / `ld c, BANK_TEXT`, the global `il_go` =
   `item_log.go`; = `blob_log` / `BANK_BLOB` only while D0 runs: the blob draws the line through
-  item_log0, then Morrow's ink + the balloon). `pl_et`, `pi_ic` and `il_go` are always patched /
+  item_log0, then Morrow's ink + the balloon) and, TUT-KEY, **`item_depth.d + 1`** (HOT_COPY panel_hot.asm
+  item_depth's `add a, '0'` operand; = `'0' - 1` only while D0 runs, so the panel prints "D0" with LVL_DEPTH 1 on
+  every PD_DEPTH redraw: the key pickup / unlock). `pl_et`, `pi_ic`, `il_go` and the digit are always patched /
   undone together: `tut_d0` sets them (`tt_hook` for `il_go`), `blob_choice` (death, Quit,
   choice `2`, BREAK) and `tt_reset` (the grate step = EX_LEVEL / EX_DOWN from C) put them back
-  through **`tt_unhook`**, which also restores the D8 lectern tile ids 15..18 the balloon borrows
+  through **`tt_unhook`** (`tt_hook` patches `il_go` + the digit), which also restores the D8 lectern tile ids 15..18 the balloon borrows
   (glyphs, attrs, flags). Invariant: every D0 exit passes `enter_select` / `blob_choice` or
   undoes the operands itself — a stale `pl_et` / `pi_ic` / `il_go` would far-call a blob the D1
   pool has overwritten, and a skipped `tt_unhook` would leave the Sanctum lectern drawn as a
