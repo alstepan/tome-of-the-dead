@@ -14,7 +14,7 @@ deal_hit (combat3), h_jump (status7), xp_turn (MP_HOLD).
       HUNGER" (+ STS_HWEAK), the 50th WEAK turn faints (FAINT1); hunger_add: WEAK ->
       HUNGRY none, -> FED "YOU FEEL WELL FED"; saturates at 100
   R   MP regen: Mage period 6 -> 12 while HUNGRY; none while (hunger) WEAK;
-      FED HP +1 per 12 turns (to MAXHP), OK none
+      FED HP +1 per 16 turns (to MAXHP; BALANCE-PKG4), OK none
   W   hunger WEAK = status WEAK, not stacked: deal_hit dmg 3 -> 2 with
       either or both; Cure leaves STS_HWEAK
   P   panel: FOOD bar + stage word redrawn (PD_FOOD), the stage attr on
@@ -247,7 +247,7 @@ def run(h, p, check):
     # ======================= R: regen =============================================
     # HUNGRY: MP_RG advances on even TURN_COUNTER only, so the 1st gain lands on
     # turn 12 or 13 (parity), then every 12
-    for food, per, tag in ((80, 5, "FED"), (20, 10, "HUNGRY"), (5, None, "WEAK")):
+    for food, per, tag in ((80, 7, "FED"), (20, 14, "HUNGRY"), (5, None, "WEAK")):
         scene(K_WIZARD, mp=0, maxmp=12)
         setfood(food)
         got = []
@@ -257,33 +257,33 @@ def run(h, p, check):
         gains = [i + 1 for i in range(30) if got[i] != (got[i - 1] if i else 0)]
         if per is None:
             ok = gains == [] and p.rb("MP_RG") == 0
-        elif per == 5:
-            ok = gains == [5, 10, 15, 20, 25, 30]     # LARGER-D T5 package 3: Mage 5 turns (MP_PER 20 quarter-turns)
+        elif per == 7:
+            ok = gains == [7, 14, 21, 28]             # BALANCE-PKG4: Mage 7 turns (MP_PER 28 quarter-turns; was 5)
         else:
-            ok = len(gains) == 3 and all(gains[i + 1] - gains[i] in (8, 10) for i in range(2))   # HUNGRY: odd turns held, ~9
-        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (HUNGRY ~10)"),
+            ok = len(gains) == 2 and gains[1] - gains[0] in (12, 14, 16)   # HUNGRY: odd turns held, ~14
+        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (HUNGRY ~14)"),
               ok, (gains, got[-1], p.rb("MP_RG")))
-    # LARGER-D T5 (larger_depths 3.1): FED regen = 1 + MAXHP div 40 per 12 turns (package 3); DN_SLOT + DS_SNAP grows by the HP gained
+    # LARGER-D T5 (larger_depths 3.1): FED regen = 1 + MAXHP div 40 per 16 turns (BALANCE-PKG4; 12 in package 3); DN_SLOT + DS_SNAP grows by the HP gained
     snap_a = S["DN_SLOT"] + S["DS_SNAP"]
     for food, mx, tag in ((80, 16, "FED"), (80, 39, "FED"), (80, 40, "FED"), (80, 79, "FED"), (80, 80, "FED"), (40, 40, "OK")):
         scene(hp=mx)
         p.set_ent(0, HP=5)
         setfood(food)
         s0 = p.rb(snap_a)
-        for _ in range(24):
+        for _ in range(32):
             p.turn("WAIT")
         inc = 0 if tag == "OK" else 2 * (1 + mx // 40)
         got = p.ent(0)["HP"]
-        check(f"R2 {tag} MAXHP {mx}: HP +{inc} in 24 turns, DS_SNAP +{inc}", got == 5 + inc and (p.rb(snap_a) - s0) & 255 == inc,
+        check(f"R2 {tag} MAXHP {mx}: HP +{inc} in 32 turns, DS_SNAP +{inc}", got == 5 + inc and (p.rb(snap_a) - s0) & 255 == inc,
               (got, (p.rb(snap_a) - s0) & 255))
     scene(hp=40)
     p.set_ent(0, HP=39)
-    for _ in range(12):
+    for _ in range(16):
         p.turn("WAIT")
     s0 = p.rb(snap_a)
     check("R2b clamp: HP 39 / 40 -> 40 (a +2 step gains 1), DS_SNAP +1 only", p.ent(0)["HP"] == 40, p.ent(0)["HP"])
     scene(hp=40)
-    for _ in range(12):
+    for _ in range(16):
         p.turn("WAIT")
     check("R3 FED regen never above MAXHP", p.ent(0)["HP"] == 40, p.ent(0)["HP"])
 

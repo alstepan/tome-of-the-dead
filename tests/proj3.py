@@ -561,6 +561,15 @@ def main():
         p.boot(K_KNIGHT)
         tt_boot = p.rb("TURN_TICK")                  # P9: 0 throughout INPUT
         kt = p.kinds()
+        # BALANCE-PKG4: the shipped Ghost is SHOCK R (was X). These rule cases need a SHOCK reflector, so the Ghost row is
+        # poked to SHOCK X here (kx_tab byte 0 bits 7-6, type 3) and the model's row follows: a fixture, not the shipped table.
+        _gk = CT.KINDS[K_GHOST]
+        CT.KINDS[K_GHOST] = (_gk[0], {**_gk[1], "SHOCK": "X"}) + tuple(_gk[2:])
+        _kxg = 3 * 16384 + S["kx_tab"] - 0xC000 + K_GHOST * 8
+        p.z.cmd("set-memory-zone 0")
+        _r0 = p.z.read_memory(_kxg, 1)[0]
+        p.wmem(_kxg, [(_r0 & ~0xC0) | (X << 6)])
+        p.z.cmd("set-memory-zone -1")
         hero0 = p.ent(0)
         hy, hx = hero0["Y"], 10
         solid = {T_BRICK}

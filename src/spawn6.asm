@@ -523,10 +523,9 @@ sp_door:        call cur_room_desc             ; (bank 2) HL, L low nibble = 0
                 ld   d, EF_PENDING | EF_WALKIN
                 jr   .s
 .v:             inc  l
-                ld   a, (hl)                   ; RD_UPCOL (storey 0)
-                ld   e, a
-                or   a
-                ld   a, 0
+                ld   e, (hl)                   ; RD_UPCOL (storey 0)
+                xor  a                         ; (BALANCE-PKG4 -2 B: A = 0 kept across the zero test)
+                cp   e
                 jr   nz, .vs
                 inc  l
                 ld   e, (hl)                   ; RD_DNCOL (storey 1)

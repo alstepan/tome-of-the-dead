@@ -8,7 +8,7 @@ item_mp + the poll (xp2.asm / icons.asm); the rank info line item_info (D3-9a).
   L   a kill through deal_hit -> XP += KXP; level-up exactly at the threshold
       (XP 37 + Goblin 3 = 40 -> L2; 36 + 3 = 39 stays L1); a respawned Goblin
       (EF_RESPAWN) gives 1; LVL_SH (panel digit at (31, 19)) follows
-  G   gains: Warrior max/cur HP +5 (WIDOW-SPIT; was +4), MP +1; Mage HP +3, MP +2;
+  G   gains: Warrior max/cur HP +6 (BALANCE-PKG4; was +5), MP +1; Mage HP +2 (was +3), MP +2;
       "YOU REACH LEVEL 2!"
   S   steps: XP 919 -> 922 at L1 = 7 levels at once: gains x 7, atk +2 (L4, L8),
       eva +1 (L6) in the hero's kind_tab columns; lines REACH LEVEL 8 / STRIKE
@@ -172,7 +172,7 @@ def run(h, p, check):
     st = hero_stats()
     check("L2 XP 41 + 3 = 44 = XP_NEXT[2] (LARGER-D T5 package 3): L2, XP_UP cleared", x == 44 and st[0] == 2 and p.rb("XP_UP") == 0,
           (x, st))
-    check("G1 Warrior: HP 30/30 -> 35/35, MP 3/6 -> 4/7", st[1:] == (35, 35, 4, 7) and S["LUP_W_HP"] == 5, st)
+    check("G1 Warrior: HP 30/30 -> 36/36, MP 3/6 -> 4/7", st[1:] == (36, 36, 4, 7) and S["LUP_W_HP"] == 6, st)   # BALANCE-PKG4: +6 (was +5)
     check("G1 'YOU REACH LEVEL 2!' logged once", lines.count(TXT["xp_reach"] + "2!") == 1, lines)
     check("L3 panel level digit: LVL_SH follows LVL", p.rb("LVL_SH") == 2, p.rb("LVL_SH"))
     check("G1 no step at L2: atk / eva unchanged", katk(K_KNIGHT) == base_w, (katk(K_KNIGHT), base_w))
@@ -182,7 +182,7 @@ def run(h, p, check):
     scene(K_WIZARD, hp=20, mp=5, maxmp=12)
     kill(54)
     st = hero_stats()
-    check("G2 Mage: L2, HP 20/20 -> 23/23, MP 5/12 -> 7/14", st == (2, 23, 23, 7, 14), st)
+    check("G2 Mage: L2, HP 20/20 -> 22/22, MP 5/12 -> 7/14", st == (2, 22, 22, 7, 14), st)   # BALANCE-PKG4: +2 (was +3)
 
     # ======================= S: steps, multi-level, cap, reset ===================
     scene(K_KNIGHT, hp=30, mp=0, maxmp=6)
@@ -190,7 +190,7 @@ def run(h, p, check):
     kill(1239)
     st = hero_stats()
     a1 = katk(K_KNIGHT)
-    check("S1 XP 1242 from L1: L8 at once, HP +35, MP +7", st == (8, 65, 65, 7, 13), st)
+    check("S1 XP 1242 from L1: L8 at once, HP +42, MP +7", st == (8, 72, 72, 7, 13), st)
     check("S1 atk +2 (L4, L8), eva +1 (L6)", a1 == (base_w[0] + 2, base_w[1] + 1), (a1, base_w))
     want = [TXT["xp_reach"] + "8!", TXT["xp_atk"], TXT["xp_eva"]]
     check("S1 lines: REACH LEVEL 8!, STRIKE TRUER, FEEL NIMBLE (once each)",
@@ -205,7 +205,7 @@ def run(h, p, check):
 
     # ======================= M: MP regen ==========================================
     # B20 (game.md 4.0): Mage period 6; gain = 1 + MAXMP div 16 (MAXMP 16 -> +2), clamped
-    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 20, 2), (K_WIZARD, 20, 16)):   # LARGER-D T5: MP_PER in quarter-turns, +4 a turn (Mage 5, package 3)
+    for hero, per, mx in ((K_KNIGHT, 32, 2), (K_WIZARD, 28, 2), (K_WIZARD, 28, 16)):   # MP_PER in quarter-turns, +4 a turn (Mage 7, BALANCE-PKG4; 5 in package 3)
         gain = 1 + (mx >> 4)
         scene(hero, mp=0, maxmp=mx)
         got = []
@@ -220,9 +220,9 @@ def run(h, p, check):
     # B20 clamp: MP + gain never overshoots MAXMP (MAXMP 17 gain 2; MAXMP 99 gain 7)
     for mx, mp0, want in ((17, 16, 17), (99, 98, 99)):
         scene(K_WIZARD, mp=mp0, maxmp=mx)
-        for i in range(5):
+        for i in range(7):
             p.turn("WAIT")
-        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 5th turn (no overshoot)",
+        check(f"M1 clamp: MAXMP {mx}, MP {mp0} -> {want} on the 7th turn (no overshoot)",
               p.rb("MP") == want, p.rb("MP"))
     scene(K_WIZARD, mp=0, maxmp=12)
     p.wb(S["ST_FLAGS"], S["STS_WEAK"])

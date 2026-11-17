@@ -1,6 +1,6 @@
 # BALANCE-V2: magic evenness + retune to the 2026-11-16 targets (designer recommendation, 2026-11-16)
 
-Status: **recommendation, nothing built.** Targets (user 2026-11-16, `balance_sim.py --ld-pkg`, 10k × 2 seeds): **best
+Status: **package 4 (section 5) BUILT 2026-11-16 (`feat/balance-pkg4`); sections 1-4 are the original recommendation (history).** Original status: recommendation, nothing built. Targets (user 2026-11-16, `balance_sim.py --ld-pkg`, 10k × 2 seeds): **best
 expert 30–40 %, average 15–25 %, |W − M| ≤ 3 in each band.** Today: average W 32.5 / M 36.3, best expert
 (`expert+charm_food+rest_fed-no_rest_full-no_jump_p`) W 72.5 / M 81.1. The average must drop ~10–14 pts, the expert
 ~35–45: we need levers whose effect grows with play skill. The skilled exploit is one loop: **food → FED → regen →

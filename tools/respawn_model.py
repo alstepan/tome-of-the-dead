@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import levelgen as G                                    # noqa: E402
 
 RESPAWN_PERIOD = 48
-RESPAWN_CHANCE = 96                 # of 256
+RESPAWN_CHANCE = 32                 # of 256 (BALANCE-PKG4: was 96; the time trickle at 1/3 rate)
 RESPAWN_XP_DIV = 2
 RESPAWN_ITEM_W = 2
 RESPAWN_ITEM_CAP = 7                # room weight = min(7, 1 + 2 * items)

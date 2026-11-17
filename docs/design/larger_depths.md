@@ -189,6 +189,8 @@ unchanged; the mana-amulet player measured 63.7 % (amulet granted from D2, optim
 **Sim evidence** (10k x 2 seeds, package 2): W 43.1 / M 42.7, gap 0.4; monsters met per run 162/187 (today 111/113);
 run length ~5,565/6,248 turns; BSIM1 ok (+30 HP Mage 50.5 %).
 
+**Package 4 (BALANCE-PKG4, shipped; user 2026-11-16; `balance_v2.md` §5):** FED regen 16 turns (was 12), floor food 3–5 (was 4–5), time respawn trickle back on D1–D8 at ⅓ rate (48 turns, chance 32/256; shared cap 6), Mage MP 7 turns (was 5), level-up HP W +6 / M +2 (was +5 / +3), Scarab MP regen ×1.6 (was ×2), resist rows (Vampire FIRE N; Ghost / Poltergeist / Archmage SHOCK R; Gargoyle FIRE R COLD N; Necromancer / Bone Caller COLD N), Firebolt burst 1d3 / 1d3 / 1d5. Sim (`--ld-pkg4`, 10k × 2): average W 20.6 / M 25.2, best expert W 34.3 / M 28.2. The package-3 lines below, and the §3 table values for the changed knobs (food 4–5, Mage 5, FED 12), are **history**.
+
 **Package 3 (shipped; user 2026-11-15: target 20–30 %, even W/M):** monsters 20/21/21/23/24/23/23/18, `XP_NEXT`
 44/110/220/374/550/770/1,012/1,265, FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns (Warrior 8), progress
 respawns p 0.75 cap `RESPAWN_MAX` 6. Sim (`tools/balance_sim.py --ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5**

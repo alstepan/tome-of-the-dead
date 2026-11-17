@@ -1072,7 +1072,7 @@ because the next evaluation sees their effect.
 | HP / MP at start | 24 / 6 | 16 / 12 (10 + Robe 2) |
 | atk / eva / DEF | 3 / 2 / 1 (Leather) | 1 / 1 / 0 |
 | Melee | Short Sword 1d6, reach 1 | Oak Staff 1d4, reach 1, own **STAFF_SWING** frame. Never greys out (the 0-MP fallback) |
-| MP regen (B20, designer 2026-10-19; LARGER-D package 3) | every **8** turns: +1 + `MAXMP` div 16 | every **5** turns (LARGER-D T5; B20 had 6): +1 + `MAXMP` div 16; Mana / Scarab ½ = 2.5 turns via quarter-turn counting |
+| MP regen (B20, designer 2026-10-19; LARGER-D package 3) | every **8** turns: +1 + `MAXMP` div 16 | every **7** turns (BALANCE-PKG4; history: 5 in LARGER-D package 3, 6 in B20): +1 + `MAXMP` div 16; Mana ½ = 3.5 turns via quarter-turn counting; Scarab ×5/8 (4.5 turns, `c/2 + 4` quarter-turns) |
 | Mana use | 2 power attacks (§6.2) | 5 spells (§6.1) |
 | Finite supplies | daggers, arrows (§6.3) | spell books/scrolls are found, never bought (§5) |
 | Ranged | **throwing daggers** (range 6) + **bow** (range 14), both **finite** (§6.3) | spells |
@@ -1098,7 +1098,7 @@ Staff **1d4+0**. Level-up gains and steps unchanged (§4.1: W +4 HP/+1 MP, M +3/
 L6 eva +1, L8 atk +1). `XP_NEXT` unchanged.
 
 **Why (F1 `d20 + atk ≥ 10 + eva`, so P(hit) = (11 + atk − eva) / 20; monster rows §9.1 incl.
-depth scaling; HP regen FED +1 / 12 turns):**
+depth scaling; HP regen FED +1 / 16 turns, BALANCE-PKG4):**
 
 | Fight (hero level = depth) | Hero hit % × avg dmg | Turns to kill | Hero HP lost | FED turns to regen |
 |---|---|---|---|---|
@@ -1120,7 +1120,7 @@ must open with spells and the staff is a rat-and-finisher tool. Mage melee damag
 the between-rooms refill, so in-fight regen is kept small (≤ 1 Spark per ~12-turn fight).
 Regen gain per period = **1 + `MAXMP` div 16** (≤ 16 → +1, 16–31 → +2), so refill time stays
 roughly flat as the pool grows. HUNGRY doubles the period, WEAK halts it (§7), Amulet of
-Mana / Scarab halve it.
+Mana halves it, the Scarab takes it to ×5/8 (BALANCE-PKG4; was ½).
 
 | Ability | MP (rank 1) | Change |
 |---|---|---|
@@ -1191,8 +1191,8 @@ level is `LVL_EXP(d) = d`** at every depth entry (thresholds sit ~15 % under the
 totals, so a hero who skips a few monsters still keeps pace; skipping a third of a level
 drops one level). L9 now comes early on D8 for thorough play.
 
-**Level-up** (each level; several at once loop): **Warrior max HP +5, max MP +1 · Mage max
-HP +3, max MP +2; current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
+**Level-up** (each level; several at once loop): **Warrior max HP +6, max MP +1 · Mage max
+HP +2, max MP +2** (BALANCE-PKG4; history: W +5 / M +3); current HP/MP rise by the same amounts** (not a full heal). (WIDOW-SPIT, user
 2026-11-05: Warrior +4 → +5, the compensation for the Black Widow's spit; `docs/design/widow_spit_sim.md`.) The class split
 replaces the Vigor/Power tomes, which are now rare (§5: books mostly teach or rank up
 abilities). Extra steps: **L4 atk +1 · L6 eva +1 · L8 atk +1** (mirrors
@@ -1241,7 +1241,7 @@ removed.
 | Ability | Rank 1 (§6.1/§6.2) | Rank 2 | Rank 3 |
 |---|---|---|---|
 | Spark | **2 MP**, r6, 1d4+1, confuse 1 in 4 | **4 MP**, r**9**, **1d8+2** | **6 MP**, r**10**, **1d8+4**, confuse 1 in 2 |
-| Firebolt | **5 MP**, r8, 1d8, burst 1d4 | **6 MP**, r8, **1d8+2**, burst 1d4 | **10 MP**, r10, **1d10+4**, burst 1d6, burst **spares the caster** |
+| Firebolt | **5 MP**, r8, 1d8, burst **1d3** | **6 MP**, r8, **1d8+2**, burst **1d3** | **10 MP**, r10, **1d10+4**, burst **1d5**, burst **spares the caster** (BALANCE-PKG4; history: burst 1d4 / 1d4 / 1d6) |
 | Frost Shard | **3 MP**, r10, 1d6+1, 1 bounce, freeze 2 | **5 MP**, r10, **1d8+2**, 2 bounces, freeze 3 | **7 MP**, r12, **1d8+4**, 2 bounces, freeze 4 (bosses halved, §6.4) |
 | Drain Life | **3 MP**, r6, 1d6+2 | **5 MP**, r8, **1d8+3** | **7 MP**, r8, **1d8+6** |
 | Lightning | **5 MP**, r16, 1d8+4, 1 bounce | **8 MP**, r16, **1d8+7**, 1 bounce | **11 MP**, r20, **1d10+9**, 2 bounces (loop guard 4 still binds) |
@@ -1662,7 +1662,7 @@ own, but it would leave the D2 Mage (19 HP) at about half HP after one Spider Qu
 
 **Lethality check (poison cannot kill; it softens the hero for the next fight).**
 - D2 Spider (7 hp, ~2 bites a fight → 24 turns): **6 HP** over 24 turns (was 4 over 12).
-  FED regen gives back +2 (1 per 12 turns), so net −4. That is 14 % of the Warrior's 28 HP
+  FED regen gives back +2 (1 per 12 turns; 16 since BALANCE-PKG4), so net −4. That is 14 % of the Warrior's 28 HP
   and 21 % of the Mage's 19 HP.
 - Spider Queen (3–4 bites → cap 30): **8 HP** over 30 turns, net −6 after regen (was 5 / −4).
   That is 21 % of the Warrior's HP and 32 % of the Mage's. It is the D2 boss, Cure is its §10
@@ -1730,7 +1730,7 @@ tints and the gold glow (§6.4), and one more meaning in a 2-colour cell is unre
   (caster already at max) shows **nothing**, never `0`: `0` means "immune".
 - **Heal sources that emit `+n`:** **Heal potion** (drinker), **Drain Life** (caster, on the
   tick after the target's `-n`), **Vampire drain bite** (the Vampire), and any later
-  monster potion (§9.2 idea). **Silent:** FED regen (+1 per 12 turns: a `+1` every 12 turns
+  monster potion (§9.2 idea). **Silent:** FED regen (+1 per 16 turns since BALANCE-PKG4, was 12: a `+1` every 16 turns
   would hold a live slot and drown the real hits during waits and corridor walks; the panel
   HP bar already shows it), level-up and Vigor/Power tomes (max-HP raises, not heals; their
   log line carries them). Rule for any future source: a number only for a heal **caused by an
@@ -1887,7 +1887,7 @@ the release tick (budget split). The rule is **logic early, visible output at im
 - Physical damage: `max(1, roll × resist − DEF)`. Spells: `roll × resist`, no DEF.
 - Nat-20/1 stays off.
 - MP regen as §4 / §4.0 (+1 + `MAXMP` div 16 per class period), period doubled when
-  HUNGRY, halted when Weak. Mana potion +8. Amulet of Mana / Scarab halve the regen
+  HUNGRY, halted when Weak. Mana potion +8. Amulet of Mana halves the regen (Scarab ×5/8, BALANCE-PKG4)
   interval.
 
 **Hunger** (`FOOD` 0–100, start 80): burns −1 per **6 turns**, a jump −2 extra. **Never fatal.**
@@ -1897,7 +1897,7 @@ distinct stages, each name ≤ 6 chars:**
 
 | Stage (panel word) | FOOD | Effects | Bar + word attr |
 |---|---|---|---|
-| **FED** | 50–100 | **HP +(1 + `MAXHP` div 40) per 12 turns** (LARGER-D package 3, T5; was flat +1, user: agreed; Mage 16 → 1, Warrior 70 → 2) | `$44` |
+| **FED** | 50–100 | **HP +(1 + `MAXHP` div 40) per 16 turns** (BALANCE-PKG4; 12 in LARGER-D package 3, T5; was flat +1, user: agreed; Mage 16 → 1, Warrior 70 → 2) | `$44` |
 | **OK** (was Peckish) | 25–49 | no HP regen | `$46` |
 | **HUNGRY** | 10–24 | atk −1, MP regen halved (= regen **period ×2**, 3E, confirmed 2026-10-20 §8.11) | `$42` |
 | **WEAK** | 0–9 | atk −2, eva −1, dmg −1 (min 1; physical hits only, §6.4.2 R1), no MP regen, no jump | `$42`; line on entry (`YOU ARE WEAK WITH HUNGER.`); **faints** after 50 WEAK turns, then every 30 (§7.1) |
@@ -2035,7 +2035,7 @@ is not a pause: music and SFX keep playing** (no `SND_HOLD`). Engineering detail
 
 ### 8.5 Per-level placement (floor list ≤ 32 entries)
 
-**LARGER-D (T6, as built 2026-11-16): food 4–5 · potions 3 + rnd(2) = 3–4 (≥ 1 Heal) · scrolls 2 · arrows `1d4+6` · traps ×4/3 (§1.5).** The line below is the 3×3 history. Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
+**LARGER-D (T6, as built 2026-11-16): food ~~4–5~~ **3–5 (BALANCE-PKG4)** · potions 3 + rnd(2) = 3–4 (≥ 1 Heal) · scrolls 2 · arrows `1d4+6` · traps ×4/3 (§1.5).** The line below is the 3×3 history. Food 3–4 · potions 2–3 (≥ 1 Heal) · **scrolls 1–2** (rev 2: 1; E: 1–2 keeps the quick
 slot alive) · gear 1–2 (depth-gated) · class book 1 (D1–D7) + 1 more with 1 in 2 on D4–D7
 (rev 5, §5) · ~~other-class book 0–1~~ (cut, user 2026-10-20) ·
 key 1 (no floor entry: found on entering the key room, §8.11 Q1) · all 3E entries on
@@ -2063,7 +2063,7 @@ not a replacement for the sword. The stack caps (9 / 24) make hoarding a loss.
 | D2 | Golden Spider Queen | golden Spider | **Silk Cloak**: armour DEF 1, eva +2, poison-immune |
 | D3 | Golden Vampire Lord | golden Vampire | **Gravecloak**: armour DEF 2, DRAIN R, DARK R |
 | D4 | **Ogre Warlord** | **unique** | **Warlord's Cleaver** (W: 1d10+1, atk+1) / **Bone Staff** (M: 1d6, spells +2) |
-| D5 | Golden Pharaoh | golden Mummy | **Scarab Amulet**: charm, MP regen ×2, FOOD burn ×½ |
+| D5 | Golden Pharaoh | golden Mummy | **Scarab Amulet**: charm, MP regen ×1.6 (period ×5/8, BALANCE-PKG4; was ×2), FOOD burn ×½ |
 | D6 | Golden High Necromancer | golden Necromancer | **Ring of the Grave**: charm, DARK I, MP+2 |
 | D7 | **Death Knight** | **unique** | **Mirror Helm**: helmet DEF 2, **DARK X** (reflects Dark/Death Bolts) |
 | D8 | **Necromancer Archmage** | unique | none; its death unseals the Sanctum |
@@ -2846,7 +2846,7 @@ replaced by the values above (§9.8 D3-1); the §11.4 "monster DEF 0" rule was 3
 - Following is unaffected: the follow rule runs on the hero's exit turn, when the door the
   hero walked through is open by construction.
 
-**Resistances** (N blank; R resist, I immune, W weak, X reflect; BAL-1 FINAL B applied 2026-11-02, docs/design/bal1_final.md):
+**Resistances** (N blank; R resist, I immune, W weak, X reflect; BAL-1 FINAL B applied 2026-11-02, docs/design/bal1_final.md; **BALANCE-PKG4 rows applied 2026-11-16**: Vampire FIRE W→N, Ghost / Poltergeist / Archmage SHOCK X→R, Gargoyle FIRE N→R + COLD R→N, Necromancer / Bone Caller COLD R→N; history in `balance_v2.md` §1 / §5):
 
 | Kind | PHYS | FIRE | COLD | SHOCK | DRAIN | DARK |
 |---|---|---|---|---|---|---|
@@ -2855,25 +2855,24 @@ replaced by the values above (§9.8 D3-1); the §11.4 "monster DEF 0" rule was 3
 | Slime | R | W | | | | |
 | Spider, Black Widow | | | | | | |
 | Skeleton line (Archer, Guard, Knight, Sniper) | | | **R** | | **I** | I |
-| Vampire (undead set) | | **W** | **I** | | **I** | I |
-| Ghost, Poltergeist | R | | **R** | **X** | I | I |
+| Vampire (undead set) | | | **I** | | **I** | I |
+| Ghost, Poltergeist | R | | **R** | **R** | I | I |
 | Orc | | R | | | | |
-| **Gargoyle** (stone) | **R** | | R | | **I** | |
+| **Gargoyle** (stone) | **R** | **R** | | | **I** | |
 | **Fire Imp** | | **I** | **W** | | | |
 | **Frost Wraith** | | **W** | **I** | | I | I |
 | Mummy | | W | I | | I | I |
-| Necromancer, Bone Caller | | | R | | | I |
+| Necromancer, Bone Caller | | | | | | I |
 | Ogre Warlord | | | R | W | | |
 | Death Knight | | **X** | I | W | I | I |
-| Archmage | | | **X** | **X** | I | R |
+| Archmage | | | **X** | **R** | I | R |
 
 Design intent:
 - Undead shut off Drain (Frost is halved on the Skeleton and Ghost lines, BAL-1 FINAL B), but burn.
-- The Ghost bounces Lightning and Spark back at you.
+- The Ghost no longer bounces Lightning and Spark (SHOCK R since BALANCE-PKG4; history: X): they work at ½.
 - The Death Knight reflects Firebolt.
-- The Fire Imp burns nothing of its own: FIRE is I and Frost is ×2 (Spark works; Firebolt is wasted). The Frost Wraith is the mirror: COLD I, FIRE ×2. Being COLD I it is never FROZEN. The Gargoyle halves PHYS and COLD (the Warrior's tax; Power Strike, Spark and Firebolt answer it).
-- The Archmage reflects Frost and Lightning, so the Mage must fight it with Firebolt and
-  the staff, and the Warrior with steel.
+- The Fire Imp burns nothing of its own: FIRE is I and Frost is ×2 (Spark works; Firebolt is wasted). The Frost Wraith is the mirror: COLD I, FIRE ×2. Being COLD I it is never FROZEN. The Gargoyle halves PHYS and FIRE (BALANCE-PKG4; stone, Frost cracks it: COLD N; the Warrior's tax; Power Strike, Spark and Frost answer it).
+- The Archmage reflects Frost (COLD X); Lightning / Spark work at ½ (SHOCK R since BALANCE-PKG4), Firebolt at full: the Mage's best answer; the Warrior uses steel.
 - Reflected Death Bolts (Mirror Helm) deal ½ to the Archmage.
 
 **Status immunity mask (3D, designer decision 2026-10-03; §6.4).** FROZEN follows COLD (no
@@ -3551,7 +3550,7 @@ yield and swap → (c)2 shove. (a) needs no work.
 
 ### 9.5 Respawn trickle
 
-**LARGER-D (T5, as built 2026-11-16; `larger_depths.md` §3.2): respawns are progress-tied on D1–D8.** On each **first entry** of a room (not the start room) one respawn event fires with probability **0.75** (`RSP_CHANCE` 192 of 256), placed by `rsp_run` (low-RAM cold block) in a random unvisited room, else a visited room ≥ 2 rooms away unseen ≥ 150 turns, else skipped; cap **`RESPAWN_MAX` 6** live respawns per level. **The time trickle below (period 48, chance 96) now runs only on D0** (`trk_run` stays for D0 and the model tests; `end_turn` no longer counts `TRK_PHASE`). Tiers, `F_RESPAWN` and `RESPAWN_XP_DIV` are unchanged. The constants table below is the pre-LARGER-D time trickle.
+**LARGER-D (T5, as built 2026-11-16; `larger_depths.md` §3.2): respawns are progress-tied on D1–D8.** On each **first entry** of a room (not the start room) one respawn event fires with probability **0.75** (`RSP_CHANCE` 192 of 256), placed by `rsp_run` (low-RAM cold block) in a random unvisited room, else a visited room ≥ 2 rooms away unseen ≥ 150 turns, else skipped; cap **`RESPAWN_MAX` 6** live respawns per level. **BALANCE-PKG4 (2026-11-16): the time trickle is back on D1–D8 at ⅓ rate** (period 48 turns of the level, chance **32** of 256 = 96 at period 144; same `trk_run`, same shared cap `RESPAWN_MAX` 6 with the progress respawns; `end_turn` counts `TRK_PHASE` bits 0–5 again and sets `TRK_TIME`, the check runs on the next idle INPUT tick). **D0 (tutorial) has no respawns**: `trk_run` returns on `LVL_DEPTH` 0 and `tut_start` presets `LP_RESPAWNS = RESPAWN_MAX`. (History: LARGER-D T5 had it off on D1–D8; chance was 96.) Tiers, `F_RESPAWN` and `RESPAWN_XP_DIV` are unchanged. The constants table below is the pre-LARGER-D time trickle.
 
 Implemented in 3F. Tags: **U** = user 2026-10-03, **D** = designer decision 2026-10-03.
 
@@ -4098,13 +4097,13 @@ so a missing answer costs time and food (retreat, rest, return), never the run.
 | Threat (res., §9.1) | Mage answers | Mage without them | Warrior |
 |---|---|---|---|
 | Spider Queen D2 (FIRE W) | Firebolt | ½ of runs (and then Spark is II): Spark kite, ~14 MP for its 22 hp = the whole L2 pool; Mana potion or a second visit | PS II + sword; Cure |
-| Vampire Lord D3 (FIRE W; COLD/DRAIN I) | Firebolt; Spark N | ⅓: Spark-kite at range (its bite heals it), 2 lair visits; Frost/Drain useless | Whirlwind ½ / PS III ½: both fine |
+| Vampire Lord D3 (COLD/DRAIN I; FIRE N since BALANCE-PKG4) | Firebolt, Spark N | ⅓: Spark-kite at range (its bite heals it), 2 lair visits; Frost/Drain useless | Whirlwind ½ / PS III ½: both fine |
 | Ogre Warlord D4 (PHYS R, SHOCK W) | **Spark**, Lightning | always has Spark; ranked Spark is the best answer | PS (×2–×3 beats PHYS R), bow, doors |
 | Mummies / Pharaoh D5 (FIRE W, PHYS R, COLD/DRAIN I) | Firebolt; Spark/Lightning N | ~7 %: Spark/Lightning at N, slower; Pharaoh over 2 visits | PS, Scarab next |
-| Ghosts D6–D8 (SHOCK X, PHYS R, COLD/DRAIN I) | **Firebolt only** | **~2 % (no Firebolt at run end): staff only, 1d4 PHYS R ≈ 1 per hit; avoid them (flyers, blocked by closed doors). BAL1 item** | sword (R), PS |
+| Ghosts D6–D8 (SHOCK R since BALANCE-PKG4 (was X), COLD R, PHYS R, DRAIN I) | Firebolt; Spark / Lightning at ½ (**no longer reflected**) | **~2 % (no Firebolt at run end): staff only, 1d4 PHYS R ≈ 1 per hit; avoid them (flyers, blocked by closed doors). BAL1 item** | sword (R), PS |
 | Living Orcs D4–D7 (FIRE R) | Drain (sustain), Spark, Lightning | no Drain (~10 %): potions + rest | sword, Whirlwind on packs |
 | Death Knight D7 (FIRE X, SHOCK W) | Spark, Lightning | no Lightning (~27 %): Spark III 1d8+4 ×2 = 17 per 6 MP is enough | PS through parries |
-| Archmage D8 (COLD/SHOCK X, DRAIN I) + summons | Firebolt + staff; Lightning on summons | no Lightning: Firebolt burst on summons. **No Firebolt (~2 %): Bone Staff 1d6 (~38 swings for ~47 hp) + Mirror Helm reflecting Death Bolts (½ to it), hit-and-run over many visits (it never regenerates, §8.6); near-unwinnable. BAL1 item** | steel, Mirror Helm |
+| Archmage D8 (COLD X, SHOCK R since BALANCE-PKG4, DRAIN I) + summons | Firebolt + staff; Lightning on summons | no Lightning: Firebolt burst on summons. **No Firebolt (~2 %): Bone Staff 1d6 (~38 swings for ~47 hp) + Mirror Helm reflecting Death Bolts (½ to it), hit-and-run over many visits (it never regenerates, §8.6); near-unwinnable. BAL1 item** | steel, Mirror Helm |
 
 Warrior check: his end state is unchanged (PS III + Whirlwind III, ~3 Vigor); only the D3
 order varies (Whirlwind or PS III). Low variance is accepted: his variety is gear, bow and
@@ -4150,7 +4149,9 @@ event) and Cure now answers four effects; traps cost ~2–4 HP per level (DART) 
 (TELEPORT) and ~1 extra wave (ALARM, D5+); tiers raise threat by ~10 % (D2) to ~25 % (D8) of
 monsters being tougher, self-correcting through `Δ` for a hero who skips books or bosses.
 
-**LARGER-D package 3 (user 2026-11-15; as built T5):** monsters per level incl. boss now **20/21/21/23/24/23/23/18** (§9.4 `lp_dtab`; the MORE-MON counts below are history), `XP_NEXT` ×1.1 (§4.1), FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns. balance_sim (`--ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5** (target 20–30 %, even W/M, accepted by the user).
+**BALANCE-PKG4 (user 2026-11-16; as built; `balance_v2.md` §5):** FED regen 16 turns, food 3–5, time respawn trickle back on D1–D8 at ⅓ rate (period 48, chance 32/256, shared cap 6), Mage MP 7 turns, level-up HP W +6 / M +2, Scarab regen ×1.6, the §9.1 resist rows above, Firebolt burst 1d3 / 1d3 / 1d5. Sim `--ld-pkg4`: average W 20.6 / M 25.2, best expert W 34.3 / M 28.2.
+
+**LARGER-D package 3 (user 2026-11-15; as built T5; its FED regen 12 / Mage MP 5 are history, see above):** monsters per level incl. boss now **20/21/21/23/24/23/23/18** (§9.4 `lp_dtab`; the MORE-MON counts below are history), `XP_NEXT` ×1.1 (§4.1), FED regen `1 + MAXHP div 40` per 12 turns, Mage MP 5 turns. balance_sim (`--ld-pkg`, average policy, 10k × 2 seeds): **W 25.4 / M 26.5** (target 20–30 %, even W/M, accepted by the user).
 
 **MORE-MON (user 2026-11-04, `docs/design/more_monsters.md` MEDIUM).** Monsters per level
 D1..D8 = 13/14/14/15/16/15/15/12 (was 11/12/12/13/13/14/14/11) and `ROOM_MAX` 3 at every

@@ -7493,3 +7493,24 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   S3 static (balloon bytes == the grid, `bal_lect` == tiles_common), S4 room change / off-screen (scen_speak), C27
   (`hooks_off`) now also `il_go` + the lectern ids restored after every D0 exit. Golden `tut0_d0_arrival` re-baselined
   (the arrival balloon + cyan log).
+
+## BALANCE-PKG4 ledger (`feat/balance-pkg4`, 2026-11-16; `balance_v2.md` §5, user-accepted package 4)
+
+No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
+
+| Region | Before -> after (free) | What |
+|---|---|---|
+| R6 | 10,748 -> 10,749 B (free 4 -> 3) | `gear6.asm` `hero_recalc`: Scarab period `(c + 8) / 2` (+4 B; the Plate test reuses the flags and doubles in A, -1), `spawn6.asm` `.v` zero test via `xp / cp` (-2). `trk_run` itself unchanged |
+| Bank 7 | 7,384 -> 7,416 B (free 40 -> 8) | `turn_input` TRK_TIME branch (far6 `trk_run`) + `end_turn` `TRK_PHASE` count / flag (+32 B) |
+| Bank 1 | free 13 -> 3 | items overlay packed 995 -> 1,005 B (`ig_grp` bit-6 span-3 food count, raw 1,173 -> 1,180) |
+| Bank 0 text / `B0_CODE2` | text 2,761 -> 2,763 B (headroom 27 -> 25); `B0_CODE2` unchanged | `ie_scarab` "1.6X MP REGEN, HALF HUNGER" |
+| Low RAM, HOT_COPY, bank 3, bank 2 | unchanged | tables only (`kx_tab` 8 rows, `ab_rank` Firebolt 3 bytes) |
+
+- **Constants:** `HP_REG_FED` 12 -> 16 (`item_defs.asm`), `MP_REG_M` 5 -> 7 turns, `LUP_W_HP` 5 -> 6, `LUP_M_HP` 3 -> 2 (`xp7.asm`),
+  `RESPAWN_CHANCE` 96 -> 32 (period `RESPAWN_PERIOD` 48 kept: ⅓ rate = the doc's period 144 at 96/256, fewer bytes), `TRK_CNT_MASK` `$7F` -> `$3F`,
+  new `TRK_TIME` (`TRK_PHASE` bit 6, `TRK_TIME_BIT` 6). `TRK_PHASE`: bits 0-5 turn count 0..47, bit 6 time check due, bit 7 progress event due
+  (`TRK_DUE`); a coincident pair runs the time check on one idle INPUT tick and the progress event on the next. D0: `trk_run` returns on depth 0 and
+  `tut_start` presets `LP_RESPAWNS = RESPAWN_MAX` (the balloon overlap test relies on it) - no respawns on D0.
+- **Tables:** `kx_tab` (`combat_data3.asm`): Ghost / Poltergeist SHOCK X -> R, Archmage SHOCK X -> R, Vampire + bat form FIRE W -> N, Gargoyle FIRE N -> R /
+  COLD R -> N, Necromancer / Bone Caller COLD R -> N (reflection is data-driven by the X bit: no code special case). `ab_rank` Firebolt effect 4/4/6 -> 3/3/5
+  (burst die). `ig_grps` food `$40 | 3` (3 + rnd(3) = 3-5).
