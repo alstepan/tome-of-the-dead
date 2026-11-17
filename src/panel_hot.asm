@@ -427,6 +427,7 @@ dn_mbit:
                 and  e
                 ret
 
+                INCLUDE "tele_hot.asm"         ; BALANCE-PKG5 C1: tp_safe + tp_msk (R6 tele_pick's safe-room filter)
 panel_hot_end:
                 ENT
 PANEL_HOT_LEN   EQU panel_hot_end - panel_hot

@@ -324,11 +324,11 @@ hint_book       "READ IT IN THE BAG"
 mn_tut          "NEW? START > TUTORIAL"
 # ITEM-INFO §3 (ux0.asm ie_line, the bag page's row 19): effect phrases, then the two gate phrases;
 # ie_* <= 40 chars (textpack IE_MAX); KEEP THIS ORDER (ie_map indexes TX_IE_CURE + k); the digits
-# 6 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
+# 9 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
 # bonuses by tests/itemtab.py
 ie_cure         "CURES POISON WEAK CONFUSED FEAR"
 ie_teleport     "SENDS YOU TO ANOTHER ROOM"
-ie_fear         "ROOM'S MONSTERS FLEE 6 TURNS"
+ie_fear         "ROOM'S MONSTERS FLEE 9 TURNS"
 ie_sleep        "ROOM'S MONSTERS SLEEP 8 TURNS"
 ie_enchant      "A RANDOM WORN ITEM +1, UP TO +3"
 ie_book         "READ: A NEW SKILL OR A RANK"

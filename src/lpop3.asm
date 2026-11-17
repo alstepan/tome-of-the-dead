@@ -39,9 +39,11 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
 ; §9.4.1 "N >= |R|" always holds (min N = LP_N_MIN - 2 = 16 >= 10 = the most rooms R
 ; can have), so lp_budget has no "N farthest rooms" branch (levelgen.py keeps it).
                 ASSERT LP_N_MIN - 2 >= GRID_CELLS - 2
-; LARGER-D T5: lp_dtab max count 24 (D5) vs the tight min room capacity: the 3x4 grid's min |R| 8 x ROOM_MAX 3 = 24
+; LARGER-D T5: lp_dtab max count vs the tight min room capacity: the 3x4 grid's min |R| 8 x ROOM_MAX 3 = 24 split units
 ; (the discard path would silently drop units otherwise). Armed once the grid has 12 cells (T4); on 3x3 |R| can be 7.
-LP_N_MAX        EQU 24
+; BALANCE-PKG5 M1: 24 -> 25 (D4 / D6 / D7). The split places count - 2 units (the lair takes boss + escort), so 25 leaves
+; 23 for 24 slots; D5's 26 (= 24 units, zero slack) is NOT taken (manager: keep the cap, report it; balance_v2 §8).
+LP_N_MAX        EQU 25
     IF GRID_CELLS >= ROOM_SLOTS
                 ASSERT ROOMS_MIN * ROOM_MAX >= LP_N_MAX
     ENDIF

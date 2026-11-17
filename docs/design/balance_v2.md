@@ -161,6 +161,141 @@ Warrior HP/level 6 was chosen for the package (W-only, smaller). Hurt the wrong 
 Sim gaps: bot charm choice drives Mage numbers; Mage average ~ E1 (small spread); doors / faints / frost-freeze value not modelled; cautious bot is
 now below the average bot (not updated); Firebolt burst nerf unmeasurable (burst rarely hits). Spot-check in the emulator not done.
 
+## 6. D3 spike (package 5) (designer recommendation, 2026-11-17; nothing built)
+
+**Problem.** User playtest: "killed almost always on D3"; "the feel should be that you have a chance to win". Sim `--ld-pkg4`
+(400 runs/cell): **D3 takes 27–54 % of all deaths** in every policy (D2 11–25, D4 9–18). Food at D3 entry is 43–50, so this is
+not starvation. Top killers: Ghost 11–16 % of all deaths, Vampire Lord 4–15 % (mostly Mage), Poltergeist, Vampire. Cause by
+the §9.4 table: D3 is the first undead depth, and **Ghost holds 3 of the 8 `LP_KINDS` slots** (37.5 % of 21 bodies plus the
+respawns). The Ghost is a DEF 3 flyer whose touch confuses 1 in 4 (CONFUSED 4). Confusion takes away the one escape the
+player has, which is walking away. Deaths that come from that feel unavoidable. Doors block flyers in the game but not in the
+sim, so the sim overstates the Ghost (§3 gap 2). Even so, 3/8 is the heaviest single-kind weight on any depth.
+
+**The "expert/cautious do worse" anomaly: partly confirmed.** By §9.5 the time trickle gives 32/256 per 48 turns, about one
+spawn per ~384 level turns. It shares `RESPAWN_MAX` 6, and `LP_RESPAWNS` only counts up (§9.5 step 10). Progress respawns
+(0.75 × ~14 first entries ≈ 10 events) fill the cap by mid-level in any case. So the trickle mostly changes **where and when**
+monsters come back, not how many: it adds them early, into VISITED rooms, weighted toward rooms with items left on the floor.
+That is exactly the path of a hero walking back to regen. The trickle is not the main tax, though. The `rest_full` habit cost
+the same before and after package 4 (E2 vs E1: W −12 / M −8 in package 3, −11 / −9 in package 4). The plain `expert` and
+`cautious` bots also lack `rest_fed` and `charm_food`. They rest while not FED, which gains no HP at all, and FED step 16 was
+the single biggest knob (E1 W −31). Read: **the un-FED rest loop is what gets punished; the trickle adds ambushes on the way back.**
+Test: `--set param.RESP_MODE=progress` on cautious + expert against the package-4 base. If they gain ≥ 5 pts more than the
+average bot does, option B is worth more than estimated below.
+
+**Principle: move difficulty, don't remove it.** Average M (25.8) is already at the top of its band. Whatever D3 gives back is
+taken again at D4–D5, so the threat curve rises smoothly instead of hitting a wall.
+
+| Rank | Option | Change | Sim knobs | Cost |
+|---|---|---|---|---|
+| **1** | **A. D3 mix + Ghost telegraph** | D3 `LP_KINDS` Ghost 3 → **2**, Goblin 1 → **2** (the Goblin is the D2 bridge kind). Ghost confuse touch 1 in 4 → **1 in 8** on every depth. The Ghost keeps its role, but being confused is now the exception: you get a turn to back off through a door. Pay it back: D4 monsters 23 → **24**. | D3 row in `tools/balance_nm3.json` (pool slot counts); `kind.Ghost` confuse probability 0.25 → 0.125 (junior adds the key if it is missing, ~5 lines); `lp` count D4 | **0 B**: `LP_KINDS` D3 row data; the confuse mask constant (`and 3` → `and 7`, same size); the D4 count byte |
+| 2 | B. No time trickle on D1–D3 | `trk_run` returns below D4 (today it returns on D0 only). Progress respawns are unchanged, so monsters keep hunting and keep coming back. Only the early-depth ambushes on the walk back go. Resting at D3 costs food again, not surprise bodies. | new `param.TRK_MIN_DEPTH` = 4 (junior, sim) | **+1 B** bank 7: the D0 gate `or a / ret z` becomes `cp 4 / ret c`. Check that the D0 preset `LP_RESPAWNS = RESPAWN_MAX` stays (it does). |
+| 3 | C. D3 supplies (the user's "more food") | D3 floor food 3–5 → **4–5**, plus one **guaranteed Heal** on D3 (on top of the ≥ 1 Heal rule). Golden Vampire Lord: drain-bite self-heal **½ of the damage** (the base Vampire keeps full). | `param.FOOD_N` per-depth override for D3; `param.POT_N` D3; `kind.Vampire_Lord` drain heal 0.5 | ~6–10 B for a per-depth food/potion range (the generator range is flat today); ~6–8 B for a golden-only `srl` on the heal (a `LEK_GOLD` test) |
+
+**Recommendation: A + B as package 5** (≈ 1 B of code, everything else is data). A goes after the two biggest killers at
+their source: Ghost density and the confuse lock that blocks escape. That gives the user's "telegraphed threats and escape
+options" without making any monster stop hunting. B removes the one package-4 effect that punishes the eat → walk → regen
+play the user actually does. Take C only if, after A + B, D3 still holds > 35 % of deaths or the Mage's Vampire Lord share is
+still > 10 %. Food alone does not fix the cause, because deaths at D3 are not starvation.
+Expected (back-of-envelope; the sim decides): D3 share of deaths 42–54 → **~28–35 %**, Ghost share ~7–10 %; average +2…+4,
+cautious/expert +4…+8.
+**Gate (§3 C rules, 10k × seeds 1+2):** average W, M ∈ [15, 25]; E1 W, M ∈ [30, 40]; |W − M| ≤ 3; **no depth > 35 % of a
+class's deaths** (new, this is the "feels winnable" criterion); no killer > 30 %. If average M goes above 25: D5 monsters
+24 → 25 first, then put the D4 count back (keep the spike moved, not raised).
+**Sweep order** (2k, seed 1, one knob at a time, then cumulative): Ghost slots 3 → 2; confuse 1/8; `TRK_MIN_DEPTH` 4; D4 +1;
+then C's three knobs separately. Report the death-by-depth row and the top 5 killers per class at every rung.
+Docs to sync on adoption: game.md §9.4 D3 row, the §11 Ghost row (confuse 1 in 8), §9.5 lead paragraph (trickle from D4),
+larger_depths.md §3 package line.
+
+## 7. Package 5 v2: food ample, monsters + counterplay (designer recommendation, 2026-11-17; nothing built)
+
+**User direction.** Food must stop killing ("death because of lack of the food makes game not so interesting"). Difficulty
+comes from monsters, stronger or more numerous, and a careful player gets real ways to "trick them with scrolls, etc.".
+Bad luck is allowed, but a run must never feel 100 % lost. Fixed constraints: monsters keep hunting (no stealth or
+avoidance mechanic), no feature cuts, targets as in §6 (average 15–25, E1 30–40, |W − M| ≤ 3, no depth > 35 % of deaths).
+
+**Why this also fixes the package-4 near miss.** Package 4 failed because average M ≈ E1 M: the sensible average copies the
+expert's food habits, and scalar knobs move both bots together. Food play is a habit that anyone copies. Counterplay is a
+**decision**: when to read Teleport, when to open with Sleep, when to Fear and leave. Moving difficulty from food to
+monsters + escapes is what opens the expert–average gap the targets ask for. So the gate's expert becomes
+**E1 + `avoid_pro`** (below), and the average bot keeps today's emergency-only escape use.
+
+### 7a. Food target: "ample"
+
+Definition, measured on the **average bot at the 75 % pickup rate** (the census-matched human proxy), 10k × seeds 1+2:
+- **runs that ever reach HUNGRY before D5 ≤ 15 %**; runs that ever reach WEAK ≤ 3 %;
+- **deaths with hunger stage ≥ HUNGRY ≤ 5 %** of all deaths (that is starvation as a contributing cause, not only as the killer);
+- food at D3 entry ≥ 50 and food at D6 entry ≥ 40 (medians).
+
+Knobs (apply in order; stop at the first rung that passes):
+| Rung | Change | Sim knob | Game constant | Asm |
+|---|---|---|---|---|
+| F1 | hunger 1 food per 6 → **8** turns | `param.FOOD_BURN` 8 | the hunger period constant (staff to locate; if it is a counter compare, same size; if it becomes a power-of-2 mask, −1..−2 B) | **0 B** |
+| F2 | floor food 3–5 → **4–5** (undo package 4's food cut: ~90 → ~105 value per level) | `param.FOOD_N` [4, 5] | the generator's food count range | **0–2 B** |
+| F3 | start food 80 → **100** (only if F1 + F2 fail the D3 median) | `param.FOOD_START` 100 | the START food init | **0 B** |
+`FED_STEP` stays **16**: walk-to-heal still costs something, just less (≈ 30 food per 30 HP at L3 under F1 instead of ≈ 40).
+Arithmetic check: at 75 % pickup F1 + F2 supply ~79 per level against ~75 burned on a ~600-turn level, so a human finishes
+roughly even and keeps the starting 80 as a buffer. Today it is ~67 supplied against ~100 burned.
+Sim additions (junior, ~15 lines): stats `hungry_before_d5`, `weak_ever`, `death_hungry` (the hunger stage at death), and the
+food medians at entry to each depth.
+
+### 7b. Monster pressure (the payback)
+
+F1 + F2 together will lift wins a lot (package 4's food knobs cost 8–31 pts). Take it back at **D4–D8 with bodies, not HP**,
+keeping §6's D3 fix (option A: Ghost 3 → 2 slots, confuse 1 in 8) and its "move, don't raise" rule. Rungs, applied cumulatively
+until the average bot is back in its band (2k, seed 1 per rung, then 10k × 2 to confirm):
+| Rung | Change | Sim knob | Asm |
+|---|---|---|---|
+| M1 | monster count D4 23 → **25**, D5 24 → **26**, D6–D7 23 → **25**, D8 17 → **18** (D1–D3 unchanged) | `lp` count per depth (`tools/balance_nm3.json`) | **0 B** (count bytes) |
+| M2 | `RESPAWN_MAX` 6 → **8** on D4+ (more hunters come back; they still hunt) | `param.RESPAWN_MAX_D4` (new, ~3 lines) | **~4 B** (depth test before the cap compare); 0 B if applied flat to D1+ (then rerun D3's share) |
+| M3 | HP +1 die-face on the D5–D8 bruisers (Mummy, Orc, Vampire, Frost Wraith): ~+10 % | `kind.<Name>.hp` | **0 B** (kind table) |
+| M4 | dmg +1 on Orc, Mummy (only if M1–M3 cannot reach the band) | `kind.<Name>.dmg` | **0 B** |
+Room cap ≤ 4 per room (§9.3) holds, so M1 gives more full rooms and more respawns rather than bigger swarms. That pressure
+is exactly what Sleep / Fear / Teleport answer.
+
+### 7c. Counterplay: making "trick them" real
+
+Today: 2 scrolls per level, type uniform from 4, so **Teleport 0.5, Fear 0.5, Sleep 0.5, Enchant 0.5 per level**. At 75 %
+pickup P(no Teleport by D3 entry) ≈ 44 %, and the whole escape stock at D3 is ~1.7 scrolls against 21 bodies plus respawns.
+The worse problem is efficacy. Teleport lands in a **random room**, which can be an unvisited room whose residents spawn on
+arrival (lazy population), so the escape can drop the hero into a fresh fight. The sim treats Teleport as a clean retreat,
+so **the sim overstates the game's escape value**. Fear 6 often runs out before a hero crossing a 28-col room reaches an exit.
+| Rank | Change | Sim knob | Asm |
+|---|---|---|---|
+| **C1** | **Safe Teleport landing** (scroll and trap share it): pick a random **VISITED room with no live residents** (not the current room, not the lair while the boss lives). None → today's rule. Land ≥ 6 cols from any body. The time trickle and progress respawns can still refill the room later, so monsters keep hunting. This is no stealth: they come back | new `param.TELE_AMBUSH` = chance a landing starts a fresh-room fight (today ≈ unvisited-room share, ~0.4 mid-level; C1 → 0.05) | **~20–30 B** in the shared landing routine (room-record filter loop + fallback) |
+| **C2** | **Scroll weights**: an 8-slot table like `LP_KINDS`, **Teleport 3, Fear 2, Sleep 2, Enchant 1**, and `SCR_N` 2 → **2–3**. Per level: Teleport 0.94, Fear 0.63, Sleep 0.63, Enchant 0.31 (Enchant still exists and still repairs; gate: weapon-destroyed rate must not rise > 5 pts) | `param.SCR_W` [3,2,2,1], `SCR_N` [2, 3] | **~10–12 B** (8 B table + `and 7` lookup replacing `and 3`) |
+| **C3** | **Guaranteed Teleport on D2** (like the ≥ 1 Heal rule; it counts inside `SCR_N`) | `param.SCR_GUAR_D2` 1 | **~8–12 B** (copy of the Heal-guarantee pattern) |
+| **C4** | **Fear 6 → 9 turns** (4-bit timer, max 15; bosses stay immune). Enough to cross a room to an exit or to throw daggers into backs | `param.FEAR_SCR_T` (today hard-coded 6 in two places) | **0 B** |
+| C5 | Doors (they block flyers in the game) and jumps: already free counterplay, unmodelled. No change; the §3 gap 2 door model stays the sim's known underestimate of the hero | — | 0 B |
+Sim expert: `avoid` = 1 mixes in **room skipping**, which is not a game mechanic (in the game, monsters in a room you avoid
+still hunt and respawn). Add **`avoid_pro`** (~10 lines): the proactive Teleport / Fear disengage only, with no skipping, and
+make **E1 + avoid_pro** the gate's expert. Report `tele_scrolls`, `avoid_tele`, `avoid_fear` per run, plus scrolls still
+unread at death (target: median 0 for E1, so the expert is not hoarding).
+Tutorial: D0 already teaches "READ FEAR OR SLEEP WHEN SWARMED" (§3 help row 21). Nothing to add.
+
+### 7d. Fixed book order
+
+It does **not** fit well. Rev 6 made the uniform pick a user choice for variety, and the user vetoed the keystone rule
+(2026-10-26). A fixed order removes the Mage's build variety to fix one symptom, Firebolt timing, which is ½ by D2 and ⅔ by D3.
+The Warrior's path is already near-deterministic, so it gains nothing. The "100 % bad luck" feeling comes from food and
+inescapable rooms, which 7a + 7c remove for both classes. **Recommendation: keep the uniform pick.** Use the sweep's
+fixed-order cell only as a measurement. If fixed order is worth ≥ 4 pts of Mage E1 **and** ≥ 5 pts of the Mage's D3 death
+share **after** 7a–7c, offer the user the narrow version: **Firebolt-first on the first uniform read** (Mage only, D2+;
+all other picks stay uniform). It is a keystone variant, so it needs the user's explicit OK. Sim `param.MAGE_FB_FIRST`;
+asm ~6–10 B in the book reader. A full fixed order is ~0 B net (a table replaces the RNG pick).
+
+### 7e. Recommended package 5 v2 and gate
+
+**Package = F1 + F2 + §6 option A + C1 + C2 + C3 + C4, then M1 (+ M2/M3 as needed to land the band).** Code ≈ **40–55 B**
+(C1 20–30, C2 10–12, C3 8–12, M2 4, F2 0–2), the rest data and constants. §6 option B (no trickle on D1–D3) becomes optional:
+with F1 the walk back is cheap, so add it only if D3 is still > 35 % of deaths.
+Ranking by value per byte: F1 (0 B, removes the killer) > C4 (0 B) > M1 (0 B) > C1 (makes every escape work) > C2 > C3 > F2 > M2 > M3.
+**Gate (10k × seeds 1+2):** the §6 gate (average 15–25, **E1 + avoid_pro** 30–40, |W − M| ≤ 3, no depth > 35 %, no killer > 30 %)
+**plus** the 7a food criteria at 75 % pickup **plus** the expert–average spread ≥ 10 pts per class (counterplay must reward skill).
+Sweep order (2k, seed 1): F1; F1 + F2; + A; + C4; + C1 (`TELE_AMBUSH` 0.4 → 0.05); + C2; + C3; then M1 → M2 → M3 until the
+average is back in band. Report the death-by-depth row, top 5 killers, the 7a food stats and the 7c scroll-use stats at every rung.
+Docs to sync on adoption: game.md §7 hunger period, §8 scroll pool + Fear 6 → 9 + Teleport landing, §8.5 food/scroll counts and the
+D2 guarantee, §6.4 FEAR row, §9.4 counts, §9.5 `RESPAWN_MAX`; larger_depths.md §3.
+
 ## 8. Package 5 final: sim results and constant-to-asm map (junior sweep, 2026-11-17; nothing built)
 
 Final combo = `tools/balance_pkg5_final.json` (run: `--ld-pkg4 --overrides tools/balance_pkg5_final.json --set param.PICKUP=0.75`).

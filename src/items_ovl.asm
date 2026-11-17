@@ -38,7 +38,9 @@ GT_W            EQU $80                 ;          Warrior-only row (the Mage's 
 GT_DMASK        EQU $0F                 ;          first depth
                 ASSERT K_KNIGHT == 0 && K_WIZARD == 1
 IG_GRP_N        EQU 3                   ; ig_grp descriptors: food, scrolls, gear
-IG_GRP_LEN      EQU 5
+IG_GRP_LEN      EQU 3
+IG_SCR_K        EQU 8                   ; BALANCE-PKG5 C2: the scroll group's rnd(8) (the weights' slots)
+C3_DEPTH        EQU 2                   ; BALANCE-PKG5 C3: the depth with a guaranteed Teleport scroll
 
 ig_main:
                 push ix
@@ -48,7 +50,9 @@ ig_main:
                 ld   (TRAP_N), a
                 ld   a, (LVL_DEPTH)
                 ld   (ig_d), a
-                or   $80
+                sub  C3_DEPTH
+                ld   (ig_tf), a                ; C3: 0 = D2 (a Teleport still owed), ig_grp
+                add  a, C3_DEPTH | $80         ; (= depth | $80: depth < $80)
                 call ig_seed                   ; ITEM_RNG
                 ; room pools (length-prefixed, id order): NS = present non-start,
                 ; NL = NS minus the lair, ST = [start]
@@ -366,44 +370,52 @@ ig_seed:        ld   b, a
 .s:             ld   (GEN_RNG), hl
                 ret
 
-; ig_grp — IX = descriptor {n_lo (bit 7: fixed, no roll), type_lo, k, DW pool-pointer variable}: n = n_lo + rnd(2) items, each type = type_lo + rnd(k)
-; (k = 0: ig_gp[rnd(len)]), qty 1, place in the pool, append (or drop).
-; Keeps IX. Clobbers A, BC, DE, HL.
-ig_grp:         ld   a, (ix+0)
-                and  $3F
-                ld   b, a
-                bit  7, (ix+0)                 ; LARGER-D T6: bit 7 = fixed count (scrolls 2, no roll)
-                jr   nz, .l
-                ld   a, 2                      ; BALANCE-PKG4: bit 6 = span 3 (food 3-5), else rnd(2)
-                bit  6, (ix+0)
-                jr   z, .sp
-                inc  a
-.sp:            call rnd
-                add  a, b
+; ig_grp — IX = descriptor {n_lo, type_lo, k}: n = n_lo + rnd(2) items, each type = type_lo + rnd(k)
+; (k = 0: ig_gp[rnd(len)]; k = 8: the scroll group, below), qty 1, place in NS, append (or drop).
+; BALANCE-PKG5 (balance_v2 §8): every group rolls rnd(2) now (food 3-4, scrolls 2-3: the old bit-7
+; "fixed" and bit-6 "span 3" counts are gone), and the pool is always NS (no DW pool pointer).
+; Scrolls (k = 8, the only k with bit 3): C2 weights, rnd(8) -> 0 0 0 1 1 2 2 3 = max(0, r - 1) >> 1 =
+; Teleport 3, Fear 2, Sleep 2, Enchant 1 (/ 8); C3: on D2 (ig_tf = 0, ig_main) the group's LAST scroll
+; is a Teleport if none came before (its rnd(8) still consumed): the same distribution as the sim's
+; "no Teleport -> scr[0] := Teleport" (i.i.d. types: which one is replaced does not matter).
+; Keeps IX. Clobbers: A, BC, DE, HL.
+ig_grp:         ld   a, 2
+                call rnd
+                add  a, (ix+0)
                 ld   b, a
 .l:             push bc
                 ld   a, (ix+2)
                 or   a
                 jr   z, .gear
-                call rnd
-                add  a, (ix+1)
+                call rnd                       ; (keeps BC)
+                bit  3, (ix+2)
+                jr   z, .t0                    ; food: type_lo + rnd(5)
+                sub  1
+                adc  a, 0                      ; max(0, r - 1)
+                srl  a                         ; 0 = Teleport (type_lo), 1 Fear, 2 Sleep, 3 Enchant
+                ld   hl, ig_tf
+                or   a
+                jr   nz, .nt
+                ld   (hl), h                   ; a Teleport: C3 met (ig_tf != 0)
+.nt:            djnz .t0                       ; not the group's last scroll (B is popped below)
+                ld   b, (hl)
+                inc  b
+                djnz .t0                       ; ig_tf != 0: not D2, or met
+                xor  a                         ; D2, the last scroll, no Teleport yet: Teleport
+.t0:            add  a, (ix+1)
                 jr   .t
 .gear:          ld   a, (ig_gp)
                 call rnd
                 ld   hl, ig_gp + 1
                 call idx
-.t:             ld   l, (ix+3)
-                ld   h, (ix+4)
-                ld   e, (hl)
-                inc  hl
-                ld   d, (hl)
-                ex   de, hl                    ; HL = the pool
+.t:             ld   hl, ig_ns
                 push ix
                 call ig_add1
                 pop  ix
                 pop  bc
                 djnz .l
                 ret
+                ASSERT IT_SCR_LO == IT_S_TELEPORT && IT_S_FEAR == IT_S_TELEPORT + 1 && IT_S_SLEEP == IT_S_FEAR + 1 && IT_S_ENCHANT == IT_S_SLEEP + 1
 
 ; ig_ammo — B = type, C = qty base, A = qty span: qty = C + rnd(A), place in
 ; NL, append (or drop).  Clobbers A, BC, DE, HL, IX.
@@ -753,16 +765,12 @@ ig_trap_ok:     call ig_desc
                 ASSERT PIT_W_NARROW == 3
 
 ; --- data ---------------------------------------------------------------------
-; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2); bit 6: rnd(3); bit 7: fixed), type_lo, k (0 = the gear
-; pool), DW the pool-pointer variable
-ig_grps:        DB   $40 | 3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
-                DW   ig_nsp                    ; food 3-5 (BALANCE-PKG4: was 4-5, LARGER-D T6; FLOOR1: the D8 lair allowed)
-                DB   $80 | 2, IT_SCR_LO, IT_SCR_HI - IT_SCR_LO + 1
-                DW   ig_nsp                    ; scrolls exactly 2 (LARGER-D T6; lair allowed)
-                DB   1, 0, 0
-                DW   ig_nsp                    ; gear 1-2
+; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2)), type_lo, k (0 = the gear pool; 8 = the weighted scrolls)
+ig_grps:        DB   3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1   ; food 3-4 (BALANCE-PKG5: was 3-5, PKG4; 4-5 LARGER-D T6; FLOOR1: the D8 lair allowed)
+                DB   2, IT_SCR_LO, IG_SCR_K    ; scrolls 2-3, the C2 weights (BALANCE-PKG5: was exactly 2 of 4 uniform; lair allowed)
+                DB   1, 0, 0                   ; gear 1-2
                 ASSERT $ - ig_grps == IG_GRP_N * IG_GRP_LEN
-ig_nsp:         DW   ig_ns
+                ASSERT ((IT_FOOD_HI - IT_FOOD_LO + 1) & 8) == 0   ; ig_grp: bit 3 of k = the scroll group only
 ig_st:          DB   1, 0                      ; [start] (+1 written per level)
 ; §8 'Found' gear table (model GEAR_TABLE order, gear_rules.md 1.3): first depth | class flag, type
 ig_gtab:        DB   2 | GT_W, IT_W_LONG
@@ -800,4 +808,5 @@ ig_ns           EQU ig_pool + 2         ; 1 + GRID_CELLS: present non-start room
 ig_nl           EQU ig_ns + 1 + GRID_CELLS   ; 1 + GRID_CELLS: ... minus the lair
 ig_el           EQU ig_nl + 1 + GRID_CELLS   ; 1 + GRID_CELLS: trap-eligible rooms
 ig_gp           EQU ig_el + 1 + GRID_CELLS   ; 1 + IG_GEAR_N: gear pool
-ig_end          EQU ig_gp + 1 + IG_GEAR_N
+ig_tf           EQU ig_gp + 1 + IG_GEAR_N    ; BALANCE-PKG5 C3: 0 = a D2 Teleport scroll still owed (ig_grp)
+ig_end          EQU ig_tf + 1

@@ -2635,6 +2635,7 @@ page_run:
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
                 INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
+                INCLUDE "dscl.asm"             ; BALANCE-PKG5: dsc_roll, the monster melee depth ramp (from bank-3 dmg_roll)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with

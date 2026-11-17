@@ -26,8 +26,10 @@ is dropped (counted, not an error).
     others type = POT_BY_ROLL[rnd(3)]. Then (FLOOR1) each entry in list order is
     re-checked against the item rules below (its own cell freed first); an
     illegal one is re-placed (non-start pool, scan fallback, same slot).
- 2. food:    n = 4 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
- 3. scrolls: n = 2 (fixed, no roll); each: type = IT_S_TELEPORT + rnd(4), place(non-start).
+ 2. food:    n = 3 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
+ 3. scrolls: n = 2 + rnd(2); each: r = rnd(8), type = IT_S_TELEPORT + max(0, r - 1) // 2
+    (Teleport 3 / Fear 2 / Sleep 2 / Enchant 1 of 8, BALANCE-PKG5 C2); on D2 the LAST scroll is
+    a Teleport if none came before (its rnd(8) consumed; C3), then place(non-start).
  4. gear:    n = 1 + rnd(2); each: type = pool[rnd(len)] (depth + class gated),
     then place(non-start).  Fixed stats, no state roll.
  5. books (IT_BOOK, D1-D7): n = 1 (+1 if depth >= 4 and rnd(2) == 0; the roll is
@@ -95,8 +97,10 @@ ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
 
 POT_BY_ROLL = (T["IT_P_HEAL"], T["IT_P_MANA"], T["IT_P_CURE"])    # Q_POTION_TYPE
 POTION_COUNT_MIN = G.POTIONS_MIN             # 8.5 / levelgen (LARGER-D: 3..4 entries, from GEN_RNG)
-FOOD_N_MIN, FOOD_N_SPAN = 3, 3              # BALANCE-PKG4: food 3-5 (LARGER-D T6: 4-5)
-SCROLL_N = 2                                # LARGER-D T6: scrolls exactly 2 (no roll)
+FOOD_N_MIN, FOOD_N_SPAN = 3, 2              # BALANCE-PKG5: food 3-4 (PKG4 3-5; LARGER-D T6: 4-5)
+SCROLL_N_MIN, SCROLL_N_SPAN = 2, 2          # BALANCE-PKG5 C2: scrolls 2-3 (LARGER-D T6: exactly 2)
+SCROLL_W_TYPE = (0, 0, 0, 1, 1, 2, 2, 3)    # BALANCE-PKG5 C2: rnd(8) -> scroll offset (Teleport 3, Fear 2, Sleep 2, Enchant 1)
+SCROLL_GUAR_DEPTH = 2                       # BALANCE-PKG5 C3: >= 1 Teleport scroll on D2 (the last one forced)
 GEAR_N_MIN, GEAR_N_SPAN = 1, 2              # 8.5 gear 1-2
 BOOK2_DEPTHS = range(4, 8)                  # 8.5 / 5: 2nd book 1 in 2 on D4-D7
 BOOK_DEPTHS = range(1, 8)                   # 8.5: class book D1-D7
@@ -497,10 +501,16 @@ def gen_level_items(b, master, hero, gear2=True, old_pool=False):
     for _ in range(FOOD_N_MIN + rng.rnd(FOOD_N_SPAN)):
         typ = D["IT_FOOD_LO"] + rng.rnd(D["IT_FOOD_HI"] - D["IT_FOOD_LO"] + 1)
         try_add(rng, b, lvl, glyph_pool, typ, 1)
-    # 8.5 scrolls 1-2 (PAGES glyph 18: lair allowed on D8), type uniform of 4 (8)
-    for _ in range(SCROLL_N):
-        typ = D["IT_SCR_LO"] + rng.rnd(D["IT_SCR_HI"] - D["IT_SCR_LO"] + 1)
-        try_add(rng, b, lvl, non_start, typ, 1)
+    # 8.5 scrolls 2-3 (PAGES glyph 18: lair allowed on D8), the C2 weights; C3 on D2
+    n = SCROLL_N_MIN + rng.rnd(SCROLL_N_SPAN)
+    owed = depth == SCROLL_GUAR_DEPTH
+    for i in range(n):
+        off = SCROLL_W_TYPE[rng.rnd(8)]
+        if off == 0:
+            owed = False
+        elif i == n - 1 and owed:
+            off = 0
+        try_add(rng, b, lvl, non_start, D["IT_SCR_LO"] + off, 1)
     # 8.5 gear 1-2 depth-gated, fixed stats
     gp = gear_pool(depth, hero, old=old_pool)
     for _ in range(GEAR_N_MIN + rng.rnd(GEAR_N_SPAN)):
@@ -723,7 +733,7 @@ def check_items(b, lvl, hero=None):
     nbk = cnt.get(IT_BOOK, 0)
     if not FOOD_N_MIN - lvl.dropped_items <= nf <= FOOD_N_MIN + FOOD_N_SPAN - 1:
         v.append(f"food {nf}")
-    if not SCROLL_N - lvl.dropped_items <= ns <= SCROLL_N:
+    if not SCROLL_N_MIN - lvl.dropped_items <= ns <= SCROLL_N_MIN + SCROLL_N_SPAN - 1:
         v.append(f"scrolls {ns}")
     if not GEAR_N_MIN - lvl.dropped_items <= ng <= GEAR_N_MIN + GEAR_N_SPAN - 1:
         v.append(f"gear {ng}")
@@ -871,9 +881,9 @@ NECRO_MANA = 1 / 3                              # Necromancer mana drop
 
 
 def ld_statics(rng, depth, hero):
-    """Entries the generator appends on a LARGER-D level (sec 3 counts), excl. boss unique: potions 3-4, food 3-5, scrolls 2,
-    gear 1-2, books 1 (+1 half the time D4-D7), Warrior D1-D7 dagger + arrow stacks (+ bow + bundle on D2)."""
-    n = rng.randint(3, 4) + rng.randint(3, 5) + 2 + rng.randint(1, 2)
+    """Entries the generator appends on a LARGER-D level (sec 3 counts), excl. boss unique: potions 3-4, food 3-4, scrolls 2-3
+    (BALANCE-PKG5), gear 1-2, books 1 (+1 half the time D4-D7), Warrior D1-D7 dagger + arrow stacks (+ bow + bundle on D2)."""
+    n = rng.randint(3, 4) + rng.randint(3, 4) + rng.randint(2, 3) + rng.randint(1, 2)
     if depth in BOOK_DEPTHS:
         n += 1 + (depth in BOOK2_DEPTHS and rng.random() < 0.5)
     if hero == HERO_WARRIOR and depth in AMMO_DEPTHS:

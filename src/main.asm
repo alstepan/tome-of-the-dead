@@ -312,6 +312,7 @@ fdesc_end:
                 INCLUDE "decor_gen.asm"
                 ; LARGER-D T4: the level-key lock / key selection ksel (FARB0 from bank-3 attempt; bank 3 had no room)
                 INCLUDE "lgkey0.asm"
+                INCLUDE "drop0.asm"            ; BALANCE-PKG5: drop_any, the 8 % food drop (farb from bank-3 mon_drop)
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
