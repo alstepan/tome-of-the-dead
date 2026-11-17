@@ -192,6 +192,13 @@ tut_d0:
                 ASSERT tut0_lvl_state - tut0_floor_list == FLOOR_MAX * FL_STRIDE
                 ASSERT tut0_edge_tab - tut0_lvl_state == TUT0_HDR_COPY
                 ASSERT tut0_lvl_vars - tut0_edge_tab == EDGE_SLOTS && tut0_trap_list - tut0_edge_tab == TRAP_LIST - EDGE_TAB
+                ; TUT-GEAR (tut_gear.md s1): room B's helmet is the class's own — the image's IT_H_HELM (Warrior, DEF+1),
+                ; IT_H_HOOD for the Mage (MP+1); never the other class's (GEAR1 gates: the Helm blocks Spark, the Hood
+                ; Power Strike). (HL = LVL_KEYROOM2 + n here: an absolute store.)
+                ld   a, (HERO_KIND)
+                cpl
+                add  a, IT_H_HELM + 1          ; IT_H_HELM - kind (tk_helm's ASSERT: Hood = Helm - 1, Wizard = 1)
+                ld   (FLOOR_LIST + TUT0_GEAR_FL * FL_STRIDE + FL_ITEM), a
                 ; --- the hero (level_populate's part, bank3.asm) ---
                 ld   ix, P_ENTITIES
                 ld   l, (ix+E_HP)
