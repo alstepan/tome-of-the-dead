@@ -413,7 +413,7 @@ icons). The 16 R4-5 rewordings are in the table below (same ids, no new text).
 | L72 | `PRESS ‹F›, THEN DRINK THE CURE` (B9 icon target BAG; R4) | 32 |
 | L73 | `THAT ONE. NOW PRESS ‹F›` (icon target confirm: B5 FOOD, B11/B12 slot 2, B13 SCROLL) | 25 |
 | L75 | `CHILD. FIRST, DO AS I SAID` (Nudge, §13.5) | 26 |
-| L76 | `YOU LEFT A LESSON UNDONE ABOVE` (entering B with B2–B5 open, §13.5) | 30 |
+| L76 | `YOU LEFT A LESSON UNDONE ABOVE` (entering B with B2–B5 open, or C with B9G open; once per D0, §13.5) | 30 |
 | L77 | `THE KEY LIES IN THIS ROOM` (TUT-KEY: B7 G0 + goal; the keyless-door nudge) | 25 |
 | L80 | `NEW GEAR! OPEN THE BAG` (TUT-GEAR: B9G G0) | 22 |
 | L81 | `CURSOR: ‹L› ‹R› ‹U› ‹D›` (B9G G2) | 31 |
@@ -649,6 +649,8 @@ keeps its earlier decision.
 open, §13.3), not a beat; the pit lesson extends B2; the bag / scroll steps extend B3 / B9 / B13;
 the WEAK lesson is B5's tail; the Nudge replaces the Nag. No record is inserted, so the
 overtaken-beat jump, `TUT_BF_FIRST`, tests C3 and the B11/B14 code paths keep their indexes.
+*(TUT-GEAR 2026-11-16: B9G was later inserted as record 10; the spec's B10..B15 are records 11..16,
+named `TUT_B10`.. by spec id in tut_turn.asm; tut_gear.md.)*
 
 ### 13.1 Rename
 
@@ -778,6 +780,10 @@ FLASH on the goal line that turn, no next-turn re-show — the goal line carries
   D0, before B7's G0 (same mechanism as FH_IMPATIENT's L53). The up-exit back to A is open; the
   skipped beats are not revived (the overtaken jump only moves forward) — the line is information,
   not a gate.
+- **Left gear (TUT-GEAR, 2026-11-16):** entering room **C** while **B9G** is current (the helmet never
+  picked up, or picked up and not equipped) prints the same **L76** instead of B11's L53, under the
+  same once-per-D0 bit (`TFB_L76`): if L76 was already said on entering B, C gets L53 as before.
+  (The line says "ABOVE", which is loose for B; accepted to keep 0 B — one line, one bit.)
 
 ### 13.6 Pits and the WEAK no-leap rule (requests 7, 8)
 
@@ -793,8 +799,9 @@ Take-off `x = 14…18` lands safely (`x = 16` is the clean one).
 **WEAK, stated exactly (§2.4 "Not when Weak", §7, §6.4; code `h_jump`, status7.asm):** the jump
 is refused when the hunger **stage is WEAK (FOOD 0–9)** or the hero has the **WEAK status** (Mummy
 curse, Archmage Drain). **HUNGRY (FOOD 10–24) does not block the jump** (the user's draft "A HUNGRY
-CHILD CANNOT JUMP" would be false). The refusal is **silent: no turn, no log line, the hero does
-not move** (there is no string). Hence L70 `AT WEAK YOUR LEGS WILL NOT LEAP` (the panel word reads
+CHILD CANNOT JUMP" would be false). The refusal costs **no turn and the hero does not move**; since
+plan 4b (#35) the engine logs **`TOO WEAK TO JUMP`** once per press (status7.asm, `weak_jump`; was
+silent when this section was written). Hence L70 `AT WEAK YOUR LEGS WILL NOT LEAP` (the panel word reads
 WEAK) and L71 `A LEAP THEN JUST DOES NOTHING`, as B5's tail right after the food lesson (L22 already
 says "eat when it says HUNGRY"). **No scripted demonstration:** forcing FOOD ≤ 9 would apply the
 real WEAK penalties and the faint clock, and the refused jump costs no turn, so the blob cannot
@@ -864,7 +871,7 @@ even observe the attempt (no end-of-turn) — a demo would leave the player pres
 
 1. **Engine refusal line for the WEAK jump** (`TOO WEAK TO LEAP`, resident text + ≈ 6 B in
    `h_jump`): it is the real UX gap behind request 8. *Default: not in TUT0 (resident, outside the
-   blob); proposed to the manager as a separate small task.*
+   blob); proposed to the manager as a separate small task.* **Done (plan 4b, #35): `TOO WEAK TO JUMP`.**
 2. **In-mode holds** (I00 + bag targets). *Default: hold; scroll fallback if staff finds the
    re-entrancy unsafe (§13.9 risk 1).*
 3. **Nudge numbers** 12 / 36, then silent. *Default: yes.*

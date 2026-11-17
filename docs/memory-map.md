@@ -7554,7 +7554,8 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   `.g2p` now calls `tt_igrp`). Rect **`TUT_PR_HELM`** = rows 22-23 cols 28-29; class pair `TUT_CP_L83`; `tut_goal` 17 B
   (B9G = L82); `tut_tgt` + B9G BAG (L73, scroll); beat numbers in `tut_tgt` are the `TUT_Bn` names now.
 - **L76 on entering C with B9G open:** `tt_glob .ff` sets **`TFB_P76` = TV_FL bit 7** (also for the old B entry case);
-  `tt_step .pre` says L76 when set, else L53 (was: L53 iff FH_IMPATIENT). TUT_RAM: 0 B (a free bit).
+  `tt_step .pre` says L76 when set, else L53 (was: L53 iff FH_IMPATIENT). Review: the C path shares the B path's
+  once-per-D0 `TFB_L76` test (L76 at most once; said on entering B -> C gets L53), 0 B. TUT_RAM: 0 B (a free bit).
 - **Budget cut (reviewer, before the beat):** `tk_key` also needs `LOG_QN` = 0 (the engine's key line drawn), so B7's G1
   (L24 / L25) comes a turn after the pickup and its L24 is no longer drawn in the tick that runs B8's pose + goal change.
   tests/tut0.py TK4 waits one turn.

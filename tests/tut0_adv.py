@@ -196,6 +196,9 @@ def pose_settle(p):
     return False
 
 
+GOB_W = 2                                                # the Goblin's body is 3 cells (KT_BW): the tween overhang is gx-1
+
+
 def mentor_check(c, again=True):
     p = c.p
     if not again and not i5_gate(p, False):
@@ -208,7 +211,8 @@ def mentor_check(c, again=True):
     c0, r0 = box
     hx = p.ent(0)["X"]
     g = U.goblin(p)                                      # TUT-GEAR (A12M): the awake Goblin chasing the hero past C1 is drawn
-    gx = g[1]["X"] if g else -99                         # over his box like the hero: its cells are not his pose either
+    gx = g[1]["X"] if g else -99                         # over his box: only its sprite footprint is exempt (body cols gx..gx+2
+                                                         # cell-aligned, one more col either side mid-tween: gx-1..gx+GOB_W)
     ids = [p.rb(S["ROOM_MAP"] + 32 * (r0 + k // 3) + c0 + k % 3) for k in range(18)]
     gl = [bytes(p.z.read_memory(S["TILE_GLYPHS"] + 8 * i, 8)) for i in ids]
     c.mglyphs.update(g for g, i in zip(gl, ids) if i in U.MENTOR_IDS and any(g))
@@ -216,7 +220,7 @@ def mentor_check(c, again=True):
     bad = []                                             # its top line f0.. == a mentor glyph at (20, 11), the hero's head)
     for k in range(18):
         col, row = c0 + k % 3, r0 + k // 3
-        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5 or gx - 2 <= col <= gx + 5 or (col, row) in dn:   # the id-less cell / under the hero / Goblin
+        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5 or gx - 1 <= col <= gx + GOB_W or (col, row) in dn:   # the id-less cell / under the hero / Goblin
             continue
         if G.cell_bytes(fr, col, row) != gl[k] or G.attr_at(fr, col, row) != p.rb(S["TILE_ATTRS"] + ids[k]):
             bad.append((col, row))

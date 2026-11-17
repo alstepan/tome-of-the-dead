@@ -551,14 +551,14 @@ tt_glob:
                 ld   e, ST_PRE
                 ld   hl, TV_FL
                 cp   TUT_B9G                   ; TUT-GEAR: B9G open = the room is C (A's / B's first beats
-                jr   z, .p76                   ; are earlier): L76 instead of B11's L53 (once by construction)
+                jr   z, .l76                   ; are earlier): L76 instead of B11's L53, the same once-per-D0 bit
                 sub  2                         ; R2 s13.5: entering B with B2..B5 open (book /
                 cp   4                         ; ladder / pear skipped): L76 once per D0, before
                 jr   nc, .im                   ; B7's G0 (the ST_PRE mechanism of L53)
                 ld   a, c
                 cp   TUT0_ROOM_B
                 jr   nz, .im
-                bit  TFB_L76, (hl)
+.l76:           bit  TFB_L76, (hl)             ; (review: said entering B already -> C gets B11's L53)
                 set  TFB_L76, (hl)             ; (SET keeps the flags)
                 jr   nz, .im
 .p76:           set  TFB_P76, (hl)             ; tt_step .pre says L76
