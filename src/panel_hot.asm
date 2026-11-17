@@ -427,6 +427,24 @@ dn_mbit:
                 and  e
                 ret
 
+;------------------------------------------------------------------------------
+; fly_cut — FLY-CUT head (HOT_COPY's spare: uncontended, every flyer turn; the rest is lowram flyl.asm
+; fly_cut2, contract there). In: IX = the flyer, TMP4 = its storey. CF = 1: no detour (no mid-block:
+; ~60 T incl. the call). Else D = M (ai_monster's segment encoding) -> fly_cut2.
+;------------------------------------------------------------------------------
+fly_cut:        ld   hl, FLY_CUT
+                ld   a, (hl)
+                add  a, 1
+                ret  c                         ; $FF: no mid-block (CF = 1)
+                ld   a, (TMP4)
+                rrca
+                ld   d, a                      ; storey 1: D = M = $80; storey 0: D = 0
+                jr   c, .m
+                ld   a, (hl)
+                cp   (ix+E_X)                  ; CF iff K < x: seg0(x)
+                rl   d                         ; D = M = 0 / 1
+.m:             jp   fly_cut2
+
 panel_hot_end:
                 ENT
 PANEL_HOT_LEN   EQU panel_hot_end - panel_hot

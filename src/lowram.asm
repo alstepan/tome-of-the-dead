@@ -1353,7 +1353,7 @@ climb_blocked:
                 pop  af
                 inc  a
                 cp   P_MAX_ENT
-                jp   c, .l                     ; (out of jr range since B19)
+                jr   c, .l                     ; (FLY-CUT: back in jr range, -1 B)
                 xor  a
                 ld   (ACT_SLOT), a             ; (the hero's turn: 0, try_player_turn)
                 call build_live                ; PENDING ones stop colliding
@@ -1893,7 +1893,7 @@ present_full:
                 dec  a
                 ld   (PRES_RMIN), a            ; $FF: no marked row
                 ld   a, P7FFD_SCREEN7
-                jp   set_screen
+                jr   set_screen
 
 ;==============================================================================
 ; init_kbd_mirror — all released.  Clobbers: A, B, HL
@@ -2262,7 +2262,7 @@ gen_frame:
                 ld   a, (hl)
                 ld   (GEN_OFF), a
                 ld   a, 2
-                jp   gen_facing
+                jr   gen_facing
 
 ; gen_facing — A = variant base (0 right / 2 left). Uses GEN_* state.
 gen_facing:
@@ -2275,7 +2275,7 @@ gen_facing:
                 ld   hl, GEN_VAR
                 inc  (hl)
                 ld   a, 4
-                jp   gen_variant
+                jr   gen_variant
 .stat:
     IF PHASE_SHIFT
                 ld   a, (GEN_FLAGS)            ; FF_PH4 (= 4): drawn at px & 4 = 4,
@@ -2286,11 +2286,11 @@ gen_facing:
                 ld   a, (GEN_OFF)
     ENDIF
                 and  7                         ; anchor implies the one shift
-                jp   z, gen_variant            ; shift 0 -> variant base
+                jr   z, gen_variant            ; shift 0 -> variant base
                 ld   hl, GEN_VAR
                 inc  (hl)                      ; shift 4 -> base + 1
                 ld   a, 4
-                jp   gen_variant
+                jr   gen_variant
 
 ; gen_variant — emit GEN_BASE shifted by A (0/4) into the pool as variant
 ; GEN_VAR of GEN_FID. Clobbers: all but IX.
@@ -2635,6 +2635,7 @@ page_run:
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
                 INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
+                INCLUDE "flyl.asm"             ; FLY-CUT: fly_cut, a flyer's detour round a mid-block (bank-3 ai_flyer)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with

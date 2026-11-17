@@ -493,3 +493,19 @@ ksel:           push ix
                 ret  z                  ; distinct rooms only
                 ld   (KC_L1 + KL_KEY), a
                 jp   kcons
+
+; FLY-CUT: kload back from lowram lgkeyl.asm (ksel is its only caller; pure GEN_SCRATCH work, 19 B).
+; kload: A = candidate index, DE = KC_L0 / KC_L1: its 8 B, KL_CI := index. Clobbers A, BC, DE, HL.
+kload:          ld   hl, KL_CI
+                add  hl, de
+                ld   (hl), a
+                add  a, a
+                add  a, a
+                add  a, a
+                add  a, KS_CAND & $FF
+                ld   l, a
+                ld   h, KS_CAND >> 8
+                ld   bc, 8
+                ldir
+                ret
+

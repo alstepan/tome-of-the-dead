@@ -350,6 +350,7 @@ LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ASSERT lowram_code_end == $8000
 LOWRAM_SPARE    EQU lowram_code - LOWRAM_FREE_END   ; F1: no descriptor reserve here any more (FDESC_GROW is in B0_CODE2)
                 ASSERT lowram_code >= LOWRAM_FREE_END
+                ASSERT LOWRAM_SPARE >= 61                      ; tests/world.py run_code places a 61-B stub at LOWRAM_END_3B (= the spare)
                 ; C+TUT0: in_tut finds the blob stream's trailer at this record's address + length
                 ASSERT {b tape_tab + TT_BOOT4_REC * TT_STRIDE} == BANK_BOOT4 && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 1} == BOOT4_ORG && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 3} == BOOT4_TAPE_LEN
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias

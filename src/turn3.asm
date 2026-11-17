@@ -511,6 +511,7 @@ rs_self:        ld   c, DTY_DARK | DH_NODEF
 ; dx_to_player — D = sign(player.x - x) (0 if equal; Z iff D = 0 on return).  Clobbers: A
 dx_to_player:
                 ld   a, (P_ENTITIES + E_X)
+dx_to_a:                                       ; FLY-CUT: D = sign(A - x) toward col A (Z: there)
                 ld   d, 0
                 cp   (ix+E_X)
                 ret  z
@@ -609,7 +610,13 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 ld   h, 0
                 call ai_rhook
                 ret  c
-                ld   a, (PL_STOREY)
+                ; FLY-CUT (game.md §9.2): the hero in the other storey-0 half of a mid-block room -> fly round
+                ; it through the ladder shafts (lowram fly_cut: seek_col's pick). No mid-block: +64 T a turn (measured)
+                call fly_cut                   ; (HOT_COPY head + lowram fly_cut2)
+                jr   c, .rules
+                jp   z, step_dy                ; at the shaft: straight down / up through its hole (E)
+                jr   .dy                       ; D = dx toward the shaft col
+.rules:         ld   a, (PL_STOREY)
                 ld   hl, TMP4
                 cp   (hl)
                 jr   nz, .wander
@@ -646,11 +653,15 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 MUL_STOREY b
                 inc  a                         ; 9s+1: the cruising row
                 ld   e, 0
-                cp   (ix+E_Y)
+                sub  (ix+E_Y)
                 jr   z, .try
-                ld   e, 1
-                jr   nc, .try
                 ld   e, $FF
+                jr   c, .try                   ; below the cruising row: up
+                ld   e, 1
+                dec  a
+                jr   z, .try                   ; y = 9s (the band top)
+                ld   d, 0                      ; FLY-CUT: y < 9s, the body still in the floor row after a
+                                               ; shaft descent: straight down until it is in its band
                 jr   .try
 .wander:
                 KFIELD KT_FLAGS
