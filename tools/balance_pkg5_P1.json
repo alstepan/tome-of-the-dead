@@ -1,0 +1,2 @@
+{"_doc": "PACKAGE 5 v2 variant: every depth D3-D8 monster count +1 over package 4 (20,21,22,24,25,24,24,19). Not combined with A's own count change; use with H8 and --ld-pkg4.",
+ "param": {"MON_COUNT": [20, 21, 22, 24, 25, 24, 24, 19]}}

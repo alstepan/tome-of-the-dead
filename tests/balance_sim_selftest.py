@@ -426,9 +426,80 @@ def test_pkg5(D0):
             check("drain heal gold=%s div=%d" % (gold, div), m.hp - 1 == want, str(m.hp - 1))
 
 
+def test_pkg5v2(D0):
+    """Package 5 v2 knobs: PICKUP, BOOK_ORDER, FOOD_BURN (hunger); defaults = package 4."""
+    check("v2 defaults", B.PARAMS["PICKUP"] == 1.0 and B.PARAMS["BOOK_ORDER"] == 0 and B.PARAMS["FOOD_BURN"] == 6)
+    D = B.Data({"param": {"PICKUP": 0.0}})
+    g = new_game(D, "W", 4)
+    g.build_level(1)
+    n0 = len(g.floor["pots"]) + len(g.floor["food"])
+    g.pick_some(1.0)
+    check("PICKUP 0 takes nothing", len(g.floor["pots"]) + len(g.floor["food"]) == n0 and n0 > 0)
+    Do = B.Data({"param": {"BOOK_ORDER": 1}})
+    g = new_game(Do, "M", 4)
+    g.depth = 3
+    for _ in range(3):
+        g.read_book()
+    check("BOOK_ORDER mage D3: Spark, Firebolt, Frost", [g.h.ranks[a] for a in B.ABIL[:5]] == [1, 1, 1, 0, 0], str(g.h.ranks))
+    g.depth = 5
+    for _ in range(2):
+        g.read_book()
+    check("BOOK_ORDER D5: Drain, Lightning", [g.h.ranks[a] for a in B.ABIL[:2]] == [1, 1] and g.h.ranks[B.ABIL[3]] == 1 and g.h.ranks[B.ABIL[4]] == 1)
+    g.read_book()
+    check("BOOK_ORDER falls back to rank-up/tome", sum(g.h.ranks[a] for a in B.ABIL[:5]) == 6 or getattr(g.h, "power", 0) == 1)
+    g = new_game(Do, "W", 4)
+    g.depth = 2
+    g.h.ranks["Power"] = 1
+    g.read_book()
+    check("BOOK_ORDER W before D3: no Whirl", g.h.ranks["Whirl"] == 0)
+    g.depth = 3
+    g.read_book()
+    check("BOOK_ORDER W D3: Whirl", g.h.ranks["Whirl"] == 1)
+    Db = B.Data({"param": {"FOOD_BURN": 8}})
+    g = new_game(Db, "W", 4)
+    f0 = g.h.food
+    g.t = 0
+    g.adv(96)
+    check("FOOD_BURN 8: 12 food per 96 turns", f0 - g.h.food == 12, str(f0 - g.h.food))
+
+
+def test_pkg5v3(D0):
+    """Package 5 v2 (balance_v2.md sec 7) knobs: defaults = package 4; scroll weights / guarantee, Fear turns, respawn cap, Firebolt-first, avoid_pro, stats."""
+    P0 = B.PARAMS
+    check("v3 defaults", P0["TELE_AMBUSH"] == 0.0 and P0["SCR_W"] is None and P0["SCR_GUAR_D2"] == 0 and P0["FEAR_SCR_T"] == 6
+          and P0["RESPAWN_MAX_D4"] is None and P0["MAGE_FB_FIRST"] == 0)
+    D = B.Data({"param": {"SCR_W": [8, 0, 0, 0], "SCR_N": [2, 2]}})
+    g = new_game(D, "W", 3)
+    g.build_level(1)
+    check("SCR_W all Teleport", g.floor["scr"] == ["tele", "tele"], str(g.floor["scr"]))
+    D = B.Data({"param": {"SCR_W": [0, 0, 0, 8], "SCR_N": [2, 2], "SCR_GUAR_D2": 1}})
+    g = new_game(D, "W", 3)
+    g.build_level(2)
+    check("SCR_GUAR_D2 forces a Teleport", "tele" in g.floor["scr"] and len(g.floor["scr"]) == 2, str(g.floor["scr"]))
+    g.build_level(3)
+    check("SCR_GUAR_D2 only D2", "tele" not in g.floor["scr"])
+    D = B.Data({"param": {"RESPAWN_MAX_D4": 8}})
+    g = new_game(D, "W", 3)
+    g.depth = 3
+    c3 = g.rmax()
+    g.depth = 4
+    check("RESPAWN_MAX_D4", c3 == 6 and g.rmax() == 8)
+    D = B.Data({"param": {"MAGE_FB_FIRST": 1}})
+    g = new_game(D, "M", 3)
+    g.depth = 1
+    g.read_book()
+    g.depth = 2
+    g.read_book()
+    check("MAGE_FB_FIRST: Spark then Firebolt", g.h.ranks["Spark"] == 1 and g.h.ranks["Firebolt"] == 1, str(g.h.ranks))
+    pol = B.POLICIES["expert+charm_food+rest_fed-no_rest_full-no_jump_p+avoid_pro"]
+    check("avoid_pro flag", pol.get("avoid_pro") == 1 and not pol.get("avoid") and pol.get("rest_fed") == 1 and pol["jump_p"] == 0.0, str(pol))
+    r = B.run_batch(B.Data(B.ld_preset(True)), "M", "average", 12, "v3", 0)
+    check("stats present", r["n"] == 12 and len(r["food3"]) > 0 and 0 <= r["hungry5"] <= 12 and "xs" in r)
+
+
 def main():
     D = B.Data()
-    for t in (test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:
