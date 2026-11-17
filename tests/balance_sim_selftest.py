@@ -38,7 +38,7 @@ def test_tables(D):
             check("rank %s %d" % (name, r + 1), [got[k] for k in ("mp", "range", "die", "bonus", "bounces", "effect")] == list(row), str(got))
     check("xpn", D.xpn == C.XP_NEXT, str(D.xpn))
     check("ogre row", D.k[D.id("OGRE")]["hp"] == 36 and D.k[D.id("OGRE")]["res"][B.PHYS] == 0 and D.k[D.id("OGRE")]["res"][B.SHOCK] == 4)
-    check("vampire fire W", D.k[D.id("VAMPIRE")]["res"][B.FIRE] == 4)
+    check("vampire fire N (package 4)", D.k[D.id("VAMPIRE")]["res"][B.FIRE] == 0)
     # overrides
     ov = B.parse_set(["ab_rank.Firebolt.1.range=9", "kx.SPIDER.FIRE=N", "kind.OGRE.hp=99", "param.HP_BONUS=5"])
     D2 = B.Data(ov)
@@ -154,7 +154,7 @@ def test_damage_pipeline(D):
     m.h.ranks["Firebolt"] = 1
     m.h.mp = 30
     check("bone staff spell bonus", m.h.spellbonus == 2)
-    vamp = B.Mon(D, D.id("VAMPIRE"), 1)       # FIRE W
+    vamp = B.Mon(D, D.id("VAMPIRE"), 1)       # FIRE N (package 4; was W)
     vamp.hp = vamp.maxhp = 500
     vamp.x = 3
     seen = set()
@@ -163,16 +163,16 @@ def test_damage_pipeline(D):
         m.h.mp = 30
         m.cast("Firebolt", 1, D.rank["Firebolt"][0], [vamp], vamp)
         seen.add(500 - vamp.hp)
-    # Firebolt R1 1d8+0, +2 staff, doubled: (d+2)*2 = 6..20 even numbers
-    check("firebolt W staff range", min(seen) == 6 and max(seen) == 20, str(sorted(seen)))
-    ghost = B.Mon(D, D.id("GHOST"), 1)         # SHOCK X: reflect, 0 damage to it
+    # Firebolt R1 1d8+0, +2 staff, neutral: d+2 = 3..10
+    check("firebolt N staff range", min(seen) == 3 and max(seen) == 10, str(sorted(seen)))
+    ghost = B.Mon(D, D.id("GHOST"), 1)         # SHOCK R (package 4; was X): half damage, no reflect
     ghost.hp = ghost.maxhp = 50
     ghost.x = 3
     m.h.ranks["Spark"] = 1
     hp0 = m.h.hp
     m.h.hp = m.h.maxhp = 500
     m.cast("Spark", 1, D.rank["Spark"][0], [ghost], ghost)
-    check("spark reflected by ghost: ghost unharmed, caster hit", ghost.hp == 50 and m.h.hp < 500, "%d %d" % (ghost.hp, m.h.hp))
+    check("spark vs ghost (SHOCK R): ghost hurt, caster unharmed", ghost.hp < 50 and m.h.hp == 500, "%d %d" % (ghost.hp, m.h.hp))
     # Frost vs the Vampire (COLD I): no damage, no freeze
     sk = B.Mon(D, D.id("VAMPIRE"), 1)
     sk.x = 3

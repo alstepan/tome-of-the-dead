@@ -19,7 +19,7 @@
 ;          MP clamped to MAXMP (never raised: the start fill is kit_add's)
 ;   HERO_RES B0 / B1 = per-field max of the gear's (gx_tab), HERO_IMM = OR; the Warrior's base B0 = COLD R
 ;          (T10a follow-up: innate, the max with gear: a Frost Charm adds nothing to him)
-;   MP_PER = 8 / 6 (class), / 2 with the Mana / Scarab amulet, x 2 with Plate
+;   MP_PER = 8 / 6 (class), / 2 with the Mana amulet (x 5/8 Scarab), x 2 with Plate
 ; Charms carry no m (only the weapon is enchanted; wear hits weapon / armour /
 ; helm). Rune / Bone staff spell damage (+1 / +2) is not a recalc stat: proj_prep
 ; (bank 3) reads the worn weapon's TYPE at cast time.
@@ -142,13 +142,16 @@ hero_recalc:
                 jr   z, .h2
                 cp   IT_C_SCARAB
                 jr   nz, .nh
-.h2:            srl  c                         ; regen x 2
+                ld   a, c                      ; BALANCE-PKG4: the Scarab's period = (c + 8) / 2 = c / 2 + 4 quarter-turns
+                add  a, 8                      ; (~ x 5/8, regen x 1.6: Warrior 32 -> 20 exact, Mage 28 -> 18 vs the sim's
+                ld   c, a                      ; 17.5; the exact c/2 + c/8 cost 7 B more than R6 has). Mana: c / 2 (x 2)
+.h2:            srl  c
 .nh:            ld   a, (WORN + WS_ARMOUR * IR_STRIDE)
                 cp   IT_A_PLATE
+                ld   a, c                      ; (ld keeps the flags)
                 jr   nz, .np
-                sla  c                         ; Plate: regen x 1/2
-.np:            ld   a, c
-                ld   (MP_PER), a
+                add  a, a                      ; Plate: regen x 1/2
+.np:            ld   (MP_PER), a
                 ; --- gear MP: MAXMP += new - old; MP <= MAXMP ---
                 ld   a, (hr_mp)
                 call clamp0

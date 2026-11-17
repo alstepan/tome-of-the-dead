@@ -251,7 +251,7 @@ HS_WEAK         EQU 3
 HS_OK_BELOW     EQU 50              ; FOOD < 50 -> OK
 HS_HUNGRY_BELOW EQU 25              ; FOOD < 25 -> HUNGRY
 HS_WEAK_BELOW   EQU 10              ; FOOD < 10 -> WEAK
-HP_REG_FED      EQU 12              ; FED: HP +1 per 12 turns (§7)
+HP_REG_FED      EQU 16              ; FED: HP +1 per 16 turns (§7; BALANCE-PKG4, was 12)
 HW_REPEAT       EQU 50              ; WEAK: the faint check every 50 turns (§7.1; was the repeat line)
 FAINT_T         EQU 5               ; FAINT1 (§7.1): the hunger faint = ASLEEP 5 (BAL1 knob 4..6)
 FAINT_GAP       EQU 30              ; faints come 30 turns apart (HW_TMR := HW_REPEAT - FAINT_GAP; BAL1 25..40)

@@ -532,7 +532,7 @@ IE_TEXT = {  # item_info.md §3, verbatim
     "ie_bow": "SHOOT IT FROM BAR SLOT 5", "ie_rune": "SPELL DMG +1", "ie_bone": "SPELL DMG +2",
     "ie_plate": "HALF MP REGEN", "ie_silk": "IMMUNE TO POISON", "ie_gcloak": "HALF DMG FROM DARK + DRAIN",
     "ie_mirror": "REFLECTS DARK", "ie_fire": "HALF DMG FROM FIRE", "ie_mana": "2X MP REGEN",
-    "ie_plenty": "HALF HUNGER", "ie_scarab": "2X MP REGEN, HALF HUNGER", "ie_gring": "IMMUNE TO DARK",
+    "ie_plenty": "HALF HUNGER", "ie_scarab": "1.6X MP REGEN, HALF HUNGER", "ie_gring": "IMMUNE TO DARK",
     "ie_cold": "HALF DMG FROM COLD",                                   # NEW-MON3 (item_info.md §3 format)
     "ie_metal": "BLOCKS MAGE SPELLS", "ie_cloth": "BLOCKS POWER ATTACKS",
 }

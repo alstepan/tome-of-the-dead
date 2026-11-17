@@ -217,7 +217,7 @@ RD_STAMP = 15      # src/rsp0.asm RD_STAMP = RD_SPARE + 3
 
 
 def time_off_cases(p, L, rnd):
-    """E: LARGER-D T5: the 48-turn time trickle is disabled on D1-D8: end_turn never counts or sets TRK_DUE."""
+    """E: BALANCE-PKG4: the time trickle is on again on D1-D8 (1/3 rate: period 48, chance 32/256): end_turn counts TRK_PHASE bits 0-5, sets TRK_TIME."""
     d = L.depth
     pr = present(L)
     cur = p.rb("CUR_ROOM")
@@ -228,20 +228,30 @@ def time_off_cases(p, L, rnd):
     p.wb("LP_RESPAWNS", 0)
     p.wb("TRK_PHASE", 46)
     p.wmem(S["TRK_W"], [0xEE] * NR)
-    r0 = list(p.z.read_memory(REC, NREC))
-    ok = True
-    for _ in range(60):
-        heal(p)
-        p.turn("WAIT")
-        ok &= p.rb("TRK_PHASE") == 46
-    check("E1 60 turns: TRK_PHASE stays 46 (no count, no TRK_DUE), no check: TRK_W / records / LP_RESPAWNS untouched",
-          ok and list(p.z.read_memory(S["TRK_W"], NR)) == [0xEE] * NR and list(p.z.read_memory(REC, NREC)) == r0
-          and p.rb("LP_RESPAWNS") == 0, (p.rb("TRK_PHASE"), p.rb("LP_RESPAWNS")))
-    p.wb("TRK_PHASE", 0)
-    p.wmem(S["SPQ_K"], [S["K_RAT"] | 0xE0, 15, 1])           # sp_run turn: the count is not touched either
     heal(p)
     p.turn("WAIT")
-    check("E2 a turn with sp_run: TRK_PHASE stays 0, the queue emptied", p.rb("TRK_PHASE") == 0 and p.rb("SPQ_K") == 0,
+    ok1 = p.rb("TRK_PHASE") == 47 and list(p.z.read_memory(S["TRK_W"], NR)) == [0xEE] * NR
+    heal(p)
+    p.turn("WAIT")                                           # the 48th turn: only TRK_TIME is set (no check on the turn tick)
+    heal(p)
+    p.turn("WAIT")                                           # the check ran on the idle INPUT tick before this turn started
+    ran = list(p.z.read_memory(S["TRK_W"], NR)) != [0xEE] * NR
+    check("E1 BALANCE-PKG4 time trickle: turn 47 counts, no check; the 48th sets TRK_TIME, the check (trk_run) runs on the next idle tick, "
+          "the count restarts (the 3rd press is eaten by the idle check tick: TRK_PHASE 0, TRK_TIME / TRK_DUE clear)",
+          ok1 and ran and p.rb("TRK_PHASE") == 0 and p.rb("LP_RESPAWNS") <= S["RESPAWN_MAX"], (ok1, ran, p.rb("TRK_PHASE"), p.rb("LP_RESPAWNS")))
+    for _ in range(57):
+        heal(p)
+        p.turn("WAIT")
+    check("E1b 57 more presses from phase 0: 48 turns + 1 press eaten by the 2nd check + 8 turns: TRK_PHASE 8, RESPAWN_MAX holds", p.rb("TRK_PHASE") == 8
+          and p.rb("LP_RESPAWNS") <= S["RESPAWN_MAX"], (p.rb("TRK_PHASE"), p.rb("LP_RESPAWNS")))
+    p.wb("TRK_PHASE", 0)
+    p.wmem(S["SPQ_K"], [S["K_RAT"] | 0xE0, 15, 1])           # sp_run turn: counted like any other
+    heal(p)
+    p.turn("WAIT")
+    check("E1c rate = 1/3 of the old trickle: RESPAWN_CHANCE 32 / RESPAWN_PERIOD 48 == (96 / 48) / 3 per 256 turns "
+          "(the spawn draw itself is bit-checked against the model by the M cases)",
+          S["RESPAWN_CHANCE"] * 3 == 96 and S["RESPAWN_PERIOD"] == 48, (S["RESPAWN_CHANCE"], S["RESPAWN_PERIOD"]))
+    check("E2 a turn with sp_run: TRK_PHASE 1, the queue emptied", p.rb("TRK_PHASE") == 1 and p.rb("SPQ_K") == 0,
           (p.rb("TRK_PHASE"), p.rb("SPQ_K")))
 
 

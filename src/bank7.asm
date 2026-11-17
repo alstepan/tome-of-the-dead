@@ -51,10 +51,15 @@ turn_input:
                                                ; TOME_FX2: the bank-0 dn_tm hook ends it 2 screen ticks after
     ENDIF
                 ld   hl, TRK_PHASE             ; 3F-T12: a due trickle check takes this INPUT
-                bit  TRK_DUE_BIT, (hl)         ; tick ALONE (idle: no turn starts, no log line, a
-                jr   z, .nd                    ; deferred level-up waits too); the input is read on
-                res  TRK_DUE_BIT, (hl)         ; the next tick (40 ms, once per 48 turns). A turn
-                                               ; never starts with it set: end_turn sees it clear
+                bit  TRK_TIME_BIT, (hl)        ; tick ALONE (idle: no turn starts, no log line, a
+                jr   z, .np                    ; deferred level-up waits too); the input is read on
+                res  TRK_TIME_BIT, (hl)        ; the next tick (40 ms, once per 48 turns). A turn
+                ld   hl, trk_run               ; never starts with it set: end_turn sees it clear.
+                jp   far6                      ; BALANCE-PKG4: the time trickle is back (R6 trk_run, D1-D8 at 1/3 rate;
+                                               ; a coincident TRK_DUE keeps its bit: rsp_run runs on the NEXT idle tick)
+.np:            bit  TRK_DUE_BIT, (hl)
+                jr   z, .nd
+                res  TRK_DUE_BIT, (hl)
                 jp   rsp_run                   ; LARGER-D T5: the progress respawn event (low-RAM rsp0.asm), set
                                                ; by lp_transition on every room entry; the time trickle is off
 .nd:            ld   a, (XP_UP)                ; D3-9b: a level-up a heavy end_turn tick
@@ -295,14 +300,27 @@ end_turn:
                 ld   a, (EXIT_KIND)
                 or   a
                 call z, vb_turn                ; 3F-T9: the Vampire's bat form (+ R6 vbat6.asm)
+                ld   hl, TRK_PHASE             ; BALANCE-PKG4: the level's turn count BEFORE the exit (a level change
+                inc  (hl)                      ; zeroes it with the fresh LVL_STATE; a turn never starts with a flag set)
                 ld   a, (EXIT_KIND)
                 or   a
                 call nz, .ex
                 ld   hl, (TURN_COUNTER)
                 inc  hl
                 ld   (TURN_COUNTER), hl
-                ; LARGER-D T5: no per-turn trickle count any more (the 48-turn time trickle is disabled on D1-D8;
-                ; trk_run stays in R6 for the model tests). TRK_PHASE is only TRK_DUE now (lp_transition).
+                ; BALANCE-PKG4: the time trickle at 1/3 rate (TRK_PHASE bits 0-5 count the level's turns, 6 = TRK_TIME,
+                ; 7 = TRK_DUE of the progress event). Period 48, chance 32/256 (= period 144 at 96/256; trk_run returns on
+                ; D0 and the D0 tutorial's LP_RESPAWNS = RESPAWN_MAX silences it too). ~64 T a turn
+                ld   hl, TRK_PHASE
+                ld   a, (hl)
+                and  TRK_CNT_MASK              ; (lp_transition's DUE, set by .ex above, is bit 7)
+                cp   RESPAWN_PERIOD
+                jr   nz, .nt
+                ld   a, (hl)
+                ASSERT RESPAWN_PERIOD <= TRK_CNT_MASK && (TRK_CNT_MASK & (TRK_TIME | TRK_DUE)) == 0
+                and  TRK_DUE                   ; keep a progress event pending from this turn's room change
+                or   TRK_TIME                  ; (count 0)
+                ld   (hl), a
 .nt:            call floor_pickup              ; pickup7.asm (D3-7 T6: potions + ammo, list-driven;
                                                ; HP / potions reach the panel by panel_tick's poll)
                 xor  a

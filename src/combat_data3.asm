@@ -35,7 +35,7 @@ KXP_GARGOYLE    EQU 8
 KXP_IMP         EQU 6
 KXP_WRAITH      EQU 10
     MACRO KX_GARGOYLE_ROW
-                KXROW RSP_R,0,RSP_R,0,RSP_I,0, IMMF_SLEEP | IMMF_FEAR | IMMF_POISON, KXP_GARGOYLE, DTY_PHYS, EFX_NONE, 0, 0, 0
+                KXROW RSP_R,RSP_R,0,0,RSP_I,0, IMMF_SLEEP | IMMF_FEAR | IMMF_POISON, KXP_GARGOYLE, DTY_PHYS, EFX_NONE, 0, 0, 0
     ENDM
     MACRO KX_IMP_ROW
                 KXROW 0,RSP_I,RSP_W,0,0,0, 0, KXP_IMP, DTY_FIRE, EFX_NONE, 0, 0, 0
@@ -51,10 +51,10 @@ WR_FRZ_T        EQU 2               ; ... for 2 turns
 kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_KNIGHT (hero)
                 KXROW 0,0,0,0,0,0, 0, 0, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_WIZARD (hero)
-                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0                  ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
                 KXROW 0,0,0,0,0,0, 0, KXP_GOBLIN, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
-                KXROW RSP_R,0,RSP_R,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
+                KXROW RSP_R,0,RSP_R,RSP_R,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
                 KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_RAT
                 KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                              ; K_BAT
                 KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0, 1 ; K_SLIME (DEF 1, D3-1)
@@ -64,14 +64,14 @@ kx_tab:
                 ; is NOT a plain on-hit status (Mummy FOOD drain, Ogre SLAM, parry, ACID, breed,
                 ; summon, ranged, rage) is T6-T9 code keyed on the kind id.
                 KXROW 0,0,0,0,0,0, 0, KXP_SPIDER, DTY_PHYS, EFX_POISON, 0, PSN_SPIDER / 2, 0               ; K_SPIDER: bite POISON 12
-                KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_VAMPIRE, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
+                KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_VAMPIRE, DTY_DRAIN | DH_HEAL, EFX_NONE, 0, 0, 0 ; K_VAMPIRE: drain bite heals it
                 KXROW 0,RSP_R,0,0,0,0, 0, 9, DTY_PHYS, EFX_NONE, 0, 0, 1                               ; K_ORC
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 7, DTY_PHYS, EFX_NONE, 0, 0, 0              ; K_ARCHER (arrow: T7)
                 KXROW 0,RSP_W,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, KXP_MUMMY, DTY_PHYS, EFX_WEAK, 3, 12, 2    ; K_MUMMY: curse 1 in 3 -> WEAK 12 (FOOD drain: T6)
-                KXROW 0,0,RSP_R,0,0,RSP_I, 0, KXP_NECRO, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
+                KXROW 0,0,0,0,0,RSP_I, 0, KXP_NECRO, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_NECRO (Dark Bolt: T7)
                 KXROW 0,0,RSP_R,RSP_W,0,0, 1 << IMMF_BOSS_BIT, 60, DTY_PHYS, EFX_NONE, 0, 0, 2     ; K_OGRE: SLAM = T8
                 KXROW 0,RSP_X,RSP_I,RSP_W,RSP_I,RSP_I, 1 << IMMF_BOSS_BIT, 90, DTY_PHYS, EFX_NONE, 0, 0, 3 ; K_DKNIGHT: parry 1 in 3, notch 1 in 2 = T6
-                KXROW 0,0,RSP_X,RSP_X,RSP_I,RSP_R, 1 << IMMF_BOSS_BIT, 0, DTY_PHYS, EFX_NONE, 0, 0, 1  ; K_ARCHMAGE: awards 0 XP (§4.1)
+                KXROW 0,0,RSP_X,RSP_R,RSP_I,RSP_R, 1 << IMMF_BOSS_BIT, 0, DTY_PHYS, EFX_NONE, 0, 0, 1  ; K_ARCHMAGE: awards 0 XP (§4.1)
                 ; --- the 12 tier rows (§9.6): the base kind's resistances / immunity (+ the noted extras),
                 ; own KXP (§4.1 table), DEF and on-hit status
                 KXROW 0,0,0,0,0,0, 0, 3, DTY_PHYS, EFX_POISON, 4, PSN_RAT / 2, 0                       ; K_GIANT_RAT: bite 1 in 4 -> POISON 12
@@ -81,14 +81,14 @@ kx_tab:
                 KXROW 0,0,0,0,0,0, 0, 6, DTY_PHYS, EFX_POISON, 0, PSN_WIDOW / 2, 0                 ; K_BLACK_WIDOW: POISON 24 (ACID: T6)
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 2              ; K_SKEL_GUARD: parry 1 in 4 = T6
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 12, DTY_PHYS, EFX_STUNNED, 4, 1, 3          ; K_SKEL_KNIGHT: 1 in 4 -> STUNNED 1; parry 1 in 3 = T6
-                KXROW RSP_R,0,RSP_R,RSP_X,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN, EFX_FEAR, 3, 3, 0     ; K_POLTERGEIST: touch 1 in 3 -> FEAR 3
+                KXROW RSP_R,0,RSP_R,RSP_R,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_DRAIN, EFX_FEAR, 3, 3, 0     ; K_POLTERGEIST: touch 1 in 3 -> FEAR 3
                 KXROW 0,RSP_R,0,0,0,0, IMMF_FEAR, 13, DTY_PHYS, EFX_NONE, 0, 0, 1                      ; K_ORC_BERSERK: FEAR-immune; rage = T6
                 KXROW 0,RSP_R,0,0,0,0, 0, 18, DTY_PHYS, EFX_STUNNED, 3, 1, 2                           ; K_ORC_BOUNCER: 1 in 3 -> STUNNED 1
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 10, DTY_PHYS, EFX_NONE, 0, 0, 0             ; K_SNIPER (stand-and-shoot: T7)
-                KXROW 0,0,RSP_R,0,0,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
+                KXROW 0,0,0,0,0,RSP_I, 0, 15, DTY_PHYS, EFX_NONE, 0, 0, 0                      ; K_BONE_CALLER (summon: T6)
                 ; --- NEW-MON3 T8 (new_monsters.md §4): ids 30 / 31. Row 31 = the Fire Imp (variant A); the Frost Wraith's
                 ; row (variant B: nm3_var, src/nm3var0.asm) is KX_WRAITH_ROW below.
-                KX_GARGOYLE_ROW                                                                           ; K_GARGOYLE: stone: PHYS R, COLD R, DRAIN I; SLEEP / FEAR / POISON immune; 8 XP
+                KX_GARGOYLE_ROW                                                                           ; K_GARGOYLE: stone: PHYS R, FIRE R, COLD N (BALANCE-PKG4), DRAIN I; SLEEP / FEAR / POISON immune; 8 XP
                 KX_IMP_ROW                                                                                ; K_ALIAS (A): the Fire Imp: FIRE I, COLD W; claw FIRE; 6 XP
                 ASSERT ($ - kx_tab) == K_COUNT * KX_STRIDE && K_COUNT == 32
                 ASSERT kx_tab == BANK_WINDOW && $ - kx_tab == KX_LEN
@@ -146,10 +146,10 @@ ab_rank:
                 RANK 2, 6, 4, 1, 0, (4 << 4) | 4
                 RANK 4, 9, 8, 2, 0, (4 << 4) | 4
                 RANK 6, 10, 8, 4, 0, (2 << 4) | 4
-; Firebolt: 5 MP r8 1d8, burst 1d4 | 6 MP r8 1d8+2, burst 1d4 | 10 MP r10 1d10+4, burst 1d6 spares caster
-                RANK 5, 8, 8, 0, 0, 4
-                RANK 6, 8, 8, 2, 0, 4
-                RANK 10, 10, 10, 4, 0, 6 | RKE_SPARE
+; Firebolt: 5 MP r8 1d8, burst 1d3 | 6 MP r8 1d8+2, burst 1d3 | 10 MP r10 1d10+4, burst 1d5 spares caster (BALANCE-PKG4: was 1d4 / 1d4 / 1d6)
+                RANK 5, 8, 8, 0, 0, 3
+                RANK 6, 8, 8, 2, 0, 3
+                RANK 10, 10, 10, 4, 0, 5 | RKE_SPARE
 ; Frost Shard: 3 MP r10 1d6+1, 1 bounce, freeze 2 | 5 MP r10 1d8+2, 2 bounces, freeze 3 | 7 MP r12 1d8+4, freeze 4
                 RANK 3, 10, 6, 1, 1, 2
                 RANK 5, 10, 8, 2, 2, 3
