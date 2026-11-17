@@ -42,7 +42,7 @@ dmg_roll:
                 ld   l, a
                 ld   c, (hl)
                 bit  EF_PLAYER_BIT, (ix+E_FLAGS)  ; BALANCE-PKG5: a monster's N / B x the depth
-                call z, dsc_roll               ; scale (low RAM dscl.asm; keeps E)
+                call z, dsc_roll               ; scale (low RAM dscl.asm; clobbers E: do_attack keeps its byte in B)
                 call rng_mod                   ; 0..N-1 (keeps C, DE)
                 inc  a
                 add  a, d

@@ -123,6 +123,9 @@ lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN, K_RAT, K_BAT, K_SLIME, K_G
                 DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_ORC, K_ALIAS, K_NECRO, K_NECRO,  K_BOSS_D8, 18      ; = Frost Wraith (B) (PKG5 M1: 18 = the sim value already)
 LP_DROW         EQU 10
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
+                DUP LEVELS, d                  ; BALANCE-PKG5 review: every row's count <= LP_N_MAX (lpop3.asm)
+                ASSERT {b lp_dtab + d * LP_DROW + LP_DROW - 1} <= LP_N_MAX
+                EDUP
 
 ;------------------------------------------------------------------------------
 ; lp_post (boss0.asm, was R6 boss6.asm): FARB0 from bank-3 lp_enter, once per lair unit.

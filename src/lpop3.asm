@@ -45,7 +45,7 @@ LPV_FACE        EQU LP_RES              ; ROOM-MEM2 lp_enter -> lp_spawn: the un
 ; 23 for 24 slots; D5's 26 (= 24 units, zero slack) is NOT taken (manager: keep the cap, report it; balance_v2 §8).
 LP_N_MAX        EQU 25
     IF GRID_CELLS >= ROOM_SLOTS
-                ASSERT ROOMS_MIN * ROOM_MAX >= LP_N_MAX
+                ASSERT (ROOMS_MIN - 2) * ROOM_MAX >= LP_N_MAX - 2   ; R excludes start + lair; the split places count - 2 units
     ENDIF
 ; §9.3 weights by kind row (defs.asm WT_*), K_COUNT entries (3F-T3: 18 base + 12 tier rows)
 ; (the hero rows 0 / 1 stay 0: a record entry of kind 0 may exist in tests; id 2 = K_VBAT, 3F-T9)
