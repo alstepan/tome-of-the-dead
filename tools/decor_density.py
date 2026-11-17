@@ -249,6 +249,7 @@ def room_metrics(base, m, objs, flags, key, depth):
                 best = max(best, cur)
         free.append(best)
     out["free"] = free
+    out["empty"] = sum(1 for s in (0, 1) if not any(DG.is_decor(m[(9 * s + r) * COLS + c]) for r in range(9) for c in range(COLS)))
     # clearance (R3)
     mf = [o for o in vis if o["cls"] in (DG.C_MOUNT, DG.C_FLOOR)]
     out["margin"] = sum(1 for o in mf if o["col"] <= 2 or o["col"] + o["w"] - 1 >= 29)
@@ -345,6 +346,7 @@ def summarize(rooms):
         "gaps < 3 %": 100 * sum(1 for g in gaps if g < 3) / (len(gaps) or 1),
         "storeys with free run >= 8 %": 100 * sum(1 for f in free if f >= 8) / (len(free) or 1),
         "median largest free run": median(free),
+        "empty storeys %": 100 * sm("empty") / (2 * n),
         "margin violations mount/floor": sm("margin"),
         "margin violations chain": sm("margin_ceil"),
         "pit-zone floor objects": sm("pit_zone"),

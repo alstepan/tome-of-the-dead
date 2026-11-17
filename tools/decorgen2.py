@@ -48,6 +48,7 @@ RDF_START, RDF_LAIR, RDF_DEADEND, RDF_KEY = 0x02, 0x04, 0x08, 0x10
 # moods
 LIT, DIM, DARK, CALM = "LIT", "DIM", "DARK", "CALM"
 FILL_TRIES = {LIT: 6, DIM: 8, DARK: 6, CALM: 6}
+FILL_BONUS = {2: 3}    # user 2026-11-17: D2 (many small objects, wall budget 13) gets 3 more fill tries
 # R3 columns: mount / ceiling / floor 3..28; textures (patch, moss) 2..29
 CMIN2 = {C_MOUNT: 3, C_CEIL: 3, C_FLOOR: 3, C_PATCH: 2, C_BRICK: 0, C_COMP: 2}
 PAIR_RETRY = True      # a pair that does not fit at gap g tries the other gap before the SINGLE fallback
@@ -502,11 +503,12 @@ def pools(R, rng, mood):
     return made
 
 
-def anchored_patch(R, rng):
+def anchored_patch(R, rng, s=None):
     """one wall-anchored cluster (cols within 3 of a wall / block face, rows 1..5); the old random
     8-try loop is the fallback.  -> True if placed."""
     pats = R.info["pats"]
-    s = rng.rnd(2)
+    if s is None:
+        s = rng.rnd(2)
     obj = pats[rng.rnd(len(pats))]
     w, h = obj[2], obj[3]
     top = 1 + rng.rnd(6 - h)
@@ -563,11 +565,12 @@ def cobwebs(R, rng, mood):
                 return
 
 
-def chain_cluster(R, rng):
+def chain_cluster(R, rng, s=None):
     """DARK / DIM: 2-3 chains at pitch 2 within 6 cols of a wall / block face."""
     chain = DG.COMMON[0]
     k = 2 + rng.rnd(2)
-    s = rng.rnd(2)
+    if s is None:
+        s = rng.rnd(2)
     faces = [f for f in R.st[s]["faces"] if f[3] >= 8]
     if not faces:
         return False
@@ -594,9 +597,33 @@ def moss_strip(R, rng):
     return R.place(obj, 9, cand[rng.rnd(len(cand))], "moss", cmin=2)
 
 
+def storey_empty(R, s):
+    return not any(DG.is_decor(R.m[(9 * s + r) * COLS + c]) for r in range(9) for c in range(COLS))
+
+
+def ensure_storeys(R, rng, mood):
+    """no empty storey (user 2026-11-17): a storey with no decor element gets, in order, a wall-anchored
+    patch, a plain centrepiece (not on a CALM storey 1), a chain cluster, a moss strip, one lone chain."""
+    for s in (0, 1):
+        if not storey_empty(R, s):
+            continue
+        anchored_patch(R, rng, s)
+        if storey_empty(R, s) and not (mood == CALM and s == 1):
+            centre(R, rng, s, False)
+        if storey_empty(R, s):
+            chain_cluster(R, rng, s)
+        if storey_empty(R, s) and R.info["has_moss"] and s == 1:
+            moss_strip(R, rng)
+        if storey_empty(R, s):
+            chain = DG.COMMON[0]
+            for c in range(3, 29):
+                if R.place(chain, 9 * s, c, "ensure"):
+                    break
+
+
 def fill(R, rng, mood):
     mn = menu2(R.depth)
-    for _ in range(FILL_TRIES[mood]):
+    for _ in range(FILL_TRIES[mood] + FILL_BONUS.get(R.depth, 0)):
         obj = mn[rng.rnd(len(mn))]
         name, base, w, h, fl, cls = obj
         cmin = 2 if fl & F_MOSS else CMIN2[cls]
@@ -638,6 +665,7 @@ def decorate(m, depth, seed, live=True, room=None):
     if mood == DARK:
         moss_strip(R, rng)
     fill(R, rng, mood)
+    ensure_storeys(R, rng, mood)
     log = ObjLog(R.objs)
     log.mood = mood
     return R.m, R.anim, log

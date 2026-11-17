@@ -553,3 +553,13 @@ plain DIM (D7), plain LIT (D8); each has both storeys. Regenerate with `tools/de
 **Open questions for the user:** (a) anchored target 70 % vs density (item 3); (b) keep DEDUP and PAIR_RETRY
 (+~26 B); (c) D2 loses 13 % density (many small objects + wall budget 13): raise its fill tries?; (d) the
 3-object depths now show every object in most rooms: accept the lower variety?
+
+### 5b. User decisions applied (2026-11-17)
+All five recommendations accepted: anchored target **55 %** (model: 57.4 %); DEDUP + PAIR_RETRY kept (+26 B);
+D2 fill +3 tries (`FILL_BONUS`; D2 density now -7 % vs old, was -13 %); the rest as proposed. New rule
+**no empty storey** (`ensure_storeys`, after the fill: anchored patch, else unlit centrepiece, chain cluster,
+moss strip, lone chain): empty storeys 1.43 % -> **0** (D7 old 5.9 %). Re-run (1,000 seeds, 88,273 rooms):
+anchored 57.4 %, near-dup rooms 0, decor cells 23.8 -> 28.3 per room (D2 22.8 vs 24.6), LIT mirrored 82 %,
+lair framed 91 %. Z80 estimate in `B0_CODE2` (980 B free): P1 ~ +56 B code - 6 B data - 15..17 B reclaim = ~ +35 B
+net; P2 ~ 280-340 B planner + ~35 B executor + ~40 B no-empty-storey + 1 B D2 bonus = **~360-420 B**.
+Previews regenerated under `build/decor2/` (git-ignored; `tools/decor_preview.py build/decor2`).
