@@ -154,11 +154,13 @@ GS_DEAD, GS_SELECT, GS_PLAYING = 4, 5, 2
 # NEW-MON3 T10b (art pass, 10 frames): D4 +96 (imp_dead), D5 +2,496 (6 Gargoyle + 3 Wraith frames), D6 +1,504 (Gargoyle +
 # imp_dead), D7 / D8 +1,088 (wraith_drift2 / drift3 MOT, wraith_cast), both heroes. Binding D8 Warrior 20,274 of POOL_CAP
 # 22,594, slack 2,320.
+# DECOR2-SHIP (DG2_RES 2,064: POOL_START $EFBE -> $F7CE): the bank-0 -> 4 straddle moves: every need +16, D8 Warrior +80,
+# D8 Mage +112 (frames unchanged). Binding D8 Warrior 20,354 of POOL_CAP 20,530, slack 176 (memory-map "DECOR2-SHIP ledger").
 LEVEL_NEED = {
-    (0, 1): 11826, (0, 2): 11842, (0, 3): 16274, (0, 4): 16034,
-    (0, 5): 16642, (0, 6): 17986, (0, 7): 18482, (0, 8): 20274,
-    (1, 1): 10258, (1, 2): 10242, (1, 3): 14706, (1, 4): 14498,
-    (1, 5): 15074, (1, 6): 16386, (1, 7): 16850, (1, 8): 18674,
+    (0, 1): 11842, (0, 2): 11858, (0, 3): 16290, (0, 4): 16050,
+    (0, 5): 16658, (0, 6): 18002, (0, 7): 18498, (0, 8): 20354,
+    (1, 1): 10274, (1, 2): 10258, (1, 3): 14722, (1, 4): 14514,
+    (1, 5): 15090, (1, 6): 16402, (1, 7): 16866, (1, 8): 18786,
 }
 
 
@@ -869,7 +871,9 @@ def main():
         # 3F-T11b: R6_GROW 14 -> 15 leaves at most 14 SRC6 pages (SRC6 at $C800, 3,584 B): the set is the
         # Spider, Necro, Ogre, the climb pair + the Wizard (1,908 B packed); the Vampire, Orc and Death
         # Knight (1,900 B) go to banks 1 / 3 (8 B less than the Wizard there: bank 1 has ~no slack)
-        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_ORC", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD"}))
+        # DECOR2-SHIP: U_WRAITH + G_DUST are bank-1 sources now (MAX_FRAMES 8): the variant's bank 1 is 6 B over,
+        # so the dust block (47 B) rides in SRC6 too (187 B free there)
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_ORC", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD", "G_DUST"}))
         variants.append(("src6", REPO, kit + ["SRC6_PAGES=14", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)

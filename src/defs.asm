@@ -256,19 +256,22 @@ B0_KIT_RES      EQU 0                          ; D3-11: 0 (was 80 x DEBUG_KIT): 
 ; ledger"): append files to B0_CODE2 — no reserve to move, POOL_START (so the pool) unchanged.
 ; Sized for >= ~1 KB pool slack at the binding level (POOL_NEED incl. POOL_SIM_MARGIN and the
 ; simulated straddle waste; the slack is quantised by the bank-0 -> 4 straddle: memory-map ledger).
-; DECOR2 (decor_rules2.md P1 + P2, src/decor_gen.asm): -DDECOR2=1 assembles the new deriver instead of the
-; shipped B3B-9 one (src/decor_gen1.asm). It is +DG2_RES B of B0_CODE2, which only the pool can give
-; (B0_CODE2 had 31 B free): a DECOR2=1 build raises POOL_START by DG2_RES and is a TEST build until
-; that memory decision (the level pool need exceeds POOL_CAP: -DPOOL_LVL_CHECK=0; the D0 tutorial's
-; pool would run into the blob: tut0 cannot run on it). Memory-map "DECOR2 ledger".
+; DECOR2 (decor_rules2.md P1 + P2, src/decor_gen.asm; DECOR2-SHIP 2026-11-17: the DEFAULT): the composed
+; deriver. It is +DG2_RES B of carve (POOL_START up by it): the deriver's growth over the B3B-9 one, less
+; the B0 bytes the sprite-source repack freed (zx0_sources.py MAX_FRAMES 8, U_WRAITH + G_DUST to bank 1),
+; with FLY-CUT's 19 B and a small reserve kept. The pool cliff (bank-0 -> 4 straddle) puts the D8 Warrior
+; slack at 176 B for DG2_RES 1,696..2,080 (624 B up to 1,680, measured): keep it <= 2,080. -DDECOR2=0 still
+; assembles the B3B-9 deriver (src/decor_gen1.asm, dg_bad0.asm, the low-RAM dg_vars): escape hatch only.
+; Memory-map "DECOR2 ledger" / "DECOR2-SHIP ledger".
     IFNDEF DECOR2
-DECOR2          EQU 0
+DECOR2          EQU 1
     ENDIF
     IF DECOR2
-DG2_RES         EQU 2756
+DG2_RES         EQU 2064
     ELSE
 DG2_RES         EQU 0
     ENDIF
+                ASSERT DG2_RES <= 2080 && (DG2_RES & 1) == 0
 DG2_ON          EQU DECOR2                     ; test-observable (.sym): tests/room_model.py picks the model by it
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
 B0_FREE_RES     EQU 8408 - 16 - 32 + DG2_RES      ; 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
@@ -389,6 +392,8 @@ GEN_SCRATCH_LEN EQU NEXT_MAP + $300 - ROOM_MAP
 ROOM_COLS       EQU 32
 ATTR_STRIDE     EQU 32              ; bytes per attribute row (screen layout)
 MAP_BUF_LEN     EQU $2A0            ; 672 B per map buffer (PROTO 32x21; B3B-3 uses PLAY_CELLS)
+DG_VARS         EQU ROOM_MAP + MAP_BUF_LEN   ; $62A0..$62FF: DECOR2-SHIP, the decor deriver's state (decor_gen.asm DGV;
+                                             ; live only inside decor_b0, the gap between the two map buffers; GEN_SCRATCH)
 ; B3B-3: playfield = rows 0..PLAY_ROWS-1 (0..17), panel = rows 18..23 (level_defs.asm;
 ; B3B-11 panel engine: panel.asm).
 

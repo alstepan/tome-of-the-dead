@@ -572,3 +572,10 @@ metrics are the model's (60 seeds x D1..D8: anchored 57.7 %, empty storeys 0, ne
 free, not 980. The pool's whole slack (2,320 B) cannot pay it, so the default build still ships the old deriver until a
 memory decision (memory-map "DECOR2 ledger"). Room build (177 rooms): mean 74.1k -> 99.9k T, worst 104.6k -> 161.9k T
 (the §3 gate was <= 135k worst).
+
+### 5d. Shipped (DECOR2-SHIP, `feat/decor2-ship`, 2026-11-17)
+DECOR2 is the default build. Same model (no rule changed, exact Z80 equivalence on 5,400 generated rooms + 713 D0-style
+ones). Memory: +2,630 B of `B0_CODE2`, paid by a sprite-source repack (ZX0 blocks of up to 8 frames: -726 B packed; the Frost
+Wraith + dust sources back to bank 1) and the pool carve `DG2_RES` 2,064 (**D8 Warrior pool slack 2,320 -> 176 B**). Time:
+mean ~81.5k T, worst 131.8k T (gate 135k; the port measured 99.9k / 161.9k). The D0 tutorial keeps `tools/decorgen.py`
+(selector: `LVL_NROOMS < ROOMS_MIN`; it has a key room since TUT-KEY). Details: memory-map "DECOR2-SHIP ledger".

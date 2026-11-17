@@ -308,11 +308,11 @@ FDESC_COUNT     EQU FCTR
 fdesc_end:
                 ASSERT fdesc_end - fdesc_tab == FDESC_COUNT * FDESC_STRIDE
                 ; SIZE T3 (lever F2): the decor deriver decor_b0 + its read-only tables + dg_bad (was bank 3;
-                ; FARB0 from the bank-3 decor_room stub, once per room build; state: low-RAM dg_vars)
+                ; FARB0 from the bank-3 decor_room stub, once per room build; state: DG_VARS, decor_gen.asm)
     IF DECOR2
-                INCLUDE "decor_gen.asm"         ; DECOR2 (test build, defs.asm DG2_RES)
+                INCLUDE "decor_gen.asm"         ; DECOR2 (the default since DECOR2-SHIP; defs.asm DG2_RES)
     ELSE
-                INCLUDE "decor_gen1.asm"        ; the shipped B3B-9 / D1 deriver (tools/decorgen.py)
+                INCLUDE "decor_gen1.asm"        ; -DDECOR2=0: the B3B-9 / D1 deriver (tools/decorgen.py)
     ENDIF
                 ; LARGER-D T4: the level-key lock / key selection ksel (FARB0 from bank-3 attempt; bank 3 had no room)
                 INCLUDE "lgkey0.asm"
@@ -1165,7 +1165,7 @@ PS_IDX = PSM_IDX
 PS_PTR = PSM_PTR
                 PS_KIND K_GOBLIN
                 PS_LINEAR
-                ASSERT DECOR2 || (PS_OVF == 0 && (PS_IDX == 0 || (PS_IDX == 1 && PS_PTR + POOL_SIM_MARGIN <= BLOB_ORG)))   ; DECOR2=1: test build (defs.asm)
+                ASSERT PS_OVF == 0 && (PS_IDX == 0 || (PS_IDX == 1 && PS_PTR + POOL_SIM_MARGIN <= BLOB_ORG))
       IF PS_IDX == 1 && BLOB_ORG - PS_PTR < TUT_D0_GAP
 TUT_D0_GAP = BLOB_ORG - PS_PTR                 ; the tighter hero (DISPLAYed below)
 TUT_D0_TOP = PS_PTR

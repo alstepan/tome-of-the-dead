@@ -2132,9 +2132,30 @@ seq2_bytes:     DS   SEQ2_LEN, 0
 ;------------------------------------------------------------------------------
 ; dg_vars — the decor deriver's state (bank-0 decor_gen.asm; SIZE T3: B0_CODE2 may hold no
 ; runtime-written bytes). Runtime bytes, zeros on tape; live only inside one decor_b0 call
-; (re-derived from RD_SEED every room build). DECOR2: 30 -> DG_VARS_LEN B (the planner's state;
-; the row-3 run list of a query is DG_PLAN, level_defs.asm).
+; (re-derived from RD_SEED every room build). DECOR2: none here (DECOR2-SHIP: the DGV block lives in the
+; map-buffer gap DG_VARS and the run lists / moss list / face list in the NEXT_MAP gap, decor_gen.asm);
+; instead two of the deriver's cold helpers (a few calls a room) live here, out of the full B0_CODE2.
 ;------------------------------------------------------------------------------
+    IF DECOR2
+; dg_iskey — Z = a key room (LVL_KEYROOM / LVL_KEYROOM2; the descriptor's RDF_KEY is never set).
+; dg_rid — A = the room id from IX (ROOM_DESC + 16 r). Clobber A, HL.
+dg_iskey:
+                call dg_rid
+                ld   hl, LVL_KEYROOM
+                cp   (hl)
+                ret  z
+                ld   hl, LVL_KEYROOM2
+                cp   (hl)
+                ret
+dg_rid:
+                ld   a, ixl
+                sub  ROOM_DESC & $FF
+                rrca
+                rrca
+                rrca
+                rrca
+                ret
+    ENDIF
     IF !DECOR2
 dg_vars:                               ; the shipped deriver (decor_gen1.asm)
 dg_rng:         DW   0
@@ -2167,84 +2188,6 @@ dg_alt:         DB   0
 dg_ph:          DB   0
 dg_dg:          DB   0
 DG_VARS_LEN     EQU $ - dg_vars
-    ELSE
-dg_vars:
-dg_rng:         DW   0
-dg_dst0:        DB   0                 ; low byte of the list's count: ANIM_N / ANIM_N2 (A at decor_b0)
-dg_wmax:        DB   0                 ; ---- dg_dtab's row of the depth (LDIR, this order) ----
-dg_pkn:         DB   0                 ; PATCH_A/B records (0 = the composite)
-dg_pr:          DB   0                 ; pair light record | $80 floor class
-dg_cl:          DB   0                 ; cobweb ids (left / right corner)
-dg_cr:          DB   0
-dg_first:       DB   0                 ; the depth's first record (legacy: DG_LEG_FIRST)
-dg_nlev:        DB   0                 ; its record count (the menu = dg_ncom commons + these)
-dg_ncom:        DB   0                 ; 1 (CHAIN) / legacy 4
-dg_mood:        DB   0                 ; DM_* (decor_gen.asm)
-dg_zero:                               ; ---- zeroed at entry ----
-dg_pit:         DB   0                 ; the storey-0 pit: left col, width (0 = none)
-dg_pitw:        DB   0
-dg_mossi:       DB   0                 ; the depth's MOSS w 2 record (0 = no moss)
-dg_nl:          DB   0                 ; budgets: large animated (dg_nl, dg_ng: one word in dg_group)
-dg_ng:          DB   0                 ;          glyph-swap cols
-dg_nw:          DB   0                 ;          wall-class cells
-dg_used:        DB   0                 ; bit s = storey s holds decor (the no-empty-storey rule)
-dg_nlt:         DB   0                 ; the depth's lights: count + record list
-dg_lts:         DS   2, 0
-dg_npl:         DB   0                 ; its plain mount objects: count + record list
-dg_pls:         DS   3, 0
-dg_nlr:         DB   0                 ; placed lights: count + (col, row, w) each (the pools)
-dg_lr:          DS   6, 0
-dg_scs:         DB   0                 ; storey + 1 whose row-3 runs DG_PLAN holds (0 = none)
-DG_ZERO_N       EQU  $ - dg_zero
-dg_base:        DB   0                 ; ---- the loaded record (dg_load) ----
-dg_w:           DB   0
-dg_h:           DB   0
-dg_cls:         DB   0
-dg_fl:          DB   0
-dg_area:        DB   0
-dg_dg:          DB   0
-dg_row:         DB   0
-dg_col:         DB   0
-dg_halo:        DB   0                 ; ring cols beside the footprint (dg_halo, dg_rmask: one word)
-dg_rmask:       DB   0                 ; dg_bad bits the ring refuses (3 all, RB_LAD ladders only)
-dg_cmin:        DB   0
-dg_step:        DB   0                 ; ---- dg_cells / dg_ring ----
-dg_id:          DB   0
-dg_alt:         DB   0
-dg_ph:          DB   0
-dg_cc:          DB   0
-dg_rows:        DB   0
-dg_s:           DB   0                 ; ---- the planner ----
-dg_r3:          DB   0
-dg_nrun:        DB   0
-dg_k:           DB   0
-dg_fmin:        DB   0                 ; dg_fmin, dg_fwall: one word
-dg_fwall:       DB   0
-dg_fmask:       DB   0
-dg_fc:          DB   0                 ; the focal (dg_fc, dg_fw); cobwebs: dg_o0, dg_o1
-dg_fw:          DB   0
-dg_g:           DB   0
-dg_lw:          DB   0
-dg_gn:          DB   0                 ; a group's (or single's candidate) cols
-dg_gc:          DS   3, 0
-dg_t1:          DB   0                 ; temporaries (aliased below)
-dg_t2:          DB   0
-dg_t3:          DB   0
-dg_es:          DB   0
-dg_fd:          DB   0                 ; dg_fcol's d
-dg_fn:          DW   0                 ; dg_fwalk's action
-DG_VARS_LEN     EQU $ - dg_vars
-dg_o0           EQU  dg_fc             ; dg_cobwebs only
-dg_o1           EQU  dg_fw
-dg_nc           EQU  dg_t1
-dg_cg           EQU  dg_t2
-dg_cap          EQU  dg_t3
-dg_ci           EQU  dg_t3             ; dg_centre (after its dg_span)
-dg_win          EQU  dg_t2             ; dg_msw (2 B)
-                ASSERT (dg_nlt >> 8) == ((dg_lts + 1) >> 8) && (dg_npl >> 8) == ((dg_pls + 2) >> 8)
-                ASSERT (dg_nlr >> 8) == ((dg_lr + 5) >> 8) && dg_ng == dg_nl + 1 && dg_rmask == dg_halo + 1
-                ASSERT dg_fwall == dg_fmin + 1 && dg_fw == dg_fc + 1 && dg_t3 == dg_t2 + 1
-                ASSERT dg_nlev - dg_wmax == 6
     ENDIF
 ;------------------------------------------------------------------------------
 ; gen_frame — generate all variants of frame A into the pool; fill FRT[A].

@@ -21,7 +21,7 @@
 
 | Bank | Planned use                       | Status   |
 |------|-----------------------------------|----------|
-| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD8A..$EFBD` (8,756 B: NEW-MON3 T1 handed 3,200 B back to the pool; was 11,958 C+TUT0 / 10,910 C2 / 6,910 C-H / 5,790 C-T8); B0CODE: its used part `B0_CODE2` `b0c2_code..b0c2_end` (1,106 B: `new_game` + NEW-MON3 T1 `nm3_b0.asm`) rides on the text tape block, the rest (7,650 B) is not on tape ("B0CODE" / "NEW-MON3 T1 ledger")**, then the pre-shift sprite pool from **`POOL_START` `$EFBE`** (NEW-MON3 T1; C+TUT0 `$FC3E`; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
+| 0    | **D3-TX: the text block** + b0 cold code (`TEXT_ADDR` `$C000..B0_FREE_START`, own tape block), **C-T8: the reserved carve `B0_FREE_START..B0_FREE_END-1` = `$CD8A..$EFBD` (8,756 B: NEW-MON3 T1 handed 3,200 B back to the pool; was 11,958 C+TUT0 / 10,910 C2 / 6,910 C-H / 5,790 C-T8); B0CODE: its used part `B0_CODE2` `b0c2_code..b0c2_end` (1,106 B: `new_game` + NEW-MON3 T1 `nm3_b0.asm`) rides on the text tape block, the rest (7,650 B) is not on tape ("B0CODE" / "NEW-MON3 T1 ledger")**, then the pre-shift sprite pool from **`POOL_START` `$F7BE`** (DECOR2-SHIP: + `DG2_RES` 2,048, "DECOR2-SHIP ledger"; `$EFBE` NEW-MON3 T1; C+TUT0 `$FC3E`; C2 `$F826`; C-H `$E7F0`; C-T8 `$E390`; C-T6 `$CCF2`; "C-T8 / C-H / C2 ledgers") | PROTO    |
 | 1    | PROTO: sprite sources (virtual $8000-$BFFF), ZX0-packed since A5: 6,947 of 16,384 B (A6); + `vdata` (D3-TX: the text block moved to bank 0; **3E-T1: its boot-only part moved to the bank-6 boot block**); **C3-0: `ui1_code` (3C UI code, via `far1`)** after it; **3E-T1: then the packed overlay streams `ovl_blobs`** (**R6: moved to the R6 region**; bank 1 now ends at `bank1_end`, 1,300 B free) | PROTO |
 | 2    | (also $8000 fixed)                | system   |
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 0 (newgame0.asm, B0CODE; was bank 7 since MEM-SND); **`$F048-$FFFF` AY player slot** (A8; **D3-11: 4,024 B from `$F048`, 4,023 B used, 1 B free; bank-3 cold code +8 B**; **RECLAIM-C (a): 4,032 B from `$F040`, 4,023 B used `$F040..$FFF6`, 9 B free; bank-3 cold code +48 B**; **M0 (L3): 4,080 B from `$F010`, 4,023 B used `$F010..$FFC6`, 57 B free; bank-3 cold code `$C000..$EFC7`, 72 B free**; **MEM-RECLAIM w3: 4,144 B from `$EFD0` (was `$EFA0`), 121 B free**; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
@@ -1120,7 +1120,7 @@ virtual `$8000` (`sprite_src`):
 | Part | Contents | Size (measured) |
 |------|----------|-----------------|
 | ~~raw items + tiles~~ | B3B-13: no longer emitted (nothing at runtime read the `item_*` / `tiles_*` data since B3B-8; the tools read the `.asm` files from disk) | 0 B (was 265) |
-| packed blocks `zblk_0..zblk_31` | per kind (D3-4: the FRM kind argument, not the name prefix — the FX kinds mix prefixes), in `src/frames.asm` FRM (= fid = `gen_kind`) order, 1–4 consecutive frames of ONE kind, raw ≤ `GEN_SCRATCH_LEN` 1,536 B; each one ZX0 v2 standard forward stream. Partition per kind = fewest packed bytes (DP over 1..4-frame splits) | 101 frames, raw 20,480 → **8,908 B (2.30×)** (D3-4: +4 Knight + 23 FX frames, +1,322 B; C3-7: 74 / 7,586; was 68 / 6,682) |
+| packed blocks `zblk_0..zblk_31` | per kind (D3-4: the FRM kind argument, not the name prefix — the FX kinds mix prefixes), in `src/frames.asm` FRM (= fid = `gen_kind`) order, 1–4 (**DECOR2-SHIP: 1–8, `MAX_FRAMES` 8: 14,500 -> 13,774 B packed**) consecutive frames of ONE kind, raw ≤ `GEN_SCRATCH_LEN` 1,536 B; each one ZX0 v2 standard forward stream. Partition per kind = fewest packed bytes (DP over 1..4-frame splits) | 101 frames, raw 20,480 → **8,908 B (2.30×)** (D3-4: +4 Knight + 23 FX frames, +1,322 B; C3-7: 74 / 7,586; was 68 / 6,682) |
 | per-frame EQUs (A6: no bytes) | `nm EQU zblk_N` (its block = `FD_BLK`), `nm_zoff EQU` raw offset in the block (`FD_FRM` = `GEN_SCRATCH + nm_zoff`); plus `nm_w/h/cols/ax/ay` and `nm_len` = raw pixel bytes (cols·H·2, no ATTR byte). Folded into the bank-5 `fdesc_tab` by the FRM list (A5 had 4-B banked descriptors here) | 0 B |
 
 Build-time metadata per block (EQUs, in the `.sym`): `zblk_N_raw`,
@@ -1427,13 +1427,15 @@ dir), +8 POT (hero potions), +9 PX, +10 PY, +11 MODE, +12/13 SEQ ptr, +14 TMR,
 | Address | Symbol | Size | Contents |
 |---------|--------|------|----------|
 | `$6000` | `ROOM_MAP` | 672 | current room tile ids, 32 × `PLAY_ROWS` (B3B-3: rows 0–17 = 576 B used, `PLAY_CELLS`; 672-B buffer = `MAP_BUF_LEN`, page-aligned) |
+| `$62A0..$62FF` | `DG_VARS` | 96 | **DECOR2-SHIP:** the gap after `ROOM_MAP`'s buffer = the decor deriver's state (`decor_gen.asm` STRUCT `DGV`, 80 B used, IY-based); live only inside one `decor_b0` call (garbage between calls is fine: W13 / the scratch sweep poke random bytes there), part of `GEN_SCRATCH` (overlays / the generator / the page may overwrite it when no decor runs) |
 | `$6300` | `NEXT_MAP` | 672 | destination room during a transition |
+| `$65A0..$65BB` | `DG_MLIST` | 28 | **DECOR2-SHIP:** the gap after `NEXT_MAP`'s buffer (after `LP_CMAP`) = `dg_moss`' fitting-col list (<= 27 B), same lifetime rules as `DG_VARS` |
 | `$6600` | `TILE_GLYPHS` | 512 | 8×8 tile glyphs, **64 ids** (A6), glyph = base + id·8; **512-aligned** so `tile_rect` forms it as `E = id·8`, `D = (base>>9) RL CF` (+8 T per cell vs 32 ids) |
 | `$6800` | `BITREV_TAB` | 256 | bit-reverse table (built at boot; read by gen_frame's mirroring and, since RECLAIM-D, R6 `rev8` (the icon MIRROR column); page-aligned; permanent) |
 | `$6900` | `TILE_ATTRS` | 64 | attr by tile id (one page: `ld h, TILE_ATTRS>>8`) |
 | `$6940` | `GEN_SRC` | 512 | **3F-T2: the generator session's scratch (R6 `pool_hero` / `pool_proto` / `pool_list` → `gen_list` / the seq loader; dead before `panel_init`): `PL_LIST` `$6940` (≤ 25 B: pairs fid0, fcnt, `$FF` end), `SQ_PTR` `$6963` (9 words), `SQ_TOP` `$6975`, `PL_PROTO` `$6977` (6 B), `SQ_IMG` `$6000` (= `GEN_SCRATCH`, the unpacked sequence masters, 977 B raw to `$63D0`; NEW-MON3 T8) — over `FI_PAD` / `FI_TSLOT` / `FI_CELL` (SQ_IMG ends at `$6B34`, below `FI_INK` `$6C00` and `GEN_MIR`; it does not run over `FI_INK`), rebuilt by `fi_full` at the following room build as after any generator run.** 3F-T1: `PL_LIST` (12 B at `$6940`, R6 `pool_list` → `level_enter`, dead before `panel_init`). B3B-11b: `pblit` (one icon, <= 54 B) stages `vdata` here (3E-T1: `panel_boot`'s font halves no more: boot6_tiles reads the boot block in place) — new game only, never during generation. C3-6: the pause overlay saves rows 7-9 here (`PAUSE_SAVE`, 864 B: it runs on into `GEN_MIR`) while paused; **RECLAIM-C (d): `MENU_TORCH_BUF` `$6940` (48 B) — `menu_static` (title menu only: no room, pause, page or generator meanwhile) fetches the torch's static cells here from bank 7 (`ldir7`)** |
 | `$6B40` | `GEN_MIR` | 512 | generator: mirrored frame (`LOWRAM_END` = `LOWRAM_FREE_END` `$6D40`). D3-TX: its top 43 B `$6D15..$6D3F` = `TX_DEC` (`tx_dec`'s transient decode buffer, menu text) |
-| `$6D40..$6EBF` | `LVL_STATE` | 384 | **LARGER-D T2 (2026-11-15): reordered + sized for 12 rooms** (`ROOM_SLOTS` 12; **T4: `GRID_CELLS` 12, `EDGES_H` 8, `LVL_KEYROOM2` `$6EAE`**): `ROOM_DESC` `$6D40..$6DFF` (12 × 16, page `$6D` alone: `ld h, ROOM_DESC >> 8`, L = `$40 + 16 r` ≤ `$F0`), `FLOOR_LIST` `$6E00..$6E7F` (unchanged), header `LVL_HDR` `$6E80..$6E8F` (same internal offsets), `EDGE_TAB` `$6E90..$6E97` (`EDGE_SLOTS` 8, `EDGES_H` 6 used), `TRK_PHASE` `$6E98`, `TRK_PREV` `$6E99`, `TOME_HP` `$6E9A`, `TOME_FL` `$6E9B`, `DN_QN` `$6E9C`, `TRAP_LIST` `$6E9D..$6EAC` (`TRAP_MAX` 8 × 2) + `TRAP_N` `$6EAD` (kept right after the list: `tools/items_model.py` reads `TRAP_LIST..TRAP_N` as one range; the task table's `TRAP_N $6E9D` / list `$6EA0` swapped for that), **`LVL_KEYROOM2` `$6EAE` (LARGER-D T4: the colour-1 / magenta key room, `ROOM_NONE` = none)**, `$6EAF` spare, **`DG_PLAN` `$6EB0..$6EBF`** (16 B, DECOR2's per-build plan, reserved; replaces the `$6DF0` claim). Header `$6E80..` through `DG_PLAN` is one page (tome6 / sanct7 reach `EDGE_TAB` / `TOME_HP` with L only). Slots 9..11 are kept 0 by `attempt` / `tut_start` / `proto_level`. Before: `$6D40..$6E7F`, 320 B (header 16, `EDGE_TAB` 6 + per-level bytes `$6D56..$6D5A`, `ROOM_DESC` `$6D60` 9 × 16, `TRAP_LIST` `$6DF0` 6 × 2 + `TRAP_N` `$6DFC`, `FLOOR_LIST`). Byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
+| `$6D40..$6EBF` | `LVL_STATE` | 384 | **LARGER-D T2 (2026-11-15): reordered + sized for 12 rooms** (`ROOM_SLOTS` 12; **T4: `GRID_CELLS` 12, `EDGES_H` 8, `LVL_KEYROOM2` `$6EAE`**): `ROOM_DESC` `$6D40..$6DFF` (12 × 16, page `$6D` alone: `ld h, ROOM_DESC >> 8`, L = `$40 + 16 r` ≤ `$F0`), `FLOOR_LIST` `$6E00..$6E7F` (unchanged), header `LVL_HDR` `$6E80..$6E8F` (same internal offsets), `EDGE_TAB` `$6E90..$6E97` (`EDGE_SLOTS` 8, `EDGES_H` 6 used), `TRK_PHASE` `$6E98`, `TRK_PREV` `$6E99`, `TOME_HP` `$6E9A`, `TOME_FL` `$6E9B`, `DN_QN` `$6E9C`, `TRAP_LIST` `$6E9D..$6EAC` (`TRAP_MAX` 8 × 2) + `TRAP_N` `$6EAD` (kept right after the list: `tools/items_model.py` reads `TRAP_LIST..TRAP_N` as one range; the task table's `TRAP_N $6E9D` / list `$6EA0` swapped for that), **`LVL_KEYROOM2` `$6EAE` (LARGER-D T4: the colour-1 / magenta key room, `ROOM_NONE` = none)**, `$6EAF` spare, **`DG_PLAN` `$6EB0..$6EBF`** (16 B; spare since DECOR2-SHIP, whose run lists live in the `NEXT_MAP` gap; was DECOR2's per-build plan, replacing the `$6DF0` claim). Header `$6E80..` through `DG_PLAN` is one page (tome6 / sanct7 reach `EDGE_TAB` / `TOME_HP` with L only). Slots 9..11 are kept 0 by `attempt` / `tut_start` / `proto_level`. Before: `$6D40..$6E7F`, 320 B (header 16, `EDGE_TAB` 6 + per-level bytes `$6D56..$6D5A`, `ROOM_DESC` `$6D60` 9 × 16, `TRAP_LIST` `$6DF0` 6 × 2 + `TRAP_N` `$6DFC`, `FLOOR_LIST`). Byte layout under "3B contracts" / "3E contracts". Runtime only (not on tape). Written by `level_gen` (B3B-7) or, for the PROTO rooms A–D, by `proto_level` (B3B-8, from `new_game`) |
 | `$6EC0..$6EFF` | `ORN_GLYPHS` | 64 | **LARGER-D T2: `$6EC0` (= `LVL_STATE_END`; was `$6E80`).** B3B-1: row-17 ornament glyphs (8 × 8 B, game.md §3.3: not tile ids, same on every level). Here, not in bank 3, because `orn_cells` (also called from the scrolls) reads it with any bank paged. Filled at boot by `init_tiles` (bank 3, from `panel_orn.asm`). (B3B-1: `LOWRAM_END_3B` was `$6EC0`; now `LP_END`) |
 | `$6F00..$6FC6` | `LP_STATE` | **LARGER-D T2: 199 B, one page `$6F` (12 rooms: `TRK_W` 12 B +19..+30, `ROOM_VISITS` +31, `LP_REC` +43, `LP_POS` +151; was `$6EC0..$6F59`, 154)**; **154 (ROOM-MEM2: + 36 B `LP_POS` `$6F36..$6F59`; was 118 / `$6F35`)**; 118 (NEW-MON3 T3: was 114 / `$6F31`: `LP_KINDS` 4 -> 8 B, every later field +4; the text below keeps the pre-T3 numbers) | **LP (game.md §9.4, plan task LP)**: the lazy-population level budget + `ROOM_VISITS` + 9 room records (102 B persistent + 12 B `lp_enter` scratch) — byte layout under "LP contracts". Runtime only. Written by `lp_budget` (level entry) / `lp_bank` / `lp_enter` (room changes). `LOWRAM_END_3B` = `LP_END` (**`$6FC7`**, LARGER-D T2; was `$6F5A`): the test stubs moved up with it |
 | `$6FC7..$714D` (release; kit +2) | free | **391 release** (`LOWRAM_SPARE`) | **LARGER-D T5: −344 (`rsp0.asm` `rsp_run` / `rsp_w` 290 B + `lgkeyl.asm` `kins` / `kload` 52 B, both from B0_CODE2; the cold block now starts at `$714E`)**; LARGER-D T2: −109 (LVL_STATE +64, LP +45; was 846 kit)**. Older: **3F-T2: 135 B kept for descriptor growth (`FRT_MAX` 128 − 101 frames), 43 spare kit** (review: +7 B `SEQ_TRAP` path in `sq_load`; 50 before); before: `$6F32..$71A5`, 628, of which 295 B (D3-4, 101 frames) are kept for descriptor growth (below); **3F-T1: 29 spare kit** (−48: the level-pool block in `level_enter`, `gen_idles`; the cold block now starts at `$7076`; "Level pool (3F-T1)"); **SRC6 spike: 85 spare kit / 95 release** (+8 `zx0_frame`'s SRC6 range); **3E-T12: 93 spare kit / 103 release** (+44: `ovl_fx` / `ovl_fx_saved` deleted; after 3E-T8: 49 / 59); **3E-T6: 119 spare** (−205: `it_tab`, `item_glyph` / `item_ink`, `fl_attr`, see "3E contracts" ledger); **3E-T2: 333 spare** (−43 `page_run`); 3E-T1: 376 spare (was 118 at main `9c99ad1`: the boot code / ISR image / key table → the boot block, the table-driven tape loader, + `ovl_run` 30 B; ledger under "Boot block"); 259 spare (`LOWRAM_SPARE` DISPLAY; **D3-8b −5: `vis_room_sync` ends `ld hl, drip_room` / `jp far7`**; was 264; **D3-S2 −89 (from the measured 353): `clear_screen` / `print_char` / `print_str` moved here from bank 2**; **L2 engine −28: `pit_range` + `pit_w` reading `L2_PITW`, `jump_pit` on `pit_range`**; before: 400, measured after merging D3-4 + J1: **D3-4 −8 (`start_game` generates the class FX kind) + 101 frame descriptors; J1 −145: `try_jump` / `jump_pit`**; earlier history as before: LP −114 `LP_STATE`; D3-TX −55; B12 −21; C3-2 −1; B14 −175) |
@@ -7562,8 +7564,9 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
 
 ## DECOR2 ledger (`feat/decor2`, 2026-11-17; decor_rules2.md P1 + P2, model `tools/decorgen2.py` at `82f0a93`)
 
-**Status: a `-DDECOR2=1` TEST build. The shipped build (`DECOR2` 0, default) assembles the old deriver unchanged
-(`src/decor_gen1.asm` = the former `decor_gen.asm`, `dg_bad0.asm`, the old `dg_vars`): memory decision pending.**
+**Status: superseded by "DECOR2-SHIP ledger" below (DECOR2 is the default build since then). This entry records the
+port as it landed on `feat/decor2`: a `-DDECOR2=1` TEST build next to the old deriver (`src/decor_gen1.asm` = the former
+`decor_gen.asm`, `dg_bad0.asm`, the old `dg_vars`; still the `-DDECOR2=0` escape hatch).**
 - **Code.** `src/decor_gen.asm` = the DECOR2 deriver (planner + executor, entry `decor_b0`, same contract: FARB0 from the
   bank-3 `decor_room` stub, A = `dg_dst`, IX = descriptor). Exact port of `decorgen2.decorate` (same RNG stream): world.py
   W13 on the DECOR2 build = ROOM_MAP + ANIM_LIST + the NEXT_MAP builds byte-identical on its 131 rooms and the 86 synthetic
@@ -7590,3 +7593,51 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
   decorgen. world.py W13's independent checker accepts the DECOR2 rules in a DECOR2 build (moss strips, cobweb cap 3, a pool
   touching its light, the patch best-effort: the model leaves 1 of the sweep's 7,899 rooms without one); its synthetic maps
   use the build's model.
+
+## DECOR2-SHIP ledger (`feat/decor2-ship`, 2026-11-17; on `feat/decor2` 019d793; DECOR2 = the default build)
+
+**Memory (release `DEBUG_KIT=0`; kit identical except low RAM +2).** DECOR2 costs **+2,630 B of `B0_CODE2`** over the B3B-9
+deriver (deriver + tables 3,876 B, was 4,017 as ported; 22 B of cold helpers moved to low RAM). No bank had that free
+(B0 31, bank 1 3, bank 3 22 (4 after FLY-CUT), R6 3, bank 7 8, SRC6 19; the D0 blob region is the pool from D1): it is paid by
+- **a sprite-source repack:** `tools/zx0_sources.py` `MAX_FRAMES` 4 -> **8** (blocks of up to 8 frames of one kind, raw still
+  <= `GEN_SCRATCH_LEN`, asserted; game.md §11's "3-4 frames" was the A5 format choice): packed sources 14,500 -> **13,774 B**
+  (bank 1 -522 incl. the move below, SRC6 3,565 -> 3,519 (pages unchanged), SRC0 -38); **`U_WRAITH` + `G_DUST` back to bank 1**
+  (`SRC0_KINDS` = Gargoyle + Fire Imp): **SRC0 1,879 -> 1,312 B** (B0 +567), bank-1 free 3 -> **116**;
+- **the pool carve:** `defs.asm` `DG2_RES` **2,064** raises `POOL_START` `$EFBE` -> **`$F7CE`** (POOL_CAP 22,594 -> 20,530):
+  **D8 Warrior slack 2,320 -> 176 B** (measured cliff: `DG2_RES` <= 1,680 keeps 624, 1,696..2,080 gives 176, >= 2,088 does not
+  fit; ASSERT `DG2_RES <= 2080`); D0 pool top `$D460` -> `$DC80` (641 B below `BLOB_ORG`, margin 64 inside).
+- **state out of low RAM:** the deriver's state is the STRUCT `DGV` (80 B, IY-based) in the gap after `ROOM_MAP`'s buffer
+  (`DG_VARS` `$62A0..$62FF`); the run lists (`DG_SLOT0` / `DG_SLOT1`, 17 B each), the moss candidates (`DG_MLIST`, 28 B) and
+  the face list (`DG_FCS`, 16 B) in the gap after `NEXT_MAP`'s buffer (`$65A0..$65F1`): live only inside `decor_b0`, garbage
+  between calls (the scratch sweep pokes random bytes into `DG_VARS` before every room: 0 mismatches). `DG_PLAN` `$6EB0` is spare.
+
+| Region | before (`main` / FLY-CUT) | after | why |
+|---|---|---|---|
+| `B0_CODE2` used / free | 8,329 / 31 (FLY-CUT: 12) | **10,392 / 32** (FLY-CUT: 13) | +2,630 deriver, -567 SRC0 |
+| `POOL_START`, D8 Warrior slack | `$EFBE`, 2,320 | **`$F7CE`, 176** | `DG2_RES` 2,064 |
+| bank 1 free | 3 | **116** | repack |
+| low RAM spare | 66 (FLY-CUT: 62) | **74** (FLY-CUT: 70, stub window >= 61) | -30 old `dg_vars`, +22 `dg_iskey` / `dg_rid` |
+| bank 3 / R6 / bank 7 / SRC6 pages | | unchanged | |
+
+**Legacy selector (bug fix).** The port kept the B3B-9 algorithm for "LVL_KEYROOM = ROOM_NONE" levels, but D0 has a key room
+since TUT-KEY: the D0 rooms got DECOR2 decor over the mentor's cells (tut0 C2 / S1 / golden fails). The selector is now
+**`LVL_NROOMS < ROOMS_MIN`** (D0 = 3 rooms; PROTO rooms carry no seed), in `decor_gen.asm` and `tests/room_model.py`.
+
+**Time (`decor_b0`).** Exact equivalence with `decorgen2.decorate` kept (no model change). Measured with a Z80 simulator over
+5,400 rooms of 64 levels D1..D8 (0 mismatches; 713 D0-style rooms through the legacy path: 0) and ZEsarUX on the slowest
+(real = sim x 1.028): **mean ~81.5k T, worst 131.8k T** (port: 99.9k / 161.9k; B3B-9: 74.1k / 104.6k; gate 135k). How:
+- a try whose object is over a budget (`dg_bud`, split out of `dg_chk`) cannot place anywhere, so the fill / random-patch
+  tries and the anchored walk skip their map work and only step the RNG for their remaining draws (`dg_xs`, the values are
+  unused): the "8-try fallback" after the wall budget is spent was most of the worst rooms;
+- moss: one sweep that lists the fitting cols (`DG_MLIST`) instead of a count sweep + a pick sweep;
+- one row-3 scan a storey a room (two slots), a face list from the count pass for the walks / picks;
+- `T_AIR` fast paths in the ring and the scan, row skips instead of push / `dg_nr` in the ring and the footprint, plain
+  objects write their ids without the per-cell ANIM path, `dg_rnd` with the xorshift inlined and a power-of-two `and`.
+- **Not a frame tick:** the build runs inside `do_exit` before the scroll (and at level start), the game frozen: splitting it
+  over frames would only add the frame waits; the 135k gate is the transition delay (~1.9 frames).
+
+- **Tests.** `tests/room_model.py`: the D0 selector above. `tests/zx0_pool.py`: `LEVEL_NEED` re-pinned (the straddle moved with
+  `POOL_START`: +16 every level, D8 Warrior +80, D8 Mage +112; frames unchanged), its `src6` variant also carries `G_DUST` in SRC6
+  (its bank 1 was 6 B over). Goldens: none changed (every golden room is a PROTO room, seed 0; D0 keeps its decor). Gate on the
+  release build: world W13 + W14, tut0, tut0_level, lock8, d8_stress, sanctum, roommem, drip, trap_cells, budget, zx0_pool,
+  gfx_integrity, zx0_roundtrip, tut0_adv_par: 0 failures. W13 profile (10 rooms) 73.0k..101.9k T (port 80.5k..119.7k).

@@ -693,7 +693,7 @@ def emit_asm():
            "; levels: LVL_KEYROOM = ROOM_NONE, tools/decorgen.py); then per depth menu2 minus CHAIN (MOSS = w 2, w 3)",
            f"DG_LEG_FIRST    EQU {LEG_FIRST}",
            f"DG_LEG_N        EQU {LEG_N}",
-           "dg_dtab:        ; per depth (DG_DTAB B, = the dg_vars order dg_wmax .. dg_nlev): wall budget + 1,",
+           "dg_dtab:        ; per depth (DG_DTAB B, = the DGV order dg_wmax .. dg_nlev): wall budget + 1,",
            ";                 PATCH_A/B records (0 = composite), pair light record (| $80 floor class),",
            ";                 cobweb left / right id (0 = none), first record, record count"]
     for d in range(1, 9):
@@ -716,7 +716,11 @@ def emit_asm():
             tag = "D%d" % next(d for d in range(1, 9) if FIRST2[d] <= i < FIRST2[d + 1])
         nm = name + (str(w) if name == "MOSS" and i >= LEG_N else "")
         out.append(f"                DEFB {base:3d}, {w + h * 4 + cls * 32:3d}, ${fl:02X}      ; {i:2d} {tag} {nm}")
-    out.append(f"DG_NREC         EQU {len(RECORDS2)}")
+    n = len(RECORDS2)                         # DECOR2-SHIP: a Z80-only probe record after the model's (dg_cobwebs runs
+    out.append(f"                DEFB   0,  {1 + 1 * 4 + C_CEIL * 32:2d}, $00      ; {n} the cobweb probe (1x1 ceiling class, "
+               "no flags: dg_cobwebs' dg_chk)")   # its candidates through dg_chk = floorish + DG.fits)
+    out.append(f"DG_REC_COB      EQU {n}")
+    out.append(f"DG_NREC         EQU {n + 1}")
     return "\n".join(out)
 
 
