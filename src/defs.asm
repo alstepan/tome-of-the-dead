@@ -443,6 +443,8 @@ ROOM_CUT        EQU $BA7A           ; AI-SEEK2: the room's walker cut col K (gam
                                     ;   else L2_MIDB b - 1, else $FF = none): seg0(x) = x > K
 PL_SEG          EQU $BA7B           ; AI-SEEK2: the hero's target segment, pl_seg3: $00 / $01 = storey-0 left / right
                                     ;   half, $80 = storey 1 (a mid-climb on an internal ladder = the end he is heading to)
+FLY_CUT         EQU $BA7C           ; FLY-CUT: the room's FLYER cut col = the L2 mid-block's b - 1 (= ROOM_CUT there), $FF = none
+                                    ;   (pits do not cut flyers); build_room_map, read by lowram fly_cut
 BLIT_CROWS      EQU $BA79           ; aligned blit: char rows left
 SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BA9F)
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)

@@ -552,6 +552,7 @@ build_room_map:
                 ld   a, (ix+L2_MIDB)           ; AI-SEEK2 ROOM_CUT = K (ai_seek2.md §2.1): the pit col p (below),
                 dec  a                         ; else the mid-block's b - 1 ($FF = none: b = 0). One cut per room
                 ld   (ROOM_CUT), a             ; (L2 is one feature; a wide pit has no block)
+                ld   (FLY_CUT), a              ; FLY-CUT: the flyers' cut is the block alone (the pit below keeps it)
                 ld   a, (ix+RD_PITCOL)
                 or   a
                 call nz, .pit

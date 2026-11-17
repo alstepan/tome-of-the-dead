@@ -7559,3 +7559,18 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
   first, `first_lines` B14 order, C27 + the digit operand, C28 label, `dec()` skips the mark, `TUT0_SCEN=name,...` runs a subset.
   tests/tut0_level.py: 6 floor entries. PNGs: `build/tut_key_floor.png`, `tut_key_locked.png`, `tut_key_unlocked.png`,
   `tut_last_line.png`.
+
+## FLY-CUT ledger (`feat/fly-cut`, 2026-11-17; roadmap 2b, game.md §9.2 "FLY-CUT"; `tests/fly_cut.py`)
+
+Release build (`-DDEBUG_KIT=0`), delta vs main a5683c4:
+
+| Region | Before -> after (free) | What |
+|---|---|---|
+| HOT_COPY | spare 23 -> 0 (521 -> 544 B) | `panel_hot.asm` `fly_cut` head (23 B: the `FLY_CUT` $FF fast path + the flyer's segment M in D; uncontended, every flyer turn) -> `jp fly_cut2`. The boot block grows down by 23 B (`boot6_code` `$C040` -> `$C029`, still >= `$C000`) |
+| Low-RAM cold block | spare 66 -> 62 | + `src/flyl.asm` `fly_cut2` (30 B, INCLUDEd after `lockl.asm`: the PL_SEG tests, far7 `seek_col`, the shaft dy, `call dx_to_a` back into bank 3 (paged: only ai_flyer calls it)); mostly paid by **`kload` (19 B) moved to bank-0 `lgkey0.asm`** (its only caller is `ksel`; `kins` stays in `lgkeyl.asm`) and 6 `jp` -> `jr` in `lowram.asm` (lines `.l` of the follower loop, `set_screen`, `gen_facing`, 3 × `gen_variant`; -6 B). **The spare is the tests' stub window** (`LOWRAM_END_3B .. lowram_code`): `tests/world.py` runs a 61-B stub there, so it must stay >= 61 B |
+| B0_CODE2 | free 31 -> 12 | `kload` |
+| Bank 3 | free 22 -> 4 (`-DANIM_TRACE_ON=1` build: 18 -> **0**) | `bank3.asm` `build_room_map` `ld (FLY_CUT), a` (+3); `turn3.asm` `ai_flyer` hook (+10: `call fly_cut` / `jr c` / `jp z, step_dy` / `jr .dy`; `dx_to_a` = a new entry label inside `dx_to_player`, 0 B) and the `.dy` band rule (y < 9s -> straight down, +5) |
+| Bank 2 RAM | `$BA7C` (was unused; `$BA7C..$BA7F` lie between `PL_SEG` and `SEL_FRT_SAVE`) | **`FLY_CUT` `$BA7C`**: the L2 mid-block's b − 1 (= `ROOM_CUT` in such a room), `$FF` = none (pit / plain rooms); written by `build_room_map`, read by `fly_cut`. `$BA7D..$BA7F` stay free |
+| Bank 7, R6, bank 2 code | unchanged | `seek_col` reused as is (D = M, `ai_monster`'s encoding) |
+
+- **Cost:** a flyer turn outside a mid-block room +~60 T (call + the `FLY_CUT` test, uncontended); with a detour ~0.9k T (`seek_col` + far7).
