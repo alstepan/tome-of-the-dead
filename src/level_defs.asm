@@ -387,14 +387,16 @@ LPC_MRG_BIT     EQU 3               ; (f-1, f+3; the footprint f..f+2 is LPC_BAD
 RESPAWN_MAX     EQU 6               ; §9.5 trickle cap per level (3F)
 ; 3F-T12 respawn trickle (game.md §9.5, R6 trickle6.asm; tools/respawn_model.py)
 RESPAWN_PERIOD  EQU 48              ; a check every 48 turns of the level (TRK_PHASE)
-RESPAWN_CHANCE  EQU 96              ; of 256: draw 1 < this -> a spawn try
+RESPAWN_CHANCE  EQU 32              ; of 256: draw 1 < this -> a spawn try (BALANCE-PKG4: 96 -> 32 = the trickle at 1/3 rate; was 96 at 48 turns)
 RESPAWN_ITEM_W  EQU 2               ; room weight = min(RESPAWN_ITEM_CAP, 1 + 2 x un-picked floor items)
 RESPAWN_ITEM_CAP EQU 7
-TRK_PHASE       EQU EDGE_TAB + EDGE_SLOTS   ; $6E98: bits 0-6 turns since the last check 0..47, bit 7 TRK_DUE (EDGE_TAB spare; level_gen's
+TRK_PHASE       EQU EDGE_TAB + EDGE_SLOTS   ; $6E98: bits 0-5 turns since the last check 0..47, bit 6 TRK_TIME (time check due), bit 7 TRK_DUE (progress event due) (EDGE_TAB spare; level_gen's
                                     ; attempt zeroes EDGE_TAB..LVL_STATE_END: reset on level entry)   (test-observable)
 TRK_DUE         EQU %10000000       ; TRK_PHASE bit 7: end_turn counted the 48th turn, turn_input runs trk_run
 TRK_DUE_BIT     EQU 7
-TRK_CNT_MASK    EQU %01111111
+TRK_CNT_MASK    EQU %00111111
+TRK_TIME        EQU %01000000       ; TRK_PHASE bit 6: end_turn counted the 48th turn, turn_input runs trk_run (BALANCE-PKG4)
+TRK_TIME_BIT    EQU 6
 TRK_PREV        EQU TRK_PHASE + 1   ; $6E99: prev_room = the room the hero left last (do_exit .in; 0 at level
                                     ; entry is harmless: only CUR_ROOM is VISITED until the first exit) (test-observable)
 TOME_HP         EQU TRK_PHASE + 2   ; $6E9A: P3 (game.md §1.3) the Tome's hp, 1 B (EDGE_TAB spare: level_gen's attempt

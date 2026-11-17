@@ -370,12 +370,15 @@ ig_seed:        ld   b, a
 ; (k = 0: ig_gp[rnd(len)]), qty 1, place in the pool, append (or drop).
 ; Keeps IX. Clobbers A, BC, DE, HL.
 ig_grp:         ld   a, (ix+0)
-                and  $7F
+                and  $3F
                 ld   b, a
                 bit  7, (ix+0)                 ; LARGER-D T6: bit 7 = fixed count (scrolls 2, no roll)
                 jr   nz, .l
-                ld   a, 2
-                call rnd
+                ld   a, 2                      ; BALANCE-PKG4: bit 6 = span 3 (food 3-5), else rnd(2)
+                bit  6, (ix+0)
+                jr   z, .sp
+                inc  a
+.sp:            call rnd
                 add  a, b
                 ld   b, a
 .l:             push bc
@@ -750,10 +753,10 @@ ig_trap_ok:     call ig_desc
                 ASSERT PIT_W_NARROW == 3
 
 ; --- data ---------------------------------------------------------------------
-; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2)), type_lo, k (0 = the gear
+; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2); bit 6: rnd(3); bit 7: fixed), type_lo, k (0 = the gear
 ; pool), DW the pool-pointer variable
-ig_grps:        DB   4, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
-                DW   ig_nsp                    ; food 4-5 (LARGER-D T6; FLOOR1: the D8 lair allowed)
+ig_grps:        DB   $40 | 3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1
+                DW   ig_nsp                    ; food 3-5 (BALANCE-PKG4: was 4-5, LARGER-D T6; FLOOR1: the D8 lair allowed)
                 DB   $80 | 2, IT_SCR_LO, IT_SCR_HI - IT_SCR_LO + 1
                 DW   ig_nsp                    ; scrolls exactly 2 (LARGER-D T6; lair allowed)
                 DB   1, 0, 0

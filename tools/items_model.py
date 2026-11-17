@@ -95,7 +95,7 @@ ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
 
 POT_BY_ROLL = (T["IT_P_HEAL"], T["IT_P_MANA"], T["IT_P_CURE"])    # Q_POTION_TYPE
 POTION_COUNT_MIN = G.POTIONS_MIN             # 8.5 / levelgen (LARGER-D: 3..4 entries, from GEN_RNG)
-FOOD_N_MIN, FOOD_N_SPAN = 4, 2              # LARGER-D T6: food 4-5
+FOOD_N_MIN, FOOD_N_SPAN = 3, 3              # BALANCE-PKG4: food 3-5 (LARGER-D T6: 4-5)
 SCROLL_N = 2                                # LARGER-D T6: scrolls exactly 2 (no roll)
 GEAR_N_MIN, GEAR_N_SPAN = 1, 2              # 8.5 gear 1-2
 BOOK2_DEPTHS = range(4, 8)                  # 8.5 / 5: 2nd book 1 in 2 on D4-D7
@@ -871,9 +871,9 @@ NECRO_MANA = 1 / 3                              # Necromancer mana drop
 
 
 def ld_statics(rng, depth, hero):
-    """Entries the generator appends on a LARGER-D level (sec 3 counts), excl. boss unique: potions 3-4, food 4-5, scrolls 2,
+    """Entries the generator appends on a LARGER-D level (sec 3 counts), excl. boss unique: potions 3-4, food 3-5, scrolls 2,
     gear 1-2, books 1 (+1 half the time D4-D7), Warrior D1-D7 dagger + arrow stacks (+ bow + bundle on D2)."""
-    n = rng.randint(3, 4) + rng.randint(4, 5) + 2 + rng.randint(1, 2)
+    n = rng.randint(3, 4) + rng.randint(3, 5) + 2 + rng.randint(1, 2)
     if depth in BOOK_DEPTHS:
         n += 1 + (depth in BOOK2_DEPTHS and rng.random() < 0.5)
     if hero == HERO_WARRIOR and depth in AMMO_DEPTHS:

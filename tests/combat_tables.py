@@ -52,7 +52,7 @@ KINDS = {
     1: ("Wizard", {}, 0, 0),
     3: ("Skeleton", {"COLD": "R", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
     4: ("Goblin", {}, 0, 3),
-    5: ("Ghost", {"PHYS": "R", "COLD": "R", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
+    5: ("Ghost", {"PHYS": "R", "COLD": "R", "SHOCK": "R", "DRAIN": "I", "DARK": "I"}, SLEEP | POISON, 6),
     6: ("Rat", {}, 0, 2),
     7: ("Bat", {"SHOCK": "W"}, 0, 2),
     8: ("Slime", {"PHYS": "R", "FIRE": "W"}, SLEEP | CONFUSE | FEAR, 3),
@@ -67,15 +67,15 @@ UNDEAD = SLEEP | POISON
 SK_RES = {"COLD": "R", "DRAIN": "I", "DARK": "I"}
 KINDS.update({
     9: ("Spider", {}, 0, 4),
-    10: ("Vampire", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
-    2: ("Vampire bat form", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),   # 3F-T9 K_VBAT: the Vampire's row, PHYS bite
+    10: ("Vampire", {"COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    2: ("Vampire bat form", {"COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),   # 3F-T9 K_VBAT: the Vampire's row, PHYS bite
     11: ("Orc", {"FIRE": "R"}, 0, 9),
     12: ("Skeleton Archer", SK_RES, UNDEAD, 7),
     13: ("Mummy", {"FIRE": "W", "COLD": "I", "DRAIN": "I", "DARK": "I"}, UNDEAD, 12),
-    14: ("Necromancer", {"COLD": "R", "DARK": "I"}, 0, 10),
+    14: ("Necromancer", {"DARK": "I"}, 0, 10),
     15: ("Ogre Warlord", {"COLD": "R", "SHOCK": "W"}, BOSS, 60),
     16: ("Death Knight", {"FIRE": "X", "COLD": "I", "SHOCK": "W", "DRAIN": "I", "DARK": "I"}, BOSS, 90),
-    17: ("Archmage", {"COLD": "X", "SHOCK": "X", "DRAIN": "I", "DARK": "R"}, BOSS, 0),
+    17: ("Archmage", {"COLD": "X", "SHOCK": "R", "DRAIN": "I", "DARK": "R"}, BOSS, 0),
     18: ("Giant Rat", {}, 0, 3),
     19: ("Rabbit Rat", {}, 0, 4),
     20: ("Screech Bat", {"SHOCK": "W"}, 0, 3),
@@ -83,13 +83,13 @@ KINDS.update({
     22: ("Black Widow", {}, 0, 6),
     23: ("Skeleton Guard", SK_RES, UNDEAD, 9),
     24: ("Skeleton Knight", SK_RES, UNDEAD, 12),
-    25: ("Poltergeist", {"PHYS": "R", "COLD": "R", "SHOCK": "X", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
+    25: ("Poltergeist", {"PHYS": "R", "COLD": "R", "SHOCK": "R", "DRAIN": "I", "DARK": "I"}, UNDEAD, 9),
     26: ("Orc Berserker", {"FIRE": "R"}, FEAR, 13),          # FEAR-immune extra (§9.6)
     27: ("Orc Bouncer", {"FIRE": "R"}, 0, 18),
     28: ("Skeleton Sniper", SK_RES, UNDEAD, 10),
-    29: ("Bone Caller", {"COLD": "R", "DARK": "I"}, 0, 15),
+    29: ("Bone Caller", {"DARK": "I"}, 0, 15),
     # NEW-MON3 T8 (new_monsters.md §4): 30 Gargoyle, 31 = the alias as assembled = the Fire Imp (variant A)
-    30: ("Gargoyle", {"PHYS": "R", "COLD": "R", "DRAIN": "I"}, SLEEP | FEAR | POISON, 8),
+    30: ("Gargoyle", {"PHYS": "R", "FIRE": "R", "DRAIN": "I"}, SLEEP | FEAR | POISON, 8),
     31: ("Fire Imp", {"FIRE": "I", "COLD": "W"}, 0, 6),
 })
 # monster DEF (KX_DEF): the §9.1 / §9.6 DEF column (D3-1: Skeleton and Slime 1 too; the other 3D rows 0)
@@ -151,7 +151,7 @@ STEPS = {4: (1, 0), 6: (0, 1), 8: (1, 0)}                    # level -> (atk, ev
 # Power Strike: die = multiplier code (0/1/2 = x2 / x2.5 / x3), bounces = extra to-hit (+2 base in ab_def).
 RANKS = {
     "Spark":     [(2, 6, 4, 1, 0, 0x44), (4, 9, 8, 2, 0, 0x44), (6, 10, 8, 4, 0, 0x24)],
-    "Firebolt":  [(5, 8, 8, 0, 0, 4), (6, 8, 8, 2, 0, 4), (10, 10, 10, 4, 0, 0x86)],
+    "Firebolt":  [(5, 8, 8, 0, 0, 3), (6, 8, 8, 2, 0, 3), (10, 10, 10, 4, 0, 0x85)],
     "Frost":     [(3, 10, 6, 1, 1, 2), (5, 10, 8, 2, 2, 3), (7, 12, 8, 4, 2, 4)],
     "Drain":     [(3, 6, 6, 2, 0, 0), (5, 8, 8, 3, 0, 0), (7, 8, 8, 6, 0, 0)],
     "Lightning": [(5, 16, 8, 4, 1, 0), (8, 16, 8, 7, 1, 0), (11, 20, 10, 9, 2, 0)],

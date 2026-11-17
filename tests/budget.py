@@ -875,9 +875,20 @@ class CastStepper(FxStepper):
         super().close()
 
 
+def ghost_shock_x(p):
+    """BALANCE-PKG4: the shipped Ghost is SHOCK R (was X). The Lightning worst-case scenes (ping-pong, reflecting Ghost) need a
+    reflector, so kx_tab's Ghost row is poked to SHOCK X (byte 0 bits 7-6): a fixture, not the shipped table."""
+    a = 3 * 16384 + S["kx_tab"] - 0xC000 + S["K_GHOST"] * 8
+    p.z.cmd("set-memory-zone 0")
+    r0 = p.z.read_memory(a, 1)[0]
+    p.wmem(a, [(r0 & ~0xC0) | 0xC0])
+    p.z.cmd("set-memory-zone -1")
+
+
 def lcast_setup(p, placements, k=None, r=3, x=14):
     """"lcast": the hero at x facing left (HP 200), the monsters 60 HP,
     spell k (default Lightning) learned at rank r (ARANK; abil_load picks the row), MP 40, its slot selected (no turn)."""
+    ghost_shock_x(p)
     import combat_tables as CT
     sym, b3 = CT.load()
     k = S["ABL_LIGHTNING"] if k is None else k
