@@ -1,0 +1,2 @@
+{"_doc": "PACKAGE 5 option B (balance_v2.md sec 6): no time trickle below D4 (progress respawns unchanged). Use with --ld-pkg4.",
+ "param": {"TRK_MIN_DEPTH": 4}}

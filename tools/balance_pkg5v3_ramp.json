@@ -1,0 +1,1 @@
+{"_doc": "pkg5 v3 probe ramp D3 x1.1 .. D8 x1.5 on HP and DMG", "param": {"MON_HP_SCALE_D": [1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.45, 1.5], "MON_DMG_SCALE_D": [1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.45, 1.5]}}
