@@ -1,0 +1,1 @@
+{"_doc": "pkg5 v3 probe HP x1.10 DMG x2.00 on D3-D8, bosses exempt", "param": {"MON_HP_SCALE_D": [1.0, 1.0, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1], "MON_DMG_SCALE_D": [1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0], "MON_SCALE_NO_BOSS": 1}}

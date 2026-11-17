@@ -497,9 +497,24 @@ def test_pkg5v3(D0):
     check("stats present", r["n"] == 12 and len(r["food3"]) > 0 and 0 <= r["hungry5"] <= 12 and "xs" in r)
 
 
+def test_pkg5v4(D0):
+    """Package 5 v3 knobs: per-depth monster HP / damage scales (round half up), boss exemption, defaults off."""
+    P0 = B.PARAMS
+    check("v4 defaults", P0["MON_HP_SCALE_D"] is None and P0["MON_DMG_SCALE_D"] is None and P0["MON_ATK_D"] is None and P0["MON_SCALE_NO_BOSS"] == 0)
+    sc = [1.0, 1.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
+    D = B.Data({"param": {"MON_HP_SCALE_D": sc, "MON_DMG_SCALE_D": sc, "MON_ATK_D": [0, 0, 1, 1, 1, 1, 1, 1]}})
+    k = D.kid["ORC"]
+    m1, m4 = B.Mon(D0, k, 4), B.Mon(D, k, 4)
+    check("HP scale D4 round half up", m4.maxhp == int((m1.maxhp) * 1.5 + 0.5), str((m1.maxhp, m4.maxhp)))
+    check("atk +1, dsc 1.5", m4.atk == m1.atk + 1 and m4.dsc == 1.5 and B.Mon(D, k, 2).maxhp == B.Mon(D0, k, 2).maxhp and B.Mon(D, k, 2).dsc == 1.0)
+    Db = B.Data({"param": {"MON_HP_SCALE_D": sc, "MON_DMG_SCALE_D": sc, "MON_SCALE_NO_BOSS": 1}})
+    og = D.kid["OGRE"]
+    check("boss exempt", B.Mon(Db, og, 4).maxhp == B.Mon(D0, og, 4).maxhp and B.Mon(Db, og, 4).dsc == 1.0 and B.Mon(Db, k, 4).dsc == 1.5)
+
+
 def main():
     D = B.Data()
-    for t in (test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_pkg5v4, test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:

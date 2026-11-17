@@ -156,6 +156,11 @@ PARAMS = {
     "FEAR_SCR_T": 6,                    # turns a Fear scroll frightens (9 = C4)
     "RESPAWN_MAX_D4": None,             # live-respawn cap on D4+ (null = TRICKLE_MAX everywhere)
     "MAGE_FB_FIRST": 0,                 # 1 = the Mage's first uniform book read at D2+ teaches Firebolt if unknown (all other picks uniform)
+    # package 5 v3: per-depth monster strength (D1..D8 lists, null = off).  Rounding = round half up, as a Z80 (n * num + 128) >> 8 table would:
+    # HP = floor(hp * s + 0.5) of the final body (golden / boss included); melee dice: die faces and bonus each floor(x * s + 0.5), die >= 1.
+    # Ranged / spell shots are NOT scaled.  MON_ATK_D = flat to-hit bonus added to the monster's atk.
+    "MON_SCALE_NO_BOSS": 0,             # 1 = bosses (and golden bodies) keep package-4 HP / damage under the scales below
+    "MON_HP_SCALE_D": None, "MON_DMG_SCALE_D": None, "MON_ATK_D": None,
     "PICKUP": 1.0,                      # package 5 v2: scales pick_some's collect fraction (0.75 = the human proxy: items missed); 1.0 = package 4
     "BOOK_ORDER": 0,                    # package 5 v2: 1 = a book teaches the next unknown ability in unlock order (Mage Spark>Firebolt>Frost>Drain>Lightning,
                                         #   Warrior Power>Whirl) when its unlock depth is reached; only then the random rank-up / Vigor rule (book_model)
@@ -527,7 +532,7 @@ def merge(a, b):
 class Mon:
     __slots__ = ("kind", "k", "hp", "maxhp", "x", "atk", "df", "gold", "boss", "hold", "holdkind", "conf", "fear",
                  "cd", "climb", "scd", "sumlive", "resp", "bred", "slam", "blink", "pidx", "hexcd", "line", "back",
-                 "tail", "summoned", "guard", "awake", "pit", "met")
+                 "tail", "summoned", "guard", "awake", "pit", "met", "dsc")
 
     def __init__(self, D, kind, depth, gold=False, resp=False):
         k = D.k[kind]
@@ -538,6 +543,13 @@ class Mon:
         self.df = k["df"] + (1 if gold else 0)
         if gold:
             hp = 2 * hp + 6
+        pr = D.params
+        nb = pr["MON_SCALE_NO_BOSS"] and (k["boss"] or gold)
+        if pr["MON_HP_SCALE_D"] and not nb:
+            hp = int(hp * pr["MON_HP_SCALE_D"][depth - 1] + 0.5)
+        if pr["MON_ATK_D"] and not nb:
+            self.atk += pr["MON_ATK_D"][depth - 1]
+        self.dsc = pr["MON_DMG_SCALE_D"][depth - 1] if pr["MON_DMG_SCALE_D"] and not nb else 1.0
         self.hp = self.maxhp = hp
         self.boss = k["boss"] or gold
         self.x = 0
@@ -645,6 +657,7 @@ class Game:
         self.wstats = [0, 0]   # [fights containing a Black Widow, hero HP lost in them]
         self.xc = {}         # per-run counters for the batch report (tele_scrolls, avoid_tele, avoid_fear, open_*, tele_ambush ...)
         self.unread = None   # scrolls still in hand at death
+        self.weak_any = self.weak_bag = 0
         self.hungry5 = self.weak_ever = self.dhung = self.tele3 = 0   # sec 7a/7c stats: HUNGRY before D5, WEAK ever, died HUNGRY+, Teleport in hand at D3
         self.fb3 = 0         # Mage owns Firebolt at D3 entry (feel metric)
         self.amu = {}        # depth -> 1 if an Amulet of Mana / Scarab is worn at entry
@@ -766,11 +779,18 @@ class Game:
                     d = int(h.fb)
                     h.fb -= d
                     h.food = max(0, h.food - d)
-            if h.food < 25:
+            if h.food < 25 and not h.bagfood:       # HUNGRY with nothing to eat = a real starvation risk
                 if self.depth < 5:
                     self.hungry5 = 1
                 if h.food < 10:
                     self.weak_ever = 1
+            if h.food < 10:
+                self.weak_any = 1
+                if h.bagfood:
+                    self.weak_bag = 1       # WEAK with food in the bag: the bot did not eat in time
+                    self.stat_add("weakbag_chunks")
+                    if h.poison and not h.poison_imm:
+                        self.stat_add("weakbag_poison")      # eating is blocked while poisoned (eat_if_needed)
             if h.poison:
                 k = min(c, h.poison)
                 ticks = (t0 + k) // 4 - t0 // 4
@@ -1321,7 +1341,7 @@ class Game:
                 self.run_level(depth)
             return True, 8, None, None
         except Dead as d:
-            self.dhung = 1 if self.h.food < 25 else 0
+            self.dhung = 1 if self.h.food < 25 and not self.h.bagfood else 0
             self.unread = sum(self.h.scr[k] for k in ("tele", "fear", "sleep"))
             return False, self.depth, d.killer, d.cause
         except Stall:
@@ -1859,7 +1879,10 @@ class Game:
             if slam:
                 m.slam = 0
             return
-        dm = self.rng.randint(1, k["die"]) + k["bonus"] + (1 if m.gold else 0)
+        if m.dsc != 1.0:
+            dm = self.rng.randint(1, max(1, int(k["die"] * m.dsc + 0.5))) + int(k["bonus"] * m.dsc + 0.5) + (1 if m.gold else 0)
+        else:
+            dm = self.rng.randint(1, k["die"]) + k["bonus"] + (1 if m.gold else 0)
         if slam:
             m.slam = 0
             dm = dm + dm // 2
@@ -2477,7 +2500,7 @@ def run_batch(D, hero, policy, runs, seed, first=0):
     res = dict(n=0, wins=0, death_depth=[0] * 9, killers={}, dk={}, entry=[[0, 0.0, 0.0, 0.0] for _ in range(9)],
                spell_dmg={s: 0.0 for s in SPELLS}, spell_casts={s: 0 for s in SPELLS}, stalls=0, causes={},
                turns=0, met=0, amu=[0] * 9, overkill=[0.0, 0.0], lvl_entry=[0.0] * 9, reached=[0] * 9, wfights=0, wloss=0, fb3=0,
-               hungry5=0, weak_ever=0, dhung=0, tele3=0, food3=[], food6=[], xs={}, unread=[])
+               hungry5=0, weak_ever=0, weak_any=0, weak_bag=0, dhung=0, tele3=0, food3=[], food6=[], xs={}, unread=[])
     for i in range(first, first + runs):
         rng = random.Random("%s/%s/%s/%d" % (seed, hero, policy, i))
         g = Game(D, hero, policy, rng)
@@ -2490,6 +2513,8 @@ def run_batch(D, hero, policy, runs, seed, first=0):
         res["fb3"] += g.fb3
         res["hungry5"] += g.hungry5
         res["weak_ever"] += g.weak_ever
+        res["weak_any"] += g.weak_any
+        res["weak_bag"] += g.weak_bag
         res["dhung"] += g.dhung
         res["tele3"] += g.tele3
         if g.unread is not None:
@@ -2524,7 +2549,7 @@ def run_batch(D, hero, policy, runs, seed, first=0):
 
 def merge_res(a, b):
     out = dict(a)
-    for k in ("n", "wins", "turns", "met", "stalls", "wfights", "wloss", "fb3", "hungry5", "weak_ever", "dhung", "tele3"):
+    for k in ("n", "wins", "turns", "met", "stalls", "wfights", "wloss", "fb3", "hungry5", "weak_ever", "weak_any", "weak_bag", "dhung", "tele3"):
         out[k] = a[k] + b[k]
     for k in ("death_depth", "lvl_entry", "reached", "amu"):
         out[k] = [x + y for x, y in zip(a[k], b[k])]
@@ -2623,7 +2648,7 @@ def to_json(name, results):
     for (hero, pol), r in results.items():
         s = summarize(r)
         out["%s/%s" % (hero, pol)] = dict(n=r["n"], win=s["win"], ci95=[s["lo"], s["hi"]], death_depth=r["death_depth"],
-                                          killers=r["killers"], dk=r["dk"], causes=r["causes"], reached=r["reached"], fb3=r["fb3"], hungry5=r["hungry5"], weak_ever=r["weak_ever"], dhung=r["dhung"], tele3=r["tele3"],
+                                          killers=r["killers"], dk=r["dk"], causes=r["causes"], reached=r["reached"], fb3=r["fb3"], hungry5=r["hungry5"], weak_ever=r["weak_ever"], weak_any=r["weak_any"], weak_bag=r["weak_bag"], dhung=r["dhung"], tele3=r["tele3"],
                                           food3=sorted(r["food3"])[len(r["food3"]) // 2] if r["food3"] else 0,
                                           food6=sorted(r["food6"])[len(r["food6"]) // 2] if r["food6"] else 0, xs=r["xs"], unread_med=sorted(r["unread"])[len(r["unread"]) // 2] if r["unread"] else 0,
                                           mean_turns=r["turns"] / max(1, r["n"]), mean_met=r["met"] / max(1, r["n"]), wfights=r["wfights"], wloss=r["wloss"], spell_dmg=r["spell_dmg"], spell_casts=r["spell_casts"])
