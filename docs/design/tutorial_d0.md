@@ -99,7 +99,8 @@ col  0    5    10   15   20   25   30
   arrival (x 5) takes it, before Morrow's B1 box (10-12), the dart (13) and the Cure (19); never on a balloon spot
   (the storey's top rows). The **B-C door is really locked** (engine `key_door`, as on D1+): a bump without the
   key = `THE DOOR IS LOCKED` + thud, 0 turns; with it the door unlocks (1 turn, the key spent; arch / plates /
-  panel key cell as on D1+). The key never leaves B's floor except into the hero's held bits (no bag item, no
+  panel key cell as on D1+; TUT-KEY-FLASH 2026-11-17: the key FLASHes on the floor until taken, and its panel icon FLASHes
+  from the pickup until the unlock). The key never leaves B's floor except into the hero's held bits (no bag item, no
   discard path), so there is no soft-lock; the sandbox reset regenerates every key / lock state for D1.
 - The trap is on the only storey-0 walk path to L1; it can be jumped (or sensed by the Mage, §1.5),
   which is allowed (§3 B8 alt line).

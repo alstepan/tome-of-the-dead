@@ -1117,6 +1117,7 @@ def scen_plain(h):
     check("C1", "`1` START -> the choice screen (menu state, es_go = the blob's choice, no D0 hook yet)", ok,
           (p.rb("GAME_STATE"), hex(w2(p, S["es_go"] + 1))))
     golden(h, "tut0_choice", ch)
+    G.frame_png(ch, os.path.join(G.BUILD_DIR, "tut_choice.png"))   # the 6x8-font sub-line
     press_start(p, "2", "start_game")
     p.tick(3)
     d2, a2 = d1_after(p)
@@ -1369,8 +1370,15 @@ def panel_key(p):
     c0 = S["KEY_PAN_COL"]
     at = [G.attr_at(fr, c, 21) for c in (c0, c0 + 1)]
     ink = any(any(G.cell_bytes(fr, c, 21)) for c in (c0, c0 + 1))
+    if ink:                                                      # TUT-KEY-FLASH: the glyph line 1 = key_gly's (left, right) = $3C, $00
+        ink = [G.cell_bytes(fr, c, 21)[1] for c in (c0, c0 + 1)] == [0x3C, 0x00]
     d0 = row_bytes(fr, 18, 30, 2) == text6("D0", 0, 2)
     return at, ink, d0
+
+
+def floor_key_attrs(p):
+    """TUT-KEY-FLASH: the attrs of the floor key's 4 cells (rows 6 / 7, cols KEY_COL / +1)."""
+    return [p.rb(S["SCREEN_ATTR"] + r * 32 + c) for r in (6, 7) for c in (KEY_COL, KEY_COL + 1)]
 
 
 def climb_to(p, s, n=16):
@@ -1399,6 +1407,7 @@ def run_stub(p, code, org):
     return pc == end
 
 
+
 def scen_key(h):
     """TK1-TK5 (TUT-KEY) + S5 (review A). The short route into B; the key lies at col 8 (TK1, PNG tut_key_floor);
     the hero LEAPS over it from the arrival and goes to the B-C door keyless: L77 once (TK2), the bump = THE DOOR IS
@@ -1416,7 +1425,11 @@ def scen_key(h):
     to_floor(p, 0)
     drain_log(p)
     ke = key_entry(p)
+    p.tick(2)                                                    # (a flash hook runs at each turn end)
     png_floor = bal_png(p, "tut_key_floor.png")
+    fa = floor_key_attrs(p)
+    check("TK1F", f"the floor key FLASHes (attr bit 7 on its 4 cells {[hex(a) for a in fa]}, ink cyan, PNG {png_floor})",
+          all(a == S["ATTR_KEY_C"] | 0x80 for a in fa) and S["TUT_KEY_COL"] == KEY_COL, (fa, S["TUT_KEY_COL"], KEY_COL))
     check("TK1", f"room B: the key is a floor item at col {KEY_COL} storey 0 (FLOOR_LIST {ke}), not held; the B-C edge "
           f"locked (${bc_edge(p):02X}); B7 waits for it (PNG {png_floor})",
           inb and [(c, st_) for _, c, st_ in ke] == [(KEY_COL, 0)] and not key_held(p) and bc_edge(p) & S["EG_LOCK"]
@@ -1424,6 +1437,10 @@ def scen_key(h):
     x0 = p.ent(0)["X"]
     T(p, "K", "L")                                               # the leap over cols 8-9 (the dart may poison)
     leaped = p.ent(0)["X"] > KEY_COL + 1 and not key_held(p)
+    fl = [(r, c) for r in range(18) for c in range(32) if p.rb(S["SCREEN_ATTR"] + r * 32 + c) & 0x80]
+    check("TK1L", f"after the leap over the key (hero x {p.ent(0)['X']}, key still on the floor) the only FLASH cells of the play "
+          f"area are the key's 4: no flash on the hero / Morrow / anything else ({fl})",
+          leaped and sorted(fl) == [(6, KEY_COL), (6, KEY_COL + 1), (7, KEY_COL), (7, KEY_COL + 1)], fl)
     walk_to(p, 24)
     to_floor(p, 1)
     n0 = len(p.LOG)
@@ -1464,10 +1481,13 @@ def scen_key(h):
     got = [l.rstrip() for l in p.LOG[n2:]]
     at, ink, d0 = panel_key(p)
     want = ["YOU FIND A CYAN KEY", line("TL_L24"), line("TL_L25")]
+    png_pan = bal_png(p, "tut_key_panel.png")
     check("TK4", f"walking over it takes the key: LF_KEYC, the entry gone, the log '{got[-3:]}' (the engine's line, then L24 / "
-          "L25), B7 passed, the cyan key cell (attr ATTR_KEY_C) on the panel, the depth still 'D0'",
+          "L25), B7 passed, the cyan key cell (attr ATTR_KEY_C | FLASH, glyph row 1 $3C / $00, PNG tut_key_panel.png) on the panel, the depth still 'D0'",
           up and key_held(p) and not key_entry(p) and got[-3:] == want and (tv(p, "TV_BEAT") >= 8 or tv(p, "TV_STAGE") >= 4)
-          and at == [S["ATTR_KEY_C"]] * 2 and ink and d0, (up, key_held(p), key_entry(p), got, st(p), at, ink, d0))
+          and at == [S["ATTR_KEY_C"] | 0x80] * 2 and ink and d0, (up, key_held(p), key_entry(p), got, st(p), at, ink, d0))
+    fa2 = floor_key_attrs(p)
+    check("TK4F", f"the key taken: its floor cells no longer FLASH ({[hex(a) for a in fa2]})", not any(a & 0x80 for a in fa2), fa2)
     walk_to(p, 24)
     to_floor(p, 1)
     walk_to(p, 27)
