@@ -159,6 +159,8 @@ PARAMS = {
     # package 5 v3: per-depth monster strength (D1..D8 lists, null = off).  Rounding = round half up, as a Z80 (n * num + 128) >> 8 table would:
     # HP = floor(hp * s + 0.5) of the final body (golden / boss included); melee dice: die faces and bonus each floor(x * s + 0.5), die >= 1.
     # Ranged / spell shots are NOT scaled.  MON_ATK_D = flat to-hit bonus added to the monster's atk.
+    "DROP_ALL_P": None,                 # package 5 final: D1..D8 probability that any non-boss, non-respawn, non-summoned kill drops one random food
+                                        # (FOODS uniform; one rnd + one rnd(5) in the asm kill path); null = only the Rat / Goblin / Orc and tier drops
     "MON_SCALE_NO_BOSS": 0,             # 1 = bosses (and golden bodies) keep package-4 HP / damage under the scales below
     "MON_HP_SCALE_D": None, "MON_DMG_SCALE_D": None, "MON_ATK_D": None,
     "PICKUP": 1.0,                      # package 5 v2: scales pick_some's collect fraction (0.75 = the human proxy: items missed); 1.0 = package 4
@@ -337,6 +339,10 @@ UNIQUE = {1: "Goblin Helm", 2: "Silk Cloak", 3: "Gravecloak", 4: ("Cleaver", "Bo
 # pre-LARGER-D trap counts: items_model.TRAP_COUNT now carries the x4/3 (T6), the sim keeps TRAP_MULT as its knob
 TRAP_COUNT_1X = {1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 3, 7: 4, 8: 4}
 FOODS = [10, 15, 20, 30, 40]   # 7 / 8: Carrot Apple Pear Cheese Meat (uniform)
+class DropFood(int):
+    """A food item that came from a monster drop (tagged only so the report can split eaten food into floor / drop)."""
+
+
 DROP_FOOD = {"RAT": (30, 1, 4), "GOBLIN": (15, 1, 4), "ORC": (40, 1, 3)}   # (value, k, N) 8.6/9.6
 LEVELUP = {"W": (5, 1), "M": (3, 2)}   # documentation only (the sim reads W_LVL_HP / M_* params; WIDOW-SPIT: W 4 -> 5)
 HERO0 = {"W": dict(hp=24, mp=6, atk=3, eva=2), "M": dict(hp=16, mp=12, atk=1, eva=1)}
@@ -1259,7 +1265,12 @@ class Game:
         if h.food <= self.P["EAT_AT"] or force:
             if h.bagfood:
                 h.bagfood.sort()
-                h.food = min(100, h.food + h.bagfood.pop(0))
+                h.food = min(100, h.food + self.eat_pop())
+
+    def eat_pop(self):
+        v = self.h.bagfood.pop(0)
+        self.xc["eat_drop" if isinstance(v, DropFood) else "eat_floor"] = self.xc.get("eat_drop" if isinstance(v, DropFood) else "eat_floor", 0) + int(v)
+        return v
 
     def eat_fed(self):
         """expert eat_fed: top FOOD up to FED (>= 50) with the smallest item that still fits under 100; keep 1 item in reserve."""
@@ -1270,7 +1281,7 @@ class Game:
             h.bagfood.sort()
             if h.food + h.bagfood[0] > 100:
                 return
-            h.food += h.bagfood.pop(0)
+            h.food += self.eat_pop()
             self.stat_add("fed_eats")
 
     def heal_pct(self):
@@ -1300,7 +1311,7 @@ class Game:
                 # expert rest_fed: HP regen needs FED (>= 50); eat up to it from the bag (no reserve) instead of giving up the rest
                 while h.food < 50 and h.bagfood:
                     h.bagfood.sort()
-                    h.food = min(100, h.food + h.bagfood.pop(0))
+                    h.food = min(100, h.food + self.eat_pop())
                     self.stat_add("rest_eats")
             if self.hunger_stage() >= 1:
                 self.eat_if_needed(force=self.hunger_stage() >= 1 and h.food < 50 and bool(h.bagfood) and len(h.bagfood) > 2)
@@ -2475,10 +2486,12 @@ class Game:
         if dr and not m.resp and not m.summoned:
             tier = 1 + (m.kind != base) + (m.kind in [t[1] for t in self.D.tiers.values() if t[1]])
             if self.rr() < tier / dr[1]:
-                h.bagfood.append(dr[0])
+                h.bagfood.append(DropFood(dr[0]))
         if (self.P["TIER_FOOD"] and m.kind != base and not m.resp and not m.summoned and not m.boss
                 and base in self.tier_food_bases and self.rr() < 0.25):
-            h.bagfood.append((10, 15, 20)[int(self.rr() * 3)])     # tier6.asm 445-449: Carrot / Apple / Pear 1 in 4, none from respawns
+            h.bagfood.append(DropFood((10, 15, 20)[int(self.rr() * 3)]))     # tier6.asm 445-449: Carrot / Apple / Pear 1 in 4, none from respawns
+        if (self.P["DROP_ALL_P"] and not m.resp and not m.summoned and not m.boss and self.rr() < self.P["DROP_ALL_P"][self.depth - 1]):
+            h.bagfood.append(DropFood(FOODS[int(self.rr() * 5)]))
         if base == self.D.id("NECRO") and not m.resp and self.rr() < 1 / 3:
             h.mana += 1
         if self.D.nm3 and base == self.D.kid["FIRE_IMP"] and not m.resp and self.rr() < 1.0 / self.P["IMP_MANA_N"]:

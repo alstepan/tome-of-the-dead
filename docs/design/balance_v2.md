@@ -160,3 +160,56 @@ Warrior HP/level 6 was chosen for the package (W-only, smaller). Hurt the wrong 
 
 Sim gaps: bot charm choice drives Mage numbers; Mage average ~ E1 (small spread); doors / faints / frost-freeze value not modelled; cautious bot is
 now below the average bot (not updated); Firebolt burst nerf unmeasurable (burst rarely hits). Spot-check in the emulator not done.
+
+## 8. Package 5 final: sim results and constant-to-asm map (junior sweep, 2026-11-17; nothing built)
+
+Final combo = `tools/balance_pkg5_final.json` (run: `--ld-pkg4 --overrides tools/balance_pkg5_final.json --set param.PICKUP=0.75`).
+It is the §7 ladder (F1, A, C1–C4, M1) plus a damage ramp, a food shift from the floor to monster drops, and a Mage tune.
+10 000 runs per cell, seed 1; W / M win %. E1 = `expert+charm_food+rest_fed-no_rest_full-no_jump_p+avoid_pro`.
+
+| PICKUP | average | cautious | E1 | largest depth share of deaths (avg W / M) | starving deaths | HUNGRY + empty bag before D5 | food median D3 / D6 entry | eaten from drops |
+|---|---|---|---|---|---|---|---|---|
+| 0.75 | 16.4 / 16.4 | 22.4 / 27.2 | 37.6 / 43.6 | D4 46 % / D3 41 % | 12 % | 13 % | 56 / 52 | 56 % |
+| 1.0 | 18.1 / 17.7 | 24.4 / 30.3 | 38.6 / 45.0 | D4 49 % / D3 40 % | 11 % | 12 % | 57 / 53 | 55 % |
+
+E1 largest depth share: W D7 44 %, M D4 31 %. E1 reaches D5 in 79 % (W) / 69 % (M); the Mage has Firebolt at D3 entry in 48 %.
+Cautious: starving deaths 16 %; it eats more food per run than average (862 vs 720), not less, because it rests more.
+
+**Gates (PICKUP 0.75).** Pass: average 15–25 (both), average gap 0.0, E1 W 37.6, E1 gap 6.0 (≤ 8), E1 − average ≥ 10 (21 / 27),
+food median at D3 ≥ 50, HUNGRY + empty bag before D5 ≤ 15 %, drop share 40–55 % (56, one point over).
+**Fail:** E1 M 43.6 (band 30–40); no depth > 35 % (D4 46 % and D3 41 % for average, D7 44 % for the W expert); starving deaths 12 % (target ≤ 5 %).
+
+Known sim gaps. The Ogre Warlord boss and the D3 Vampire Lord drive the D4 / D3 shares. The sim has no door or flyer-block model. The
+average Mage is a weak bot, so any Mage nerf hits it harder than the expert (E1 M barely moves with `M_LVL_HP`, average M drops about 13 pts per HP point).
+M1 asks D5 = 26 bodies, but `lp_dtab` caps the count at 24 (`lpop3.asm`: min room capacity 8 x ROOM_MAX 3). The sim does not model that cap, so the
+real D5 pressure will be lower than measured unless ROOM_MAX or the layout changes. Weapon-destroyed % is not modelled.
+The "starving" stat is HUNGRY (food < 25) with an empty bag at death. WEAK while carrying food (6 % of runs) is the bot not eating in time:
+eating is blocked while poisoned and happens only between rooms and in rests, never inside a fight.
+
+**Mage levers tried** (ramp-3 base, average M / E1 M): MAGE_REGEN 9: 13.9 / 46.2; LUP_M_HP 1: 12.9 / 52.2; both: 4.7 / 33.5;
+Spark and Lightning bonus nerf: 16.1 / 45.8. Every nerf hit the average Mage about twice as hard as the expert. Final: MP regen period 9,
+`LUP_M_HP` 4 (raises the average Mage back, no effect on E1), Firebolt bonus −1 per rank, Frost r2 / r3 −1. E1 M is still ~4 pts above the band;
+the next lever to try is a Mage-only spell MP cost, not HP or regen.
+
+**Constant to asm map** ("table" = data edit, 0 B code):
+
+| Sim knob | Value | Z80 constant / table |
+|---|---|---|
+| FOOD_BURN | 6 → 8 | `FOOD_PERIOD` `src/item_defs.asm:245` (the x2 for Food / Scarab stays) |
+| FOOD_START | 80 → 100 | `FOOD_START` `src/item_defs.asm:244` |
+| FOOD_N floor | 3–5 → 3–4 | `ig_grps` food row `src/items_ovl.asm:758` (range byte 3 → 2 items spread) |
+| DROP_ALL_P | 0.08 on every kill | new roll in `mon_drop` `src/drop3.asm` (non-boss, non-respawn): `rnd < 8/100`, then `rnd(5)` into the food items; ~12–16 B. Cheaper variant: raise the Rat / Goblin / Orc `drop_tab` 1-in-N rows (data) |
+| FEAR_SCR_T | 6 → 9 | `SCR_FEAR_T` `src/fx6.asm:311` |
+| SCR_W [3,2,2,1], SCR_N 2–3 | | scroll pool 8-slot table, `ig_grps` scroll row (`$80 \| 2` exactly 2 → 2–3) |
+| SCR_GUAR_D2 | 1 | D2 item generator, copy of the Heal-guarantee pattern in `items_ovl.asm` |
+| TELE_AMBUSH | 0.4 → 0.05 | Teleport landing routine (scroll and trap): choose a visited, empty room; ~20–30 B |
+| NM3_LISTS D3 | Ghost 3 → 2, Goblin 1 → 2 | `LP_KINDS` D3 row (data) |
+| Ghost confuse | 1 in 4 → 1 in 8 | Ghost `kx_tab` on-hit chance nibble (4 → 8) |
+| MON_COUNT | D4 25, D5 26, D6 25, D7 25, D8 18 (D1–D3 20 / 21 / 21) | `lp_dtab` count bytes (see the cap warning above); `LP_N_MIN` `src/level_defs.asm:60` stays 18 |
+| MON_DMG_SCALE_D | D3 1.9, D4 1.7, D5 2.6, D6 2.8, D7 3.0, D8 3.0 | `kind_tab` `KT_DIE` / `KT_BONUS` per kind (melee only; faces and bonus x scale, round half up; bosses too). `kind_tab` is per kind, not per depth: either (a) one per-kind die for the average depth and a flat ramp, or (b) a depth-indexed damage adder in `mon_melee` (~10–14 B) |
+| MAGE_REGEN | 7 → 9 | `MP_REG_M` `src/xp7.asm:13` (9 * MP_RG_STEP) |
+| M_LVL_HP | 2 → 4 | `LUP_M_HP` `src/xp7.asm:16` |
+| Firebolt / Frost bonus | Firebolt r1 0 → −1, r2 2 → 1, r3 4 → 3; Frost r2 2 → 1, r3 4 → 3 | `ab_rank` rows `src/combat_data3.asm:142` |
+| RESPAWN_MAX_D4 | not used in the final | – |
+
+Docs to sync on adoption: game.md §7 hunger period, §8 scrolls / Teleport / Fear 9, §8.5 counts and the D2 guarantee, §9.4 counts and the D3 row, §11 Ghost row, §4.1 level-up HP.

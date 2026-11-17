@@ -512,9 +512,28 @@ def test_pkg5v4(D0):
     check("boss exempt", B.Mon(Db, og, 4).maxhp == B.Mon(D0, og, 4).maxhp and B.Mon(Db, og, 4).dsc == 1.0 and B.Mon(Db, k, 4).dsc == 1.5)
 
 
+def test_pkg5final(D0):
+    """Package 5 final: DROP_ALL_P (a kill drops one random food, tagged), eat_pop splits eaten food floor / drop."""
+    check("drop default off", B.PARAMS["DROP_ALL_P"] is None)
+    D = B.Data({"param": {"DROP_ALL_P": [1.0] * 8}})
+    g = new_game(D, "W", 5)
+    g.depth = 3
+    n0 = len(g.h.bagfood)
+    m = B.Mon(D, D.kid["SKELETON"], 3)
+    g.kill(m)
+    check("drop food on kill", len(g.h.bagfood) == n0 + 1 and isinstance(g.h.bagfood[-1], B.DropFood), str(g.h.bagfood))
+    mr = B.Mon(D, D.kid["SKELETON"], 3, resp=True)
+    g.kill(mr)
+    check("no drop from a respawn", len(g.h.bagfood) == n0 + 1)
+    g.h.bagfood = [B.DropFood(20), 10]
+    g.eat_pop()
+    g.eat_pop()
+    check("eat_pop split", g.xc.get("eat_drop") == 10 or g.xc.get("eat_floor") == 10, str(g.xc))
+
+
 def main():
     D = B.Data()
-    for t in (test_pkg5v4, test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_pkg5final, test_pkg5v4, test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:
