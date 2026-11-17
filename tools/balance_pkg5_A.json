@@ -1,0 +1,8 @@
+{"_doc": "PACKAGE 5 option A (docs/design/balance_v2.md sec 6): D3 slot mix Ghost 3->2, Goblin 1->2; Ghost touch confuse 1 in 4 -> 1 in 8; D4 count 23 -> 24. Use with --ld-pkg4.",
+ "param": {"MON_COUNT": [20, 21, 21, 24, 24, 23, 23, 18],
+  "NM3_LISTS": {
+   "3": ["SKELETON","VAMPIRE","GHOST","BAT","GOBLIN","GOBLIN","VAMPIRE","GHOST"],
+   "4": ["ORC","RAT","SPIDER","ARCHER","FIRE_IMP","ORC","ARCHER","RAT"],
+   "7": ["ORC","GHOST","NECRO","FROST_WRAITH","MUMMY","SPIDER","NECRO","NECRO"],
+   "8": ["NECRO","SKELETON","GHOST","VAMPIRE","ORC","FROST_WRAITH","NECRO","NECRO"]}},
+ "kind": {"Ghost": {"ech": 8}}}

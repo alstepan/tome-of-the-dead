@@ -358,9 +358,77 @@ def test_bal_knobs(D):
     check("met counted", r["met"] > 10 * 5)
 
 
+def test_pkg5(D0):
+    """Package 5 knobs (balance_v2.md sec 6): defaults = package 4; option A/B/C override files take effect."""
+    import json
+    jl = lambda n: json.load(open(os.path.join(REPO, "tools", "balance_pkg5_%s.json" % n)))
+    P0 = B.PARAMS
+    check("pkg5 defaults", P0["TRK_MIN_DEPTH"] == 1 and P0["FOOD_N_D"] is None and P0["HEAL_EXTRA_D"] is None and P0["GOLD_DRAIN_DIV"] == 1)
+    base = B.ld_preset(True)
+    D4 = B.Data(base)
+    ghost = lambda D: D.k[D.kid["GHOST"]]
+    check("pkg4 ghost confuse 1 in 4", ghost(D4)["efx"] == 5 and ghost(D4)["ech"] == 4, str((ghost(D4)["efx"], ghost(D4)["ech"])))
+    DA = B.Data(B.merge(base, jl("A")))
+    cnt = lambda D, d, n: D.lp[d].count(D.kid[n])
+    check("A ghost confuse 1 in 8", ghost(DA)["ech"] == 8)
+    check("A D3 mix", (cnt(D4, 3, "GHOST"), cnt(D4, 3, "GOBLIN"), cnt(DA, 3, "GHOST"), cnt(DA, 3, "GOBLIN")) == (3, 1, 2, 2))
+    check("A D4 count", D4.params["MON_COUNT"][3] == 23 and DA.params["MON_COUNT"][3] == 24 and DA.params["MON_COUNT"][2] == 21)
+    check("A keeps other depths", all(DA.lp[d] == D4.lp[d] for d in (1, 2, 4, 5, 6, 7, 8)))
+    DB = B.Data(B.merge(base, jl("B")))
+    for D, want in ((D4, True), (DB, False)):
+        g = new_game(D, "W", 5)
+        g.depth = 3
+        g.visited_cleared = 1
+        g.resp_count = 0
+        g.in_boss_dead = False
+        g.respawns_pending = []
+        g.P = dict(g.P, TRICKLE_P=1.0)
+        g.trickle(0, 4800)
+        check("B trickle at D3 " + str(want), bool(g.respawns_pending) == want)
+        g.depth, g.resp_count, g.respawns_pending = 4, 0, []
+        g.trickle(0, 4800)
+        check("B trickle at D4", bool(g.respawns_pending))
+    DC = B.Data(B.merge(base, jl("C")))
+    def floor(D, d):
+        g = new_game(D, "W", 7)
+        g.level_items(d)
+        return g.floor
+    for sd in range(20):
+        g = new_game(DC, "W", sd)
+        g.level_items(3)
+        check("C D3 food 4-5", 4 <= len(g.floor["food"]) <= 5)
+        g.level_items(2)
+        check("C D2 food unchanged", 3 <= len(g.floor["food"]) <= 5)
+    pots = lambda D: sum(floor(D, 3)["pots"].count("heal") for _ in range(1))
+    g4, gc = new_game(D4, "W", 7), new_game(DC, "W", 7)
+    g4.level_items(3)
+    gc.level_items(3)
+    check("C D3 extra heal", gc.floor["pots"].count("heal") >= g4.floor["pots"].count("heal") + 1 - 3 and len(gc.floor["pots"]) == len(g4.floor["pots"]) + 1,
+          str((g4.floor["pots"], gc.floor["pots"])))
+    # golden drain-bite: the Vampire Lord heals dm // 2 (base Vampire full)
+    for D, div in ((D4, 1), (DC, 2)):
+        g = new_game(D, "W", 3)
+        g.depth = 3
+        g.h.hp = g.h.maxhp
+        for gold, want in ((True, 6 // div), (False, 6)):
+            m = B.Mon(D, D.kid["VAMPIRE"], 3, gold=gold)
+            m.hp = 1
+            m.maxhp = 100
+            m.x = 1
+            g.rr = lambda: 0.0
+            g.hit_hero_chance = lambda atk: 1.0
+            D.k[D.kid["VAMPIRE"]].update(die=1, bonus=5, efx=0)
+            g.h.df = 0
+            g.h.res = [0] * 6
+            g.dmg_hero = lambda dm, *a, **k: None
+            g.hero_res = lambda ty, dm: 6
+            g.mon_melee(m, 1)
+            check("drain heal gold=%s div=%d" % (gold, div), m.hp - 1 == want, str(m.hp - 1))
+
+
 def main():
     D = B.Data()
-    for t in (test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:

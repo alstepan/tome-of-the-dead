@@ -148,6 +148,9 @@ PARAMS = {
     "RESP_P": 0.75,                     # progress: P(an event per FIRST entry of a room, at most one)
     "RESP_FAR_P": 0.7, "RESP_STALE": 150,   # progress: P(a visited room is >= 2 rooms away); it must also be unseen for >= RESP_STALE turns
     "XPN": None,                        # null = the image's xpn_tab; else 8 values (XP_NEXT L2..L9)
+    "TRK_MIN_DEPTH": 1,                 # package 5 option B: the time trickle only runs at depth >= N (1 = every depth, package 4)
+    "FOOD_N_D": None, "HEAL_EXTRA_D": None,   # package 5 option C: {depth: [lo, hi]} food range / {depth: n} extra guaranteed Heals (null = flat)
+    "GOLD_DRAIN_DIV": 1,                # package 5 option C: a golden drain-biter (Vampire Lord) heals dm // N (1 = full, package 4)
     "FOOD_N": [3, 4], "POT_N": [2, 3], "SCR_N": [1, 2],   # entries per level: inclusive (lo, hi); potions keep >= 1 Heal
     "ARR_BASE": 5, "TRAP_MULT": 1.0,    # arrows = ARR_BASE + 0..3 (1d4+4 -> 1d4+6 = 7); trap count = round(TRAP_COUNT * TRAP_MULT)
     "HP_BONUS": 0,                      # sweep/test knob: flat extra max HP for both heroes
@@ -780,7 +783,7 @@ class Game:
         P = self.P
         if self.in_boss_dead or self.resp_count >= P["TRICKLE_MAX"] or self.depth > 8:
             return
-        if P["RESP_MODE"] == "progress":
+        if P["RESP_MODE"] == "progress" or self.depth < P["TRK_MIN_DEPTH"]:
             return
         per = P["TRICKLE_PERIOD"] * (3 if P["RESP_MODE"] == "progress+time" else 1)
         k = t1 // per - t0 // per
@@ -904,7 +907,9 @@ class Game:
         items = []
         npot = P["POT_N"][0] + rng.randrange(P["POT_N"][1] - P["POT_N"][0] + 1)
         pots = ["heal"] + [("heal", "mana", "cure")[rng.randrange(3)] for _ in range(npot - 1)]
-        food = [FOODS[rng.randrange(5)] for _ in range(P["FOOD_N"][0] + rng.randrange(P["FOOD_N"][1] - P["FOOD_N"][0] + 1))]
+        pots += ["heal"] * (P["HEAL_EXTRA_D"] or {}).get(str(depth), 0)
+        flo, fhi = (P["FOOD_N_D"] or {}).get(str(depth), P["FOOD_N"])
+        food = [FOODS[rng.randrange(5)] for _ in range(flo + rng.randrange(fhi - flo + 1))]
         scr = [("tele", "fear", "sleep", "ench")[rng.randrange(4)] for _ in range(P["SCR_N"][0] + rng.randrange(P["SCR_N"][1] - P["SCR_N"][0] + 1))]
         gp = [ITEM_GEAR[next(n for n, v in IM.T.items() if v == t)] for t in IM.gear_pool(depth, IM.HERO_WARRIOR if self.hero == "W" else IM.HERO_MAGE)]
         if self.D.nm3 and depth >= self.P["CHARM_FROM"]:
@@ -1815,7 +1820,7 @@ class Game:
             if tn:
                 h.hold, h.holdkind = tn, "frozen"
         if k["heal"]:
-            m.hp = min(m.maxhp, m.hp + dm)
+            m.hp = min(m.maxhp, m.hp + (dm // P["GOLD_DRAIN_DIV"] if m.gold else dm))
         if kid == self.D.id("MUMMY"):
             h.food = max(0, h.food - 5)
             if self.rr() < 1 / 3:
