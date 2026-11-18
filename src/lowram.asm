@@ -2112,11 +2112,34 @@ gen_list:
 ;------------------------------------------------------------------------------
 seq2_bytes:     DS   SEQ2_LEN, 0
 ;------------------------------------------------------------------------------
-; dg_vars — SIZE T3: the decor deriver's state (bank-0 decor_gen.asm; it was bank-3 RAM next to
-; the code, but B0_CODE2 may hold no runtime-written bytes). Runtime bytes, zeros on tape; live
-; only inside one decor_b0 call (re-derived from RD_SEED every room build).
+; dg_vars — the decor deriver's state (bank-0 decor_gen.asm; SIZE T3: B0_CODE2 may hold no
+; runtime-written bytes). Runtime bytes, zeros on tape; live only inside one decor_b0 call
+; (re-derived from RD_SEED every room build). DECOR2: none here (DECOR2-SHIP: the DGV block lives in the
+; map-buffer gap DG_VARS and the run lists / moss list / face list in the NEXT_MAP gap, decor_gen.asm);
+; instead two of the deriver's cold helpers (a few calls a room) live here, out of the full B0_CODE2.
 ;------------------------------------------------------------------------------
-dg_vars:
+    IF DECOR2
+; dg_iskey — Z = a key room (LVL_KEYROOM / LVL_KEYROOM2; the descriptor's RDF_KEY is never set).
+; dg_rid — A = the room id from IX (ROOM_DESC + 16 r). Clobber A, HL.
+dg_iskey:
+                call dg_rid
+                ld   hl, LVL_KEYROOM
+                cp   (hl)
+                ret  z
+                ld   hl, LVL_KEYROOM2
+                cp   (hl)
+                ret
+dg_rid:
+                ld   a, ixl
+                sub  ROOM_DESC & $FF
+                rrca
+                rrca
+                rrca
+                rrca
+                ret
+    ENDIF
+    IF !DECOR2
+dg_vars:                               ; the shipped deriver (decor_gen1.asm)
 dg_rng:         DW   0
 dg_cls:         DB   0
 dg_cc:          DB   0
@@ -2147,6 +2170,7 @@ dg_alt:         DB   0
 dg_ph:          DB   0
 dg_dg:          DB   0
 DG_VARS_LEN     EQU $ - dg_vars
+    ENDIF
 ;------------------------------------------------------------------------------
 ; gen_frame — generate all variants of frame A into the pool; fill FRT[A].
 ; The frame is read from its ZX0 block unpacked in GEN_SCRATCH, which
@@ -2474,7 +2498,7 @@ mul8:
 ; zx0_frame — DE = VIRTUAL address of the frame's packed block (FD_BLK), BC =
 ; the frame's address in GEN_SCRATCH (FD_FRM). Unpacks the block into
 ; GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block cache: blocks
-; hold 1-4 consecutive fids of one kind, so gen_kind unpacks each block
+; hold 1-8 consecutive fids of one kind (zx0_sources.py MAX_FRAMES), so gen_kind unpacks each block
 ; exactly once). The tool guarantees no packed block straddles virtual $C000,
 ; so the whole stream is in one bank's $C000 window. Virtual map: $4000..$7FFF
 ; = SRC6 (bank 6 at +SRC6_VDELTA; SRC6 spike) and, from $6000, SRC0 (bank 0 at +SRC0_VDELTA, NEW-MON3 T7),

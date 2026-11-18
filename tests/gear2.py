@@ -36,7 +36,9 @@ IROW = 9 + 7
 FL, FLS = S["FLOOR_LIST"], S["FL_STRIDE"]
 FLS1 = S["FL_S1"]
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+RES = S["tut_stub_end"]                       # DECOR2-SHIP: the TUT0 stub room's free tail (.. sel_tab);
+RES_LEN = S["sel_tab"] - RES                  # STUB + 200 drifted into ts_icon / past sel_tab
+assert RES_LEN >= 20, RES_LEN                 # it_fmt's longest line (17 B + 0) + margin
 BAG, WORN = S["BAG"], S["WORN"]
 I = lambda n: S["IT_" + n]                     # noqa: E731,E741
 
@@ -119,7 +121,7 @@ def run(h, p, check):
     def fmt(slot):
         stub([0x3E, slot, 0x11] + w16(RES) + [0x21] + w16(S["it_fmt"]) + [0xCD] + w16(S["far6"])
              + [0xAF, 0x12])
-        raw = bytes(z.read_memory(RES, 40))
+        raw = bytes(z.read_memory(RES, RES_LEN))
         return raw[:raw.index(0)].decode()
 
     def setworn(slot, name, ist):

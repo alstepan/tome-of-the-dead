@@ -6,7 +6,7 @@
 > with dithered brick patches (concept-screen §3.3).
 > **Rev 3 (2026-10-02):** round-4/5 review applied. Approved 9+9+6 panel (24×16 icons, info
 > line, 16×16 gear); custom 6×8 text font + 8×16 menu font (§3.4); Mage keeps BAG (10 icons);
-> Zombie → **Vampire**; gold glow = SYNC; ZX0 in blocks of 3–4 frames (§11); **finite
+> Zombie → **Vampire**; gold glow = SYNC; ZX0 in blocks of 3–4 frames (§11; up to 8 since DECOR2-SHIP); **finite
 > ammunition** (§6.3, §8.5); Death Knight redesigned (5 frames); hunger stage names.
 > **Rev 4 (2026-10-03):** user 2026-10-03 adds **status effects** (§6.4, 3D), **traps** (§1.5,
 > 3E), **blessed/cursed gear as known states** (§8.7, 3E) and **light identification** of
@@ -4193,7 +4193,8 @@ Verify with ≥ 5 seeds × 2 heroes before Stage 3 exit.
 - Source = `W/8 × H × 2`. Pool: stationary = 2 × source; moving = 2 × source + 2 × source ×
   (cols+1)/cols; projectiles = 2 × source (one shift).
 - **ZX0 format (rev 3, A4 measured; supersedes rev 2's per-frame packing).** Sources are
-  packed in **blocks of 3–4 frames per kind**. The generator unpacks one block into the
+  packed in **blocks of 3–4 frames per kind** (DECOR2-SHIP 2026-11-17: up to 8 frames, still one kind and
+  ≤ 1,536 B raw: −726 B packed, the bytes that fund DECOR2). The generator unpacks one block into the
   **1.5 KB `GEN_SCRATCH`** (aliasing `ROOM_MAP`+`NEXT_MAP`, memory-map; legal because the
   generator never runs mid-room), then reads the frames out of it. Rev 2 unpacked each frame
   into the 512 B `GEN_SRC`. Measured ratios: **1.80× per frame, 2.71× per kind block**

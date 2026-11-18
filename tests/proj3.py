@@ -70,7 +70,7 @@ import combat_tables as CT  # noqa: E402
 import os  # noqa: E402
 PROFILE = os.environ.get("PROJ_PROFILE")
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+RES = S["tut_stub_end"]                # the TUT0 stub room's free tail (.. sel_tab; DECOR2-SHIP: STUB + 200 hit ts_icon)
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 E_REACT, E_REACTAT = 15, 16

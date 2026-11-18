@@ -50,7 +50,7 @@ import ranged_model as M  # noqa: E402
 M.FID_DAGGER = S["FID_dagger_spin1"]              # rg_q: a dagger_spin shot's FXD_ATTR = ROCK_ATTR
 
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+RES = S["tut_stub_end"]                # the TUT0 stub room's free tail (.. sel_tab; DECOR2-SHIP: STUB + 200 hit ts_icon)
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
 E_ = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",

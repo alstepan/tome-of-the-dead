@@ -496,7 +496,9 @@ level_populate:
 ;   gate     B12 / 3F-T8, after the deriver: shut (LF_GRATE_OPEN = 0, the boss
 ;            lives) T_GRATE_SHUT x 3; open: T_GRATE (raised, LADDER|HOLE) over the
 ;            3 exit cells + T_GLOW on row 16 above the middle one if T_AIR
-; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst (measured, DI, contended: W11 / W12M)
+; Clobbers: A, BC, DE, HL (IX, IY kept).   45.4k T worst WITHOUT decor (measured, DI, contended:
+;   W11 / W12M); decor_room (the DECOR2 decor_b0) adds mean ~81.5k / worst 131.8k T on a seeded
+;   room (DECOR2-SHIP: 5,400 rooms D1..D8; the 135k gate is on decor_b0, outside a frame tick)
 ;==============================================================================
 build_room_map:
                 push ix
