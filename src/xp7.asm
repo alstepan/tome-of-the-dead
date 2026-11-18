@@ -90,6 +90,8 @@ xp_level:
                 ret  nz                        ; 2nd frame: later
                 ex   de, hl
                 ld   (hl), 0
+                ld   hl, PANEL_DIRTY           ; XP-BAR: every XP gain (kill, boss delta) and level-up
+                set  PD_DEPTH_BIT, (hl)        ; redraws the XP bar (item_depth's far6 tail; 2 B bigger than 2 sets)
                 ld   a, (SEL_SLOT)
                 call slot_act                  ; bank 2 (A, HL)
                 cp   SA_BAG

@@ -270,6 +270,15 @@ EDGE_TAB        EQU LVL_HDR + LVL_HDR_LEN   ; $6E90: EDGE_SLOTS (8) B, EDGES_H u
                                     ; $6E9C DN_QN (PERF-GHOST), $6E9D TRAP_LIST (item_defs.asm)
 DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B spare (was DECOR2's run list; DECOR2-SHIP: the NEXT_MAP gap DG_SLOT0/1)
 DG_PLAN_LEN     EQU 16
+GARG_STIR       EQU DG_PLAN         ; GARG-CHAIN (new_monsters.md 4.1b): 0 = no chain armed, else the storey (0 / 1) of the first Gargoyle that
+                                    ; woke, + 1: the room's perched Gargoyles on that storey wake one a monster pass. Cleared by low-RAM vis_room_sync (a room
+                                    ; exit / teleport / level change). Test-observable
+GARG_SPENT      EQU DG_PLAN + 1     ; GARG-CHAIN: non-zero = a Gargoyle already woke in this monster pass (stir_arm sets it, bank-3 pl_seg3
+                                    ; clears it at the start of every pass). Test-observable
+ICON_FL         EQU DG_PLAN + 2     ; ICON-FLASH (game.md 5 "Reading"): 0 = no flash, else the first attr cell's column (3 * slot) of the ability icon a
+                                    ; book just LEARNED (rank 0 -> 1): FLASH (attr bit 7) on its 3 x 2 cells (rows 18-19) for ICON_FLASH_FR frames
+ICON_FLT        EQU DG_PLAN + 3     ; word: the SYS_FRAMES (low 16 bits) at the read; the flash is on while SYS_FRAMES - ICON_FLT < ICON_FLASH_FR
+ICON_FLASH_FR   EQU 100             ; 2 s at 50 Hz, independent of turns (a SYS_FRAMES compare, no ISR change). Test-observable: ICON_FL / ICON_FLT
 LVL_KEYROOM2    EQU DG_PLAN - 2     ; $6EAE (LARGER-D T4, the T2 spare after TRAP_N): colour-1 (magenta) key room id,
                                     ; ROOM_NONE = none (1-lock level / D0). attempt zeroes it, then writes it (test-observable)
 LVL_STATE_END   EQU DG_PLAN + DG_PLAN_LEN   ; $6EC0
@@ -769,4 +778,6 @@ INFO_NOTE_COL   EQU 21              ; char 28 = 168 px
 ATTR_INFO_NAME  EQU $47
 ATTR_INFO_NUM   EQU $46
 ATTR_INFO_NOTE  EQU $45
-ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1)
+ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1) + XP-BAR the XP bar cell (30, 19)
+XPB_COL         EQU DEPTH_COL       ; XP-BAR (user 2026-11-18): 8-px XP progress bar, cell (30, 19), sv_r2.asm xp_bar
+XPB_ROW         EQU ICON_ROW + 1

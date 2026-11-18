@@ -26,10 +26,13 @@ perch1:         bit  EF_GHOST_BIT, (ix+E_FLAGS)
 .gh:            call get_box                   ; (bank 2) C x, B y, D w, E h
                 call box_free                  ; (bank 2) 2. CF = a body overlaps the statue
                 ret  c
-                ld   a, (PL_LADDER)
-                or   a
-                ret  nz                        ; the hero mid-ladder: stays perched
-                call storey_ref                ; (bank 2; A, HL)
+                ld   a, (PEND_N)               ; ... or a PENDING one (a squeezed body / a door arrival): only when the room has any
+                or   a                         ; (pend_hit's own fast path; the .go entry skips it: ~1.1k T a statue a pass saved)
+                call nz, gh_pend              ; (R4 sv_r4.asm: pend_hit.go with a "current box" no body meets; keeps BC, DE, IX; CF out)
+                ret  c                         ; (+1 B vs the direct call)
+                jp   stir_gate                 ; GARG-CHAIN (low RAM, garg_l.asm): the armed chain wakes me (jp .wk); else the hero
+                                               ; mid-ladder leaves it perched (ret nz), or it comes back to .st (-2 B here)
+.st:            call storey_ref                ; (bank 2; A, HL)
                 ld   hl, PL_STOREY
                 cp   (hl)
                 ret  nz                        ; the other storey: never
@@ -51,8 +54,9 @@ perch1:         bit  EF_GHOST_BIT, (ix+E_FLAGS)
                                                ; an overlap; perch6's jr c, .wk is gone)
 .g:             cp   PERCH_GAP + 1
                 ret  nc                        ; too far: stays perched
-                res  EF_GHOST_BIT, (ix+E_FLAGS) ; 3. solid from now on (it stays in LIVE_LIST: box_free reads
+.wk:            res  EF_GHOST_BIT, (ix+E_FLAGS) ; 3. solid from now on (it stays in LIVE_LIST: box_free reads
                 set  RCD_AWAKE_BIT, (ix+E_RCD)  ; the flag live, so it collides at once: no build_live)
+                call stir_arm                  ; GARG-CHAIN: arm the room's chain (+ "THE STATUES STIR!" with a joiner); keeps E, IX
                 ld   a, e
                 call face_a                    ; (bank 2)
                 ld   b, MSG_M_WAKE

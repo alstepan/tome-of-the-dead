@@ -1205,8 +1205,12 @@ the level curve. Levels are the stat floor; books are the toolkit.
 **Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER` (16), on L6
 `YOU FEEL NIMBLE` (15). Death/win screens show `LEVEL n`.
 
-**Display.** Panel cell **(31, 19)** (free; the key icon is at (30, 19)): the level digit
-`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). The **BAG icon's info line** shows
+**Display.** Panel cell **(31, 19)**: the level digit
+`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). **XP-BAR (user 2026-11-18):** cell **(30, 19)** (under the
+depth readout, beside the digit) holds an 8-px XP progress bar, attr `$46`: fill = `floor(8 * (XP - T(L-1)) / (T(L) - T(L-1)))`
+px from the left (`T` = `XP_NEXT`, `T(0)` = 0; full at L9), in the FOOD bar's style (frame lines 1 / 6, fill lines 2..5, no side
+caps: the width is exact). Queued with the depth item (`PD_DEPTH`: set on every XP gain / level-up and by `panel_init`),
+never drawn in an input tick; D0 shows it too (harmless). 0 new glyphs; `src/sv_r2.asm` `xp_bar` (R2, boot-installed). The **BAG icon's info line** shows
 the numbers: `BAG 12/20  LV 5  XP 412/500` (≤ 42; at L9 `XP 1234`). The inventory page
 header shows the same. 0 new glyphs.
 
@@ -1285,6 +1289,8 @@ bounces, effect duration/chance) = **126 B**; the engineer may keep it in bank 3
 hero's ≤ 5 current rows (30 B) into bank 2 on learn/rank-up, so casting reads one row as now
 (0 extra T per cast). Read-time book code ~90 B bank 3; strings ~60 B raw (two message
 stems + roman suffixes; ability names exist).
+
+**ICON-FLASH (user 2026-11-18; the main-game twin of the tutorial's TUT-ICONFLASH pointer).** When a read **learns a NEW ability** (rank 0 -> 1: an empty bar slot lights up; not a rank-up, not the Tome), that icon slot's 6 attr cells (rows 18-19, cols `3 * slot .. +2`; ability `k` = slot `k + 1`) **FLASH** (hardware attr bit 7) for a fixed **100 frames (2 s)**, independent of turns (a `SYS_FRAMES` compare in `icon_poll`, the per-tick panel poll; no ISR change). The flash waits for the slot's redraw, is re-applied if a redraw drops it, and is cleared at expiry; `level_reset` (new level / new game) drops it, and the death / win / pause / bag screens repaint the cells. **Not in D0:** the tutorial pointer owns the icon there (the sandbox read arms nothing). `ic_learn` (R4) / `ic_fl` (cold block) / `ic_mark` (R4); memory-map "ICON-FLASH ledger"; `tests/iconflash.py`.
 
 **`abil_learn` (rev 6, engineer contract).** State: `ARANK` + `BOOK_DRY` 2 bits, packed in
 `ARANK`'s 6 spare bits (0 new bytes; engineer may choose otherwise). Inputs: class, current

@@ -376,8 +376,7 @@ fx_book:
                 or   l
                 jr   nz, .scan
                                                ; starter: Z = A = 0: slot 0, 0 RNG
-.learn:         ld   hl, abil_learn            ; bank 7 (A = k)
-                call far7
+.learn:         call ic_learn                  ; ICON-FLASH (R4 sv_r4.asm): far7 abil_learn (A = k), then the new-ability flash (-3 B here)
                 ld   l, FXR_TURN
                 ret
 .scan:          ld   a, (HERO_KIND)

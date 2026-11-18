@@ -203,7 +203,7 @@ set_reaction_at:
                 ret
 
 ; pl_seg3 — AI-SEEK2 (design/ai_seek2.md §2.2): PL_SEG, the hero's target segment ($80 = storey 1,
-; $00 / $01 = storey-0 left / right half = seg0(x) = x > ROOM_CUT), from cache_player's PL_*.
+; $00 / $01 = storey-0 left / right half = seg0(x) = x > ROOM_CUT), from cache_player's PL_* (+ GARG-CHAIN: clears GARG_SPENT).
 ; Called by bank-2 resolve_monsters right after cache_player, bank 3 paged. A mid-climb on an INTERNAL
 ; ladder (PL_LADDER == 2) counts on the end he is heading to (his E_AIDIR: $FF up -> storey 0,
 ; 1 down -> storey 1); everything else on his own storey.   Clobbers: A, HL.  ~0.15k T
@@ -223,6 +223,8 @@ pl_seg3:
                 sbc  a, a
                 and  1
 .sg:            ld   (PL_SEG), a
+                xor  a                         ; GARG-CHAIN: a new monster pass: no chain wake yet (+4 B; pl_seg3 runs once a pass)
+                ld   (GARG_SPENT), a
                 ret
 
 ;==============================================================================

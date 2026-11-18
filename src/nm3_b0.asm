@@ -276,6 +276,9 @@ end_scr0:
 .pl:            ld   l, 0                      ; the next tick (end_screen: jp play_loop)
                 ret
 .card:          ld   (hl), ES_CARD | END_DELAY
+                xor  a
+                ld   (ICON_FL), a              ; ICON-FLASH: the card repaints the cells; end_scr0's panel_tick polls icon_poll -> ic_fl,
+                                               ; which must not re-flash them (+4 B)
                 ld   hl, end_card              ; bank 1 (menu1.asm)
                 call far1
                 jr   .pl

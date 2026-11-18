@@ -300,7 +300,7 @@ log_drop:       push hl
 ; item — any, incl. a whole log message (scroll + line, <= ~21k T) — and
 ; re-checks: items keep coming until the queue is empty or the 2nd frame has
 ; begun, so it ends below ~92k T. A tick already in its 2nd frame draws ONE
-; small item (HP / ICONS / DEPTH, <= ~4.5k T): the render-bound heavy ticks
+; small item (HP / ICONS / DEPTH, <= ~5.5k T: item_depth is ~5.4k since XP-BAR): the render-bound heavy ticks
 ; reach ~116k T before the panel (budget.py), a log item there could pass the
 ; 126k T cap; the log waits for a 1st-frame tick (in a fight: the turn's last,
 ; light ANIM ticks — budget.py reports the latency).
@@ -361,7 +361,7 @@ item_hp_far:
                 jp   farb
 
 ;------------------------------------------------------------------------------
-; item_depth — "Dn" at (30, 18) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0", SMC below) + LARGER-D T8
+; item_depth — "Dn" at (30, 18) + XP-BAR the XP bar (30, 19) (sv_r2.asm xp_bar, via depth_tail) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0", SMC below) + LARGER-D T8
 ; KEY-PANEL the two 16x8 key icons (24-25 / 27-28, 21) (key_pan: cyan / magenta while held, else blank).
 ; HL = PANEL_DIRTY.  ~2.3k T
 ;------------------------------------------------------------------------------
@@ -386,14 +386,16 @@ item_depth:
                 call print6
                 ASSERT ((DEPTH_COL * 8) & 7) == 0 && DEPTH_COL * 8 + 6 * 2 <= 256     ; print6 x rule
                 ld   bc, (ICON_ROW << 8) | DEPTH_COL   ; KEY-PANEL: the "Dn" cells and the key icons
-                ld   de, (2 << 8) | 1          ; are marked here (R6 has no room); the marks only
+                ld   de, (2 << 8) | 2          ; are marked here (R6 has no room); the marks only
                 call pmark_rect                ; matter at the next present, after key_pan draws
+                                               ; (XP-BAR: 2 rows: + the XP bar (30, 19) that key_pan's tail draws)
                 ld   bc, (STAT_ROW << 8) | KEY_PAN_COL
-                ld   d, KEY_PAN_W              ; E = 1 kept (pmark_rect keeps BC, DE)
+                ld   d, KEY_PAN_W              ; E = 2 kept: row 22 (the log, cols 24..28) is marked too: a harmless
+                                               ; copy of already-equal cells (HOT_COPY has no byte for a 2nd `ld e`)
                 call pmark_rect
                 ld   a, (LVL_FLAGS)            ; KEY-PANEL: key_pan's input (far6 passes A)
-                ld   hl, key_pan               ; LARGER-D T8 / KEY-PANEL (R6 key6.asm): the key cells
-                jp   far6
+                jp   depth_tail                ; LARGER-D T8 / KEY-PANEL (R6 key6.asm key_pan) + XP-BAR: R2 sv_r2.asm (boot-installed
+                                               ; by in_tut; item_depth only runs after the menu): far6 key_pan, then the XP bar
 
 ;------------------------------------------------------------------------------
 ; dn_mbit — DNUM-SPRITE-FIX (bank-2 dnum2.asm dn_cel; here: HOT_COPY's spare,

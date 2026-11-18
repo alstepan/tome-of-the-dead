@@ -1699,6 +1699,9 @@ vis_reset:
                 ld   l, a
                 djnz .z
 vis_room_sync:
+                xor  a
+                ld   (GARG_STIR), a            ; GARG-CHAIN: a room exit / teleport / level change ends the chain (every Gargoyle
+                                               ; re-perches; only do_exit .in and vis_reset call this; +4 B, was 7 B in bank 3)
                 ld   ix, P_ENTITIES
                 ld   hl, SLOTREC + R_VIS
                 ld   de, P_ENT_STRIDE
@@ -2623,6 +2626,8 @@ page_run:
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
                 INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
                 INCLUDE "dscl.asm"             ; BALANCE-PKG5: dsc_roll, the monster melee depth ramp (from bank-3 dmg_roll)
+                INCLUDE "garg_l.asm"           ; GARG-CHAIN: stir_gate / stir_arm (bank-1 perch1's chain)
+                INCLUDE "icfl_l.asm"           ; ICON-FLASH: ic_fl (icon_poll's hook; ic_learn is in R4)
                 INCLUDE "flyl.asm"             ; FLY-CUT: fly_cut, a flyer's detour round a mid-block (bank-3 ai_flyer)
 
 ;------------------------------------------------------------------------------
