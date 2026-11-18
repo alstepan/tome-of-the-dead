@@ -735,7 +735,7 @@ pend_hit:
                 ret  z                         ; CF = 0
                 ld   h, (ix+E_X)
                 ld   l, (ix+E_Y)               ; the mover's current box origin
-                push ix
+.go:            push ix                        ; GARG-REDRAW: perch1 enters here with HL = PERCH_FAR (no box there)
                 ld   ix, P_ENTITIES
 .l:             push de
                 ld   de, P_ENT_STRIDE

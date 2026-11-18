@@ -7919,6 +7919,12 @@ which is why `in_tut` — after `in_flow` — installs it). R5: ASSERT `SV_R5_EN
 deeper ISR / `AY_PLAY` needs the constant raised and the region shrunk) and `ISR_SAVE_ALT == 0` (isr_alt sits at
 `STACK_BOTTOM`) unless the block is empty. R4 is not an EQU (a low-RAM label EQU differs between assembler passes).
 
+### GARG-WAKE (2026-11-18, on `feat/reclaim-sv`; user: GARG-REDRAW's statue repair dropped, only its wake fix kept)
+
+`perch1` (bank 1) calls bank-2 `pend_hit.go` (new label on the existing `push ix`; HL = `PERCH_FAR` `$C0C0`, a "current
+box" no body meets) after `box_free`, so a PENDING body on the statue's box delays the wake (new_monsters.md 4.1).
+Cost: bank 1 +7 B (free 11 -> **4**); low RAM / bank 2 / R6 / R2 / R4 / R5 0 B. `tests/nm3b.py` G3p.
+
 ### Free bytes after RECLAIM-SV (release build)
 
 | Region | Free |
@@ -7928,7 +7934,7 @@ deeper ISR / `AY_PLAY` needs the constant raised and the region shrunk) and `ISR
 | R2 `$5C7B..$5CDA` | 96 |
 | R4 print area | 68 |
 | R5 ISR stack slack | 48 (ISR margin 0) |
-| bank 1 UI | 11 (was 28) |
+| bank 1 UI | 4 (11 before GARG-WAKE; was 28) |
 | R6 | 3 (was 70) |
 | bank 2 | 6 (+3 B `kind_tab` ALIGN pad; free to FRT 3), unchanged |
 | BOOT4 (`BLOB_ORG - boot4_end`) | 544 (unchanged: empty blocks) |

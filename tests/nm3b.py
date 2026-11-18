@@ -17,7 +17,8 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
      one blocks / is bumped); the hero's find_target ignores it; the wake is delayed while the hero or a monster
      overlaps its box and happens on the first turn the box is clear; a dagger (proj_fire) flies through it and
      hits the body behind (a solid one is the target); arrival_conflicts leaves it alone; G6 try_close's
-     room_bodies: a ghost is no hostile near the door but still fills the door cells
+     room_bodies: a ghost is no hostile near the door but still fills the door cells; G3p a PENDING body
+     on the statue's box delays the wake too
   R  re-perch on room re-entry (stub lp_transition, as do_exit): an awake Gargoyle left behind comes back
      perched (parked slot restored: RCD_SUMMON cleared), hp kept; a perched one is never a follow candidate,
      an awake one is (follow_select), and place_follower keeps it awake
@@ -434,6 +435,20 @@ def part_g(p, w):
         woke = w.e(3, "POT") & AWAKE and not w.e(3, "FLAGS") & GH and w.e(3, "MODE") == S["M_SEQ"]
         check(f"G3 the {who} overlaps the ghost (hero in reach): no wake; box clear next turn: wakes (solid, M_SEQ)",
               held and woke, (held, w.e(3, "POT"), w.e(3, "FLAGS"), w.e(3, "MODE")))
+    # G3p (GARG-REDRAW, closes the §4.1 known limit) a PENDING body (squeezed / door arrival) on the statue's box
+    # delays the wake too (perch1 -> pend_hit.go); once it is gone the hero in reach wakes it
+    w.clear()
+    w.rows()
+    w.hero(gx + gw + 1)                                  # gap 1: in wake reach
+    w.put(5, KO, gx, stand_y(1, oh), flags=EF_ACTIVE | EF_HOSTILE | S["EF_PENDING"])
+    w.put(3, KG, gx, gy, flags=PERCHED)
+    ingame(p, pre(3) + far1("perch1"))
+    held = not w.e(3, "POT") & AWAKE and w.e(3, "FLAGS") & GH and w.e(3, "MODE") == 0
+    p.wb(ENT + 5 * STRIDE + EF["FLAGS"], 0)
+    ingame(p, pre(3) + far1("perch1"))
+    woke = w.e(3, "POT") & AWAKE and not w.e(3, "FLAGS") & GH and w.e(3, "MODE") == S["M_SEQ"]
+    check("G3p a PENDING Orc on the ghost's box (hero in reach): no wake; gone next turn: wakes",
+          held and woke, (held, w.e(3, "POT"), w.e(3, "FLAGS"), w.e(3, "MODE")))
     # G4 a dagger flies through the ghost and hits the Orc behind it; a solid Gargoyle is the target instead
     for fl, tag in ((PERCHED, "ghost"), (solid, "solid")):
         w.clear()

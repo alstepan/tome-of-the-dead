@@ -302,6 +302,7 @@ RCD_AWAKE       EQU %00000100
 RCD_AWAKE_BIT   EQU 2
 RCD_SPENT_BIT   EQU RCD_ONCE_BIT
 PERCH_GAP       EQU 2               ; G-1: a perched Gargoyle wakes at a box gap <= 2 to the standing hero on its storey
+PERCH_FAR       EQU $C0C0           ; GARG-REDRAW: perch1's pend_hit.go "current box" origin (x, y $C0): box_vs_ix meets no body there
 VB_GAP          EQU 12              ; rule 2: close distance at a box gap <= 12 cols
 VB_FAR          EQU 6               ; ... and gap >= 6 turns it on open floor too (gap < 6: only with a cut between)
 VB_NEAR         EQU 2               ; revert at a box gap <= 2 (same storey, no cut between)

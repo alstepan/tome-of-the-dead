@@ -150,7 +150,8 @@ also never FROZEN, so its ink can never collide with the `$45` tint.
 - **Each own turn while not awake** (after the status step and the slow gate, before `ai_flyer`;
   bank-1 `perch1`, far1 from bank-3 `afl_perch`):
   1. **Solid (no `EF_GHOST`)** = a door arrival: set AWAKE, the turn is spent (rule 4).
-  2. **A body (the hero or a monster) overlaps its box** (`box_free`, ghosts and corpses skipped): wait.
+  2. **A body (the hero or a monster, PENDING ones included) overlaps its box** (`box_free`, then `pend_hit.go`;
+     ghosts and corpses skipped): wait.
      The wake is delayed until the box is clear (rule 2).
   3. **The hero standing on the same storey (not mid-ladder) at box gap ≤ `PERCH_GAP` 2:** clear
      `EF_GHOST`, set AWAKE, face him, print `THE GARGOYLE WAKES UP.` (the existing ` WAKES UP.` suffix,
@@ -173,8 +174,11 @@ also never FROZEN, so its ink can never collide with the `$45` tint.
 - **Close door (key C):** a ghost is no "hostile within 2 cols" (it never refuses the close from there), but a
   statue standing in the door cells still blocks the door (manager ruling: a woken Gargoyle must never sit
   inside a plank). Two ghosts never block each other.
-- Known limit: the wake's overlap test sees LIVE_LIST bodies (the hero and active monsters), not PENDING ones
-  (a door arrival hidden on the statue's box): counting those costs ~30 B of bank 1 (28 free), left as is (reported).
+- **Wake overlap includes PENDING bodies (GARG-WAKE, closes the former known limit):** after `box_free` (LIVE_LIST:
+  the hero and active monsters) perch1 asks bank-2 `pend_hit.go` (with a "current box" no body meets, `PERCH_FAR`): a
+  PENDING body (squeezed, or a door arrival not yet materialised) on the statue's box also delays the wake
+  (+7 B bank 1; `tests/nm3b.py` G3p). (The GARG-REDRAW statue-as-background repair was dropped, user 2026-11-18:
+  the render stays the GARG-PASS overlap-repair cascade.)
 
 ### 4.2 Fire Imp ranged row (F-1) — RANGED-SPEC table row
 

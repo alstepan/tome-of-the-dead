@@ -26,6 +26,9 @@ perch1:         bit  EF_GHOST_BIT, (ix+E_FLAGS)
 .gh:            call get_box                   ; (bank 2) C x, B y, D w, E h
                 call box_free                  ; (bank 2) 2. CF = a body overlaps the statue
                 ret  c
+                ld   hl, PERCH_FAR             ; GARG-REDRAW: ... or a PENDING one (a squeezed body / a door arrival:
+                call pend_hit.go               ; (bank 2) pend_hit with a "current box" no body meets; keeps BC, DE,
+                ret  c                         ; IX; ~1.1k T a waiting turn) (+7 B)
                 ld   a, (PL_LADDER)
                 or   a
                 ret  nz                        ; the hero mid-ladder: stays perched
