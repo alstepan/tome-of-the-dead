@@ -1,5 +1,5 @@
 # FINAL-2: build the tape on GitHub + the emulator-free checks; a pushed v* tag also publishes a GitHub Release.
-# The ZEsarUX/ZRCP suites stay local (tests/*.py that drive the emulator; see docs/plan.md FINAL-2).
+# The ZEsarUX/ZRCP suites run in emu.yml (nightly + manual, not per push); see docs/plan.md FINAL-2.
 name: build
 
 on:

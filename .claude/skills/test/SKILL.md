@@ -127,3 +127,11 @@ FL=abc python3 tests/flicker.py  # E0 raster-beam flicker events per tick (scena
   after the tape boot), so every PROTO-room scenario keeps rooms A-D; set
   `p.proto_start = 0` for a generated start (W16 also pokes `seed_fixed` /
   `seed_value` for a reproducible master seed).
+
+## CI
+
+`.github/workflows/emu.yml` (nightly `schedule` + manual `workflow_dispatch`, never per push) builds
+ZEsarUX-12.1 from source with only the null/stdout drivers, builds the release tape
+(`tools/build.sh -DDEBUG_KIT=0`) and runs `world`, `lock8`, `game`, `tut0` as parallel matrix jobs; a failing
+suite fails its job and uploads `logs/<suite>.log`. The harness finds the emulator via `ZESARUX_BIN`
+(default: the macOS app path). `build.yml` stays emulator-free.

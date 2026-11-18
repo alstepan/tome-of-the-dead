@@ -44,6 +44,10 @@ class Zrcp:
         if self.sock is None:
             raise ConnectionError(f"cannot reach ZRCP at {host}:{port}: {last}")
         self.sock.settimeout(timeout)
+        # Lockstep request/response over loopback: avoid Nagle + delayed-ACK stalls (40 ms per
+        # round trip on Linux, invisible on macOS). TCP_QUICKACK is Linux-only and not sticky.
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self._quickack = hasattr(socket, "TCP_QUICKACK")
         self._buf = b""
         self._read_until_prompt()                      # swallow the banner
 
@@ -56,6 +60,8 @@ class Zrcp:
     def _read_until_prompt(self):
         while PROMPT not in self._buf and STEP_PROMPT not in self._buf:
             chunk = self.sock.recv(4096)
+            if self._quickack:
+                self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
             if not chunk:
                 break
             self._buf += chunk
