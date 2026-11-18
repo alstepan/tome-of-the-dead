@@ -275,6 +275,10 @@ GARG_STIR       EQU DG_PLAN         ; GARG-CHAIN (new_monsters.md 4.1b): 0 = no 
                                     ; lp_transition (a room exit / teleport). Test-observable
 GARG_SPENT      EQU DG_PLAN + 1     ; GARG-CHAIN: non-zero = a Gargoyle already woke in this monster pass (stir_arm sets it, bank-3 pl_seg3
                                     ; clears it at the start of every pass). Test-observable
+ICON_FL         EQU DG_PLAN + 2     ; ICON-FLASH (game.md 5 "Reading"): 0 = no flash, else the first attr cell's column (3 * slot) of the ability icon a
+                                    ; book just LEARNED (rank 0 -> 1): FLASH (attr bit 7) on its 3 x 2 cells (rows 18-19) for ICON_FLASH_FR frames
+ICON_FLT        EQU DG_PLAN + 3     ; word: the SYS_FRAMES (low 16 bits) at the read; the flash is on while SYS_FRAMES - ICON_FLT < ICON_FLASH_FR
+ICON_FLASH_FR   EQU 100             ; 2 s at 50 Hz, independent of turns (a SYS_FRAMES compare, no ISR change). Test-observable: ICON_FL / ICON_FLT
 LVL_KEYROOM2    EQU DG_PLAN - 2     ; $6EAE (LARGER-D T4, the T2 spare after TRAP_N): colour-1 (magenta) key room id,
                                     ; ROOM_NONE = none (1-lock level / D0). attempt zeroes it, then writes it (test-observable)
 LVL_STATE_END   EQU DG_PLAN + DG_PLAN_LEN   ; $6EC0

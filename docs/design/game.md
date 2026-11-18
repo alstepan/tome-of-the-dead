@@ -1290,6 +1290,8 @@ hero's ≤ 5 current rows (30 B) into bank 2 on learn/rank-up, so casting reads 
 (0 extra T per cast). Read-time book code ~90 B bank 3; strings ~60 B raw (two message
 stems + roman suffixes; ability names exist).
 
+**ICON-FLASH (user 2026-11-18; the main-game twin of the tutorial's TUT-ICONFLASH pointer).** When a read **learns a NEW ability** (rank 0 -> 1: an empty bar slot lights up; not a rank-up, not the Tome), that icon slot's 6 attr cells (rows 18-19, cols `3 * slot .. +2`; ability `k` = slot `k + 1`) **FLASH** (hardware attr bit 7) for a fixed **100 frames (2 s)**, independent of turns (a `SYS_FRAMES` compare in `icon_poll`, the per-tick panel poll; no ISR change). The flash waits for the slot's redraw, is re-applied if a redraw drops it, and is cleared at expiry; `level_reset` (new level / new game) drops it, and the death / win / pause / bag screens repaint the cells. **Not in D0:** the tutorial pointer owns the icon there (the sandbox read arms nothing). `ic_learn` (R4) / `ic_fl` (cold block) / `ic_mark` (R4); memory-map "ICON-FLASH ledger"; `tests/iconflash.py`.
+
 **`abil_learn` (rev 6, engineer contract).** State: `ARANK` + `BOOK_DRY` 2 bits, packed in
 `ARANK`'s 6 spare bits (0 new bytes; engineer may choose otherwise). Inputs: class, current
 depth, the class's unlock-depth row (slots ordered by unlock depth, so "earliest" = lowest

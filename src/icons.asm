@@ -81,6 +81,7 @@ item_icons_far: ld   a, c
 ; HL = PANEL_DIRTY, kept; BC kept.  Clobbers: A, DE      ~0.2k T
 ;------------------------------------------------------------------------------
 icon_poll:
+                call ic_fl                     ; ICON-FLASH (R4 / cold block): the new ability icon's FLASH (HL, BC kept; 33 T idle)
                 ld   a, (MP_SH)
                 ld   e, a
                 ld   a, (MP)

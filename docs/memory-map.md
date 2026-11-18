@@ -7956,3 +7956,9 @@ The room's perched Gargoyles wake one a monster pass once one has woken by proxi
 - **RAM:** `GARG_STIR` `$6EB0` / `GARG_SPENT` `$6EB1` (= `DG_PLAN` / +1, the spare level-state bytes; `level_defs.asm`). Cleared: `level_reset` (3 B), `lp_transition` (4 B, bank 3); `GARG_SPENT` by `pl_seg3` (4 B, bank 3, once a pass).
 - **Text:** `TX_STIR` "THE STATUES STIR!" in the bank-0 text block (text 2765 -> 2778 of `TEXT_RES` 2780: headroom 15 -> 2; the carve pad 21 -> 8). One packed stream (+13 B).
 - **Free after:** cold block 197 -> **83**, bank 1 4 -> **3** (perch1 +1), bank 3 17 -> **6**, text headroom 2; R2 1, R4 68, R5 48, R6 3, bank 2 6 unchanged.
+
+## ICON-FLASH ledger (`feat/xp-bar-r2`, 2026-11-18; game.md 5 "Reading"; `tests/iconflash.py` F1..F6)
+A book that learns a NEW ability (abil_learn's L = 1) FLASHes the slot's 6 attr cells for `ICON_FLASH_FR` 100 frames (a `SYS_FRAMES` compare, 16-bit elapsed).
+- **Code:** R4 `src/sv_r4.asm`: `ic_learn` 34 B (fx_book `.learn` now `call ic_learn` = far7 abil_learn + the arm; D0 skip via `item_depth.d + 1` == `'0' - 1`; fx6 -3 B) + `ic_mark` 14 B (pmark_rect tail). Cold block `src/icfl_l.asm`: `ic_fl` 77 B, `call`ed first in `icon_poll` (bank 2 `icons.asm`, +3 B; HL / BC kept; 33 T idle). Bank 3 `level_reset` +3 B (`ICON_FL` := 0).
+- **RAM:** `ICON_FL` `$6EB2` (0 = none, else the first cell's column), `ICON_FLT` `$6EB3` word (`DG_PLAN` + 2 / + 3; with GARG-CHAIN's two bytes, 12 of the 16 DG_PLAN spare bytes stay free).
+- **Free after (release):** cold block 6 (197 -> 83 GARG-CHAIN -> 6), R4 68 -> **23**, R2 1, R5 48, bank 1 2, bank 3 3 (17 -> 6 -> 3), bank 2 6 -> 3 (the 3 B kind_tab ALIGN pad is gone: icon_poll), R6 3, text headroom 2, HOT_COPY 3.
