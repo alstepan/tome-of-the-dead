@@ -606,54 +606,7 @@ shot_tick:
                 ASSERT E_FLA == E_FLT + 1 && ((P_ENTITIES + E_FLT) & $FF) != $FF
                 ASSERT RS_R == 0 && RS_FL == 1 && RS_D == 2 && (RS_Q >> 8) == (RS_SINK >> 8)
 
-;------------------------------------------------------------------------------
-; perch6 — NEW-MON3 T10a G-1 (new_monsters.md §4.1, as amended 2026-11-14): far6 from bank-3 afl_perch, a
-; perched Gargoyle's own turn (IX; RCD_AWAKE clear; the status step and the slow gate passed). The hero
-; standing (not mid-ladder) on its storey (storey_ref vs PL_STOREY) at a box gap <= PERCH_GAP (an overlap
-; counts as 0) -> RCD_AWAKE, it faces him, "THE GARGOYLE WAKES UP." (the existing MSG_M_WAKE line, 0 new
-; text), the WAKING pose (its KS_CLIMB one-shot: a flyer never climbs; T10b's art) and the turn is spent;
-; else it waits (the PERCHED rest pose: anim's KS_CLIMBREST fid, GARG-FLY). Never otherwise. Damage (deal_hit) and a missed
-; bump (do_attack) set RCD_AWAKE silently; room re-entry re-perches (zeroed / restored slot clears bit 2).
-; Clobbers: all but IX.  A waiting turn ~0.5k T (far6 incl.); a wake + its line ~2.5k.
-;------------------------------------------------------------------------------
-perch6:         ld   a, (PL_LADDER)
-                or   a
-                ret  nz                        ; the hero mid-ladder: stays perched
-                call storey_ref                ; (bank 2; A, HL)
-                ld   hl, PL_STOREY
-                cp   (hl)
-                ret  nz                        ; the other storey: never
-                KFIELD KT_BW
-                add  a, (ix+E_X)
-                ld   b, a                      ; x + w
-                ld   a, (PL_X)
-                ld   c, 1                      ; C = the facing (+1 right / $FF left)
-                sub  b                         ; hero right: gap = px - (x + w)
-                jr   nc, .g
-                ld   a, (PL_X)
-                ld   hl, PL_W
-                add  a, (hl)
-                ld   b, a
-                ld   c, $FF
-                ld   a, (ix+E_X)
-                sub  b                         ; hero left: gap = x - (px + pw); CF = an overlap
-                jr   c, .wk
-.g:             cp   PERCH_GAP + 1
-                ret  nc                        ; too far: stays perched
-.wk:            set  RCD_AWAKE_BIT, (ix+E_RCD)
-                ld   a, c
-                call face_a                    ; (bank 2)
-                ld   b, MSG_M_WAKE
-                ld   c, (ix+E_KIND)
-                call impact_line               ; (low RAM: pages the text, restores R6) "THE GARGOYLE WAKES UP."
-                call kind_seq_ptr              ; (bank 2) the waking one-shot = KS_CLIMB
-                ld   de, KS_CLIMB
-                add  hl, de
-                ld   a, (hl)
-                inc  hl
-                ld   h, (hl)
-                ld   l, a
-                jp   start_seq                 ; (bank 2)
+; (GARG-PASS: perch6 moved to bank 1, perch1.asm, far1 from afl_perch: R6 had 3 B free.)
 
 ;------------------------------------------------------------------------------
 ; pit6 — NEW-MON3 T10a P-1 (new_monsters.md §8.2 / §8.3, user 2026-11-13: across pits only): far6 from

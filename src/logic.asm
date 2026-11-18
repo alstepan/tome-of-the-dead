@@ -185,7 +185,8 @@ build_live:
 ;==============================================================================
 ; box_free — CF = 1 if box (C=x, B=y, D=w, E=h) overlaps any LIVE_LIST entity
 ; other than slot ACT_SLOT that is not DYING (prototype §6.1: pending/dying
-; never block). box_free_mon: the monsters only (LIVE_LIST entry 0 = the hero
+; never block) nor EF_GHOST (GARG-PASS: a perched Gargoyle never blocks).
+; box_free_mon: the monsters only (LIVE_LIST entry 0 = the hero
 ; skipped; LIVE_N >= 1 always in play). Preserves: BC, DE, IX.  Clobbers: A, HL
 ; BLAIR-FIX: D / E become the exclusive ends x+w / y+h for the loop (restored),
 ; ACT_SLOT is patched into the slot test, the DYING test runs last (on an
@@ -247,8 +248,9 @@ box_free:
                 dec  a
                 cp   b
                 jr   c, .skip2
-                bit  EF_DYING_BIT, (ix+E_FLAGS)
-                jr   nz, .skip2                ; a corpse never blocks
+                ld   a, (ix+E_FLAGS)           ; a corpse never blocks; GARG-PASS: nor a perched
+                and  EF_DYING | EF_GHOST       ; Gargoyle (LIVE_LIST holds no PENDING body, so bit 5
+                jr   nz, .skip2                ; = EF_GHOST here; +1 B, +3 T an overlap only)
                 pop  af                        ; overlap
                 pop  de
                 pop  ix

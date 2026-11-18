@@ -157,7 +157,7 @@ fi_slot:        ld   a, b
                 ld   (de), a                   ; unmapped
                 ld   a, b
                 cp   IT_KEY                    ; KEY-POLISH: the floor key's ink by its room
-                call z, key_ink                ; (lockl.asm; reads .new's pushed DE at SP + 4: no
+                call z, key_ink                ; (below; reads .new's pushed DE at SP + 4: no
                                                ; push / pop may sit between .new and here; Z = magenta)
                 call nz, item_ink              ; (icons6.asm, R6; keeps BC, DE)
                 ld   e, a                      ; FI_INK[slot * 32 ..+ 31] := the ink
@@ -297,3 +297,21 @@ uq_chk:         ld   hl, FI_USE
                 ASSERT (FI_USE >> 8) == (FI_TSLOT >> 8) && FI_SLOTS < 256 - (FI_USE & $FF)
                 ASSERT IT_KEY == 4 && IT_P_CURE == 12 && IT_POTION == 1 && IT_F_CARROT == IT_KEY + 1 && IT_P_HEAL == IT_F_MEAT + 1
                 ASSERT (FLOOR_LIST & $FF) == 0 && FLOOR_MAX * FL_STRIDE == $80 && FL_COL == 1 && FL_ITEM == 2
+
+;------------------------------------------------------------------------------
+; key_ink — KEY-POLISH (GARG-PASS: from low-RAM lockl.asm, its only caller is here): fi_slot (R6, fi6.asm) caches the IT_KEY type: its ink by the room of the entry
+; (fi_add's E = the FL_ROOM byte, which fi_slot pushed: SP + 4 here). The colour-1 key room
+; (LVL_KEYROOM2) -> Z, A = ATTR_KEY_M; else NZ, A = B (the type: fi_slot's item_ink then gives it_tab's
+; cyan, ATTR_KEY_C). The two key rooms differ (levelgen ksel), so one room never holds both keys.
+; Clobbers: A, F, HL.   ~90 T
+;------------------------------------------------------------------------------
+key_ink:        ld   hl, 4
+                add  hl, sp
+                ld   a, (hl)
+                and  FL_ROOM_MASK
+                ld   hl, LVL_KEYROOM2
+                cp   (hl)
+                ld   a, b
+                ret  nz
+                ld   a, ATTR_KEY_M
+                ret

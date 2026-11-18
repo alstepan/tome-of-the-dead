@@ -1399,7 +1399,7 @@ outweighing the +8 T per redrawn background cell of the 64-id glyph address.)
 | `$B900..$B9BF` | `DMG_LIST` | per-render damage rects, 4 B each (c0,c1,r0,r1), 48 max |
 | `$B9C0..$B9CF` | `PEND_DMG` | queued damage for the next render (4 rects) |
 | `$BA00..$BA4F` | `LIVE_LIST` | per-turn collider list, 5 B/entry (`LL_STRIDE`: slot, ptr, w, h); `LIVE_N $BA50`; entry 0 is always the hero (B19 `box_free_mon` skips it) |
-| `$BA60..$BA6F` | `RLIST` | per-tick render list (slots visible or still drawn); `RLIST_N $BA70`, `RL_IDX $BA71` |
+| `$BA60..$BA6F` | `RLIST` | per-tick render list (slots visible or still drawn; slot order, except GARG-PASS: an `EF_GHOST` slot right after the hero, low-RAM `rl_ghost`); `RLIST_N $BA70`, `RL_IDX $BA71` |
 | `$BA72..$BA7C` | `PL_X/Y`, `PL_H/W` (AI-SEEK2: H below W), `PL_STOREY`, `PL_LADDER` (0 / 1 mid-ladder / **2 = mid-climb on an internal ladder**, AI-SEEK2), `MSG_Q $BA78`, `BLIT_CROWS $BA79`, **`ROOM_CUT $BA7A`**, **`PL_SEG $BA7B`**, **`FLY_CUT $BA7C`** (FLY-CUT) | per-turn hero cache, queued impact message, aligned-blit counter; AI-SEEK2 (see its ledger): the room's walker cut col K (`build_room_map`) and the hero's target segment (`pl_seg3`) |
 | `$BA80..$BA9F` | `SEL_FRT_SAVE` | 2 × 16 B: the select idles' boot FRT rows (`sel_frt_copy` saves at boot, restores on every `enter_select`; a game's `gen_kind` re-points its hero's rows above the alloc mark, which the next hero overwrites) |
 | `$BAA0..$BAFF` | `PRES_MASK` | A7 present dirty-cell mask: 24 rows × 4 B (`PRES_LEN` 96), byte `row*4 + col/8`, bit `7 − col%8`; ends at the page end (`present` stops when `L` wraps); **3F-B2: must stay 32-B aligned** (`PRES_MASK & $1F == 0`, ASSERTed in gfx.asm: `present` takes a mask byte's first cell low byte as `L * 8`) |
@@ -7071,7 +7071,7 @@ Behaviours: G-1 PERCH (Gargoyle), F-1 flyer shooter (Fire Imp ember, Frost Wrait
   `follow_select` skips a PERCHED Gargoyle (+10 B; `.cn` jr -> jp +1). Pose for T10b: perched = `KS_IDLE` (garg_perch), awake at
   rest = `KS_MOVE` (anim `.cyc`, bank 2 +12 B, +19 T a resting body of another kind), waking = the `KS_CLIMB` slot as a
   one-shot sequence `ga_wake` (seq_img.asm, +7 B; a flyer never reads KS_CLIMB).
-- **Wake** (never otherwise): R6 `perch6` (far6 from bank-3 `afl_perch`, ai_flyer's `bit 7,(hl)` on `KF_PERCH`): the hero standing
+- **Wake** (never otherwise; GARG-PASS: now bank-1 `perch1`, far1, see its ledger): R6 `perch6` (far6 from bank-3 `afl_perch`, ai_flyer's `bit 7,(hl)` on `KF_PERCH`): the hero standing
   on its storey at box gap <= `PERCH_GAP` 2 -> AWAKE, faces him, `MSG_M_WAKE` line, `ga_wake`, the turn spent; any HP loss
   (`deal_hit` alive path, bank 3 +8 B) and a missed bump (`do_attack` .miss, +8 B) set it silently. ALARM waves: not set
   (§4.1 "if <= 4 B": a kind test costs 11 B; a wave Gargoyle appears perched).
@@ -7363,7 +7363,7 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   `check_items`: one key entry per key room, exempt from the room cap. Icon: logical **46 = `ICONS16_KEY`**
   (`assets/gfx/icons/floor_key.grid`, a 16x8 key in the lower half, placeholder drawn after the panel `label_key`:
   artist review pending; `fi_slot`'s IT_KEY -> 46 mapping needed no code; `icpk` 1,013 -> 1,027 B). Ink: `it_tab` /
-  `ITEM_INK` `$45`; the colour-1 key room's key is `$43` via low-RAM `key_ink` (`fi_slot` -> reads `fi_add`'s FL_ROOM
+  `ITEM_INK` `$45`; the colour-1 key room's key is `$43` via `key_ink` (low RAM; GARG-PASS: R6 fi6.asm) (`fi_slot` -> reads `fi_add`'s FL_ROOM
   byte from its pushed DE; the two key rooms always differ). Pickup: `floor_pickup` (bank 7) -> low-RAM **`key_take`**
   (ex `key_find`: held bit, the line, `PD_DEPTH`; the key room id kept since W21-FIX) then `pp_take` (FL_EMPTY, **SFX_PICKUP**,
   re-stamp); either hero; never refused. `lair_hint` no longer grants keys. Never lost: no monster takes floor items,
@@ -7824,3 +7824,45 @@ was started (a body hit starts KS_ATTACK in `do_attack`'s tail). Fix: bank-7 `to
 callers; low-RAM `tome_swing` (clear the hero's E_MSG / E_HIT / E_TGT, `ld hl, atk_seq / call far3 / scf / ret`) enters bank-3 `atk_seq` (a label on `do_attack`'s existing
 `kind_seq_ptr` + `start_seq` tail, 0 B). Spells / daggers / arrows / Power Strike / Whirlwind keep their abl_seq (they never go through `tome_melee`).
 Free before -> after (release / kit / trace): bank 7 8 / -- / -- -> **1** / **1** / **65** (+7); low RAM (on main after DECOR2-SHIP, 30 / 32 / 32) -> **12 / 14 / 14** (-18: `tome_swing` 8 + review fix 10, E_MSG / E_HIT / E_TGT cleared so `do_impact` does not act on the last body blow's target; measured 22 / 24 / 24 -> 12 on the release build); bank 3 30 / 26 / 26 unchanged; B0_CODE2 and HOT_COPY unchanged.
+
+## GARG-PASS ledger (`feat/garg-pass`, 2026-11-18; stacked on `fix/w21-decor` `a3ecc3b`; new_monsters.md §4.1 as built)
+
+User rulings 2026-11-18: a perched Gargoyle is fully intangible (bodies and every attack pass through it), its wake waits
+for a clear box, the statue draws behind any crossing body, door arrivals are solid and awake. **No new RAM.**
+- **`EF_GHOST` = `EF_WALKIN`** (E_FLAGS bit 5, ASSERT + comment in defs.asm; conventions.md "EF_GHOST"): set by bank-3
+  `spawn_one` for `K_GARGOYLE` (+6 B), cleared by the wake. Skipped (mask widened) by bank-2 `box_free` (+1 B), bank-7
+  `find_target` hero path and `act_here` (0 B: `arrival_conflicts`), low-RAM `jump_bodies` (+1 B) and `climb_blocked`'s
+  squeeze (0 B), bank-3 `pf_cands` (+2 B: bolts / daggers / arrows / spells), `ai_monster` (+6 B: no cork yield), bank-0
+  `mus_pick0` (0 B: not an awake hostile). Monster shots pass through via `rg_line`'s `box_free`. Ghosts stay in LIVE_LIST.
+- **Wake:** R6 `perch6` (82 B) -> **bank-1 `perch1.asm`** (88 B, far1 from bank-3 `afl_perch`, 0 B there): solid -> AWAKE
+  (rule 4); a ghost whose box `box_free` finds a body in waits; else the old gap rule, then `EF_GHOST` off + AWAKE.
+  `impact_line` returns through `restore_page` (bank 1 back; checked). The `x + w` / hero-left gap math reads `get_box`'s
+  C / D (-12 B vs perch6's KFIELD path).
+- **Pose:** anim `.cyc` tests `EF_GHOST` instead of kind + `RCD_AWAKE` (-4 B bank 2, -7 T a resting body).
+- **Render order (rule 3):** anim_tick `.add` `bit EF_GHOST_BIT / call nz, rl_ghost` (+7 B bank 2, +20 T an RLIST append);
+  **low-RAM `rl_ghost`** (18 B) shifts the monster entries after the hero up one and stores the ghost there (~45 T + ~60 T an
+  entry passed, a ghost only). **Reclaims:** bank 2 net +4 B fits only because `glow_tab` (4 B) moved from the `kind_tab`
+  ALIGN pad (3 B left there) to after `boss2a.asm`; low RAM: `key_ink` (15 B, its only caller is R6 `fi_slot`) moved from
+  `lockl.asm` to R6 `fi6.asm`.
+- **Tests:** `tests/nm3b.py` W part rewritten for the ghost (perch1, `EF_GHOST` in the pokes, solid door-arrival cases), new
+  G part (G1 monster through, G2 hero through + find_target, G3 wake delayed while overlapped, G4 dagger through via the
+  `pf_cand` list, G5 arrival_conflicts), part_p pins `TMP6`. `tests/budget.py` + `gpass` (D6, knight + 4 Orcs through the
+  statue), `gpass0` (its control, statue out of the path), `gpass3` (D5, knight + 3 Skeletons, CAP-gated).
+  `tests/zx0_pool.py` src6 variant: + `G_NBOLT` in SRC6 (its bank 1 was ~50 B over with perch1).
+
+| Region (release / kit / trace) | before | after | delta |
+|---|---|---|---|
+| bank 2 (`FRT` tail + pad) | 10 / -- / -- | **6 / 5 / 8** | -4 (pose -4, box_free +1, rl hook +7) |
+| low-RAM spare | 14 / -- / -- | **11 / 13 / 13** | -3 (rl_ghost +18, jump_bodies +1, key_ink -15) |
+| bank 3 | 30 / 26 / 26 | **17 / 13 / 13** | -13 |
+| bank 1 | 116 | **28** | -88 (perch1) |
+| R6 | 3 | **70 / 75 / 70** | +67 (perch6 -82, key_ink +15) |
+| bank 7 / B0_CODE2 / HOT_COPY | 1 / 39 / 0 | 1 / 38 / 0 | B0 -1 (a packed stream) |
+
+- **Budget (release, `tests/budget.py`, worst ordinary tick work / real):** `gpass` (D6, knight + 4 Orcs through the statue)
+  151,194 / 166,707 vs its control `gpass0` 144,554 / 159,484; `gpass3` (D5, knight + 3 Skeletons) **130,587 / 156,224** vs
+  `gpass30` 122,509 / 143,498. The RLIST reorder itself is ~45 T + ~60 T an entry (a ghost only) + 20 T an append; the
+  +6.6k / +8.1k T is the overlap repair (each crossing body's damage rect forces the 24x32 statue re-blit, which cascades
+  to the other bodies on it) that a crossing implies with any draw order. `gpass3` passes the 126k CAP only without the
+  crossings: all four are reported measurements, not gated (escalated to the manager). `tests/world.py` W15's 2nd-frame HP item
+  cap 5.5k -> 5.55k (5,485 -> 5,502 T, the panel code byte-identical: a contention-phase shift).

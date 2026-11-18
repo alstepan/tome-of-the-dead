@@ -16,7 +16,7 @@
 DNG_N           EQU 4
 DNG_CALM_MIN    EQU 8
 DNG_DWELL_MIN   EQU 16
-DNG_SCAN_MASK   EQU EF_ACTIVE | EF_HOSTILE | EF_PENDING | EF_DYING
+DNG_SCAN_MASK   EQU EF_ACTIVE | EF_HOSTILE | EF_PENDING | EF_DYING | EF_GHOST   ; GARG-PASS: a perched Gargoyle is not awake
                 ASSERT (P_ENTITIES & 31) == 0 && P_ENT_STRIDE == 32 && E_ROOM == E_FLAGS - 1
                 ASSERT (ST_FLAGS & $F0) == $10 && (ST_FLAGS & $0F) == 0   ; 'or slot' builds the address
 

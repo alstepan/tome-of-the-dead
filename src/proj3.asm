@@ -482,7 +482,8 @@ pf_cands:
                 inc  hl
                 ld   a, (hl)
                 ld   ixh, a
-                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                ld   a, (ix+E_FLAGS)
+                and  EF_DYING | EF_GHOST       ; GARG-PASS: bolts / daggers / arrows pass a perched Gargoyle
                 jr   nz, .n
                 inc  hl
                 ld   b, (hl)                   ; B = w (LIVE_LIST's cached KT_BW / KT_BH)

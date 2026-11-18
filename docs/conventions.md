@@ -197,6 +197,19 @@
   Skipping it draws the previous world's slots for a tick (bugs B7 / B7b;
   `tests/game.py` #52 / #54). See `docs/memory-map.md` "Double buffer".
 
+## EF_GHOST (GARG-PASS, user 2026-11-18)
+
+- `EF_GHOST` = `EF_WALKIN` (E_FLAGS bit 5, ASSERTed in defs.asm), double-booked by state: WALKIN means
+  something only while `EF_PENDING` is set (materialise clears both in one step), GHOST only on a
+  non-PENDING body. So **bit 5 on a non-PENDING body = a perched Gargoyle, fully intangible**
+  (new_monsters.md §4.1). Set only by bank-3 `spawn_one` (K_GARGOYLE), cleared only by bank-1 `perch1`'s
+  wake. Never set bit 5 on a live body for any other reason, and never clear PENDING without clearing it.
+- Any new code that makes bodies collide, targets them or damages them must skip ghosts: test
+  `EF_DYING | EF_GHOST` like `box_free`, `jump_bodies`, `pf_cands`, `find_target` (hero), `act_here`,
+  the squeeze. A LIVE_LIST walk sees ghosts (they stay in it: the wake needs no `build_live`).
+- RLIST is no longer in strict slot order: `anim_tick` puts a ghost right after the hero (`rl_ghost`, low
+  RAM) so it is drawn under every monster; the hero is still RLIST[0] when listed and drawn last.
+
 ## Walk cycles (phase-locked shifts, `PHASE_SHIFT` default 1)
 
 - A walker's walk phase and its px both step once per 4-px tween tick, so each

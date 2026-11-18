@@ -239,6 +239,8 @@ ai_monster:
                 ; not just the next step, so a monster already parked on the
                 ; ladder end moves off before the hero reaches it.
                 call get_box
+                bit  EF_GHOST_BIT, (ix+E_FLAGS) ; GARG-PASS: a perched Gargoyle never yields (the hero
+                jr   nz, .ny2                  ; climbs through it; a yield step would move the statue)
                 call cork_check
                 jr   nc, .ny2
                 ; mid-ladder (non-flyer): yield ALONG the ladder, away from the
@@ -592,13 +594,14 @@ attack_if_reach:
 ; Clobbers: all but IX.
 ;------------------------------------------------------------------------------
 ; afl_perch — NEW-MON3 T10a G-1 (new_monsters.md §4.1): a KF_PERCH flyer (the Gargoyle) runs ai_flyer
-; only once RCD_AWAKE is set; perched, R6 perch6 decides the wake (gap <= PERCH_GAP: wake + line +
-; the waking pose, the turn spent) or waits in the rest pose. After the status step and the slow
-; gate (both run before .go); the yield rule (cork_check) still runs first for every kind.
+; only once RCD_AWAKE is set; not awake, bank-1 perch1 (GARG-PASS) decides: a ghost wakes (box clear of
+; every body, gap <= PERCH_GAP: wake + line + the waking pose, the turn spent) or waits in the rest
+; pose; a solid one (a door arrival) is set awake, its first turn spent. After the status step and the slow
+; gate (both run before .go); the yield rule (cork_check) runs first for every kind but a ghost.
 afl_perch:      bit  RCD_AWAKE_BIT, (ix+E_RCD)
                 jr   nz, ai_flyer.awake
-                ld   hl, perch6                ; (R6 ranged6.asm; far6 returns to ai_monster's caller)
-                jp   far6
+                ld   hl, perch1                ; (bank 1 perch1.asm, GARG-PASS; far1 returns to ai_monster's caller)
+                jp   far1
 ai_flyer:                                      ; BC / DE = the box (ai_monster's get_box), HL = the KT_FLAGS byte (.go)
                 bit  7, (hl)                   ; KF_PERCH: +19 T a flyer turn
                 jr   nz, afl_perch

@@ -890,6 +890,30 @@ dn_find:
                 djnz .f                        ; (NZ from the last cp)
 .x:             pop  de
                 ret
+;------------------------------------------------------------------------------
+; rl_ghost — GARG-PASS rule 3 (user 2026-11-18): anim_tick's RLIST append for an EF_GHOST body (a perched
+; Gargoyle): its entry goes right after the hero's (RLIST[0] = slot 0 when he is listed; slot 0 is walked
+; first) or to the front, the entries in between shift up one (their slot order kept), so render's draw
+; pass blits the statue BEFORE every monster: any body crossing it is drawn over it (the hero is drawn last
+; anyway). Two ghosts: the later one goes first (statues never move; either order is stable).
+; In: DE = the new entry (RLIST + old count), A = the slot. Out: DE = where to store it, A = the slot.
+; Clobbers: C, F.   ~45 T + ~60 T per entry passed (low RAM: bank 2 is full; contended, a ghost only)
+;------------------------------------------------------------------------------
+rl_ghost:       ld   c, a
+.l:             ld   a, e
+                cp   RLIST & $FF
+                jr   z, .x                     ; the front: no hero listed
+                dec  e
+                ld   a, (de)
+                inc  e
+                or   a
+                jr   z, .x                     ; the hero's entry: stop behind it
+                ld   (de), a                   ; shift a monster entry up one
+                dec  e
+                jr   .l
+.x:             ld   a, c
+                ret
+                ASSERT (RLIST >> 8) == ((RLIST + P_MAX_ENT - 1) >> 8)
 vb_fall:
                 ld   a, (ix+E_KIND)
                 cp   K_VBAT
@@ -1311,7 +1335,7 @@ climb_blocked:
                 ld   a, 1
 .l:             push af
                 ld   a, (ix+E_FLAGS)
-                and  EF_ACTIVE | EF_PENDING | EF_DYING
+                and  EF_ACTIVE | EF_PENDING | EF_DYING | EF_GHOST  ; GARG-PASS: a ghost is never squeezed
                 cp   EF_ACTIVE
                 jr   nz, .n
                 ld   a, (CUR_ROOM)
@@ -1668,7 +1692,8 @@ jump_bodies:
                 inc  hl
                 ld   a, (hl)
                 ld   ixh, a
-                bit  EF_DYING_BIT, (ix+E_FLAGS)
+                ld   a, (ix+E_FLAGS)
+                and  EF_DYING | EF_GHOST       ; GARG-PASS: a perched Gargoyle is jumped through
                 jr   nz, .n
                 call box_vs_ix
                 jr   nc, .n

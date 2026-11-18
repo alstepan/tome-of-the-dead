@@ -133,27 +133,45 @@ Scaled: Gargoyle D5 13/4, D6 14/4. Imp D4 8/3, D6 10/3. Wraith D5 17/4, D7 19/5.
 has a use). Fire Imp: none. Frost Wraith SLEEP, POISON (undead set). Being COLD I, the Wraith is
 also never FROZEN, so its ink can never collide with the `$45` tint.
 
-### 4.1 Gargoyle PERCH rule (G-1)
-- **Perched** = the per-slot AWAKE bit is clear. Use any per-slot bit the engineer proves free for
-  non-Vampire flyers; the Vampire's fled / `RCD_VSEEN` bits are kind-exclusive and can be shared.
-  Not `ST_X`: `STS_POISON ⇔ ST_X ≠ 0`. With bit = AWAKE, slot init gives "perched" at **0 B**.
-- Spawn is unchanged: a flyer spawns at its cruise row `9s+1` (sp_y), which is high on the wall,
-  where a gargoyle belongs. FRESH, VISITED and ROOM-MEM re-spawns are perched again (stored hp is
-  kept). An admitted follower keeps AWAKE.
-- **Each own turn while perched** (after the status step and the slow gate, before
-  `ai_flyer`): if the hero is standing on the same storey with **box gap ≤ `PERCH_GAP` 2**, set
-  AWAKE, print `THE GARGOYLE WAKES UP.` (the existing ` WAKES UP.` suffix, 0 new text) and **spend
-  the turn**. Otherwise wait (CF = 1) showing the rest pose. **Any HP loss sets AWAKE** (damage
-  path, ≈ 8 B) with no message. The hit flash is the cue.
-- Fairness: the hero always gets 1 turn after the wake (melee reach is gap 0–1). An observant hero
-  shoots or casts first from range, because damage wakes it and he keeps the first strike.
-  Perched it keeps eva 1 (no eva-0 code).
-- A perched Gargoyle **blocks** like any flyer at the cruise row (its rows `9s+1..9s+4` overlap
-  the hero's `9s+2..9s+7`). Walking into it is a bump attack, which wakes it.
-- Never wakes: hero on the other storey or mid-ladder, or gap > 2. It may stay decor all level. That
-  is allowed: XP forgone.
-- ALARM waves set AWAKE if ≤ 4 B, else accept (it appears perched at the door). Default: set it.
-- `idle_phase` stops automatically (the rest pose is a STA|SYM single frame, nothing to cycle).
+### 4.1 Gargoyle PERCH rule (G-1; GARG-PASS as built, user rulings 2026-11-18)
+- **Perched** = the per-slot AWAKE bit (`RCD_AWAKE`, E_RCD bit 2, kind-exclusive like the Vampire's
+  `RCD_VFLEE`) is clear **and** the body is a ghost: `EF_GHOST` (E_FLAGS bit 5, the same bit as
+  `EF_WALKIN`, which only means something while `EF_PENDING` is set; conventions.md "EF_GHOST").
+- **Spawn:** every resident spawn and re-spawn (FRESH, VISITED, ROOM-MEM, all through bank-3 `spawn_one`)
+  of `K_GARGOYLE` sets `EF_GHOST`; the zeroed / restored slot clears `RCD_AWAKE`. The flyer cruise row
+  `9s+1` (sp_y) is high on the wall, where a gargoyle belongs. Stored hp is kept. A perched one never
+  follows; an admitted (awake) follower keeps AWAKE.
+- **A perched Gargoyle is FULLY INTANGIBLE (rule 1).** Monsters and the hero move through it: walk,
+  fly, climb, the ladder queue, jump, materialise, arrival (`box_free`, `jump_bodies`, `act_here` /
+  `arrival_conflicts`, the squeeze skip it). Hero melee / bump / FIRE melee / Whirlwind / Power Strike
+  (`find_target`), hero bolts, daggers, arrows and spells (`pf_cands`), and monster shots (`rg_line`'s
+  `box_free`) all pass through it. No damage can reach it. It never yields to a climbing hero
+  (`ai_monster` skips `cork_check` for a ghost), and it is not an awake hostile for the Dangerous cue.
+- **Each own turn while not awake** (after the status step and the slow gate, before `ai_flyer`;
+  bank-1 `perch1`, far1 from bank-3 `afl_perch`):
+  1. **Solid (no `EF_GHOST`)** = a door arrival: set AWAKE, the turn is spent (rule 4).
+  2. **A body (the hero or a monster) overlaps its box** (`box_free`, ghosts and corpses skipped): wait.
+     The wake is delayed until the box is clear (rule 2).
+  3. **The hero standing on the same storey (not mid-ladder) at box gap ≤ `PERCH_GAP` 2:** clear
+     `EF_GHOST`, set AWAKE, face him, print `THE GARGOYLE WAKES UP.` (the existing ` WAKES UP.` suffix,
+     0 new text), the waking pose (its KS_CLIMB one-shot) and **spend the turn**. It is solid from then on.
+     The hero always gets at least 1 turn after it becomes solid.
+  4. Otherwise wait, showing the statue pose.
+- **Never wakes** with the hero on the other storey or mid-ladder, or gap > 2. It may stay decor all
+  level. That is allowed: XP forgone.
+- **Damage:** a ghost takes none. A solid not-yet-awake body (a door arrival before its first turn) is
+  woken by any HP loss (deal_hit, a POISON tick) or a missed bump, with no message.
+- **ALARM waves / trickle (rule 4):** a Gargoyle that arrives at a door comes in PENDING (| WALKIN);
+  materialise clears both, so it is solid, shown flying (never the statue), and set AWAKE on its first turn.
+- **Render (rule 3):** the statue always draws BEHIND any body crossing it. `anim_tick` appends an
+  `EF_GHOST` slot to RLIST right after the hero's entry (low-RAM `rl_ghost`, the monster entries shift up,
+  their slot order kept); render's draw pass then blits it before every monster (the hero is drawn last
+  anyway), and the overlap-repair cascade re-blits it under each crossing body. The pose: `EF_GHOST` =
+  the KS_CLIMBREST statue fid; solid = the KS_IDLE fly cycle.
+- Perched it keeps eva 1 (no eva-0 code). `idle_phase` stops automatically (the rest pose is a STA|SYM
+  single frame).
+- Known limits: a ghost in a doorway still refuses the hero's "close door" (room_bodies; closing a plank
+  on a statue that later wakes inside it would trap it). Two ghosts never block each other.
 
 ### 4.2 Fire Imp ranged row (F-1) — RANGED-SPEC table row
 

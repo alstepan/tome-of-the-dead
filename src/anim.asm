@@ -88,6 +88,8 @@ anim_tick:
                 add  a, (RLIST & $FF) - 1
                 ld   e, a
                 ld   a, (ANIM_SLOT)
+                bit  EF_GHOST_BIT, (ix+E_FLAGS) ; GARG-PASS rule 3: a perched Gargoyle goes in front of every
+                call nz, rl_ghost              ; monster entry (drawn first = behind them; low RAM, ~40 T + ~60 T an entry)
                 ld   (de), a
                 ASSERT (RLIST_N >> 8) == (RLIST >> 8) && (RLIST & $FF) >= 1 && (RLIST & $FF) + P_MAX_ENT <= $100
 .skip:          ld   de, P_ENT_STRIDE
@@ -99,7 +101,7 @@ anim_tick:
                 jr   .done                     ; (once a tick: jr, -1 B, +2 T)
 
 ;------------------------------------------------------------------------------
-; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick,
+; rl_first / rl_next — iterate RLIST (slots visible or still drawn this tick; GARG-PASS: a ghost right after the hero, else
 ; ascending). rl_next: A = ANIM_SLOT = next slot (Z = slot 0), HL = its
 ; SLOTREC record (R_VIS), CF = 1 when exhausted.
 ; Clobbers: A, HL.  (The render loops touch ~5 slots instead of 16.)
@@ -240,11 +242,12 @@ anim_entity:
                 ld   b, 1
                 ret
 .cyc:           call kind_seq_ptr              ; (A = kind + KT_SEQ low: kind_seq_ptr's index)
-                cp   (K_GARGOYLE + KT_SEQ) & $FF   ; NEW-MON3 G-1 pose: a PERCHED Gargoyle rests on its KS_CLIMBREST
-                jr   nz, .cy1                  ; fid (the statue; a flyer is never on a ladder, so .crest is free),
-                bit  RCD_AWAKE_BIT, (ix+E_RCD) ; an awake one hovers on KS_IDLE = the fly cycle (GARG-FLY); waking
-                jr   z, .crest                 ; = its KS_CLIMB one-shot (perch6). +19 T a resting body of another kind
-.cy1:           ld   a, (hl)                   ; KS_IDLE
+                bit  EF_GHOST_BIT, (ix+E_FLAGS) ; NEW-MON3 G-1 pose, GARG-PASS: a PERCHED (EF_GHOST) Gargoyle rests on its
+                jr   nz, .crest                ; KS_CLIMBREST fid (the statue; a flyer is never on a ladder, so .crest is
+                                               ; free; no other animated body has bit 5: PENDING ones are not animated);
+                                               ; a solid one hovers on KS_IDLE = the fly cycle (GARG-FLY), a door arrival
+                                               ; too (rule 4); waking = its KS_CLIMB one-shot (perch1). -4 B, -7 T
+                ld   a, (hl)                   ; KS_IDLE
                 inc  hl
                 ld   h, (hl)
                 ld   l, a

@@ -13,4 +13,5 @@
                 INCLUDE "info1.asm"
                 INCLUDE "stat1.asm"            ; D3-8: the hero's status icons (row 21)
                 INCLUDE "menu1.asm"
+                INCLUDE "perch1.asm"           ; GARG-PASS: the Gargoyle's perch / wake turn (far1 from bank-3 afl_perch; was R6 perch6)
                 INCLUDE "ui1_vars.asm"

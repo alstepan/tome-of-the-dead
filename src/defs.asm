@@ -741,6 +741,17 @@ EF_LEFT_BIT     EQU 3
 EF_PENDING_BIT  EQU 6
 EF_DYING_BIT    EQU 4
 EF_WALKIN_BIT   EQU 5
+; GARG-PASS (user 2026-11-18, new_monsters.md §4.1): EF_GHOST = a PERCHED Gargoyle, fully intangible. The
+; SAME bit as EF_WALKIN, double-booked by state: WALKIN is meaningful only while EF_PENDING is set
+; (materialise reads and clears it in the same step that clears PENDING), GHOST only on a non-PENDING body.
+; So "bit 5 set and not PENDING" == ghost. Set by bank-3 spawn_one for K_GARGOYLE (every resident spawn /
+; re-spawn), cleared only by the wake (bank-1 perch1); ALARM-wave / trickle / follower arrivals (sp_fin,
+; place_follower) never set it as GHOST: they come in PENDING (| WALKIN), materialise clears both = solid.
+; Readers that skip ghosts: box_free, find_target (hero), act_here, jump_bodies, pf_cands, climb_blocked
+; (the squeeze), ai_monster (no cork yield), mus_pick0 (DANGER), anim (the statue pose, rl_ghost order).
+EF_GHOST        EQU EF_WALKIN
+EF_GHOST_BIT    EQU EF_WALKIN_BIT
+                ASSERT EF_GHOST == %00100000 && EF_GHOST != EF_PENDING && EF_GHOST == 1 << EF_GHOST_BIT
 EF_RESPAWN      EQU %10000000       ; LP: F_RESPAWN (game.md §9.5; no drops / half XP = 3F),
 EF_RESPAWN_BIT  EQU 7               ; carried through the room records (LEK_RESPAWN)
 

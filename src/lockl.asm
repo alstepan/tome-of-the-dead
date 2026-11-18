@@ -2,7 +2,7 @@
 ; lockl.asm — LARGER-D T8: the level-key runtime (larger_depths.md §2.1 rev 2 / rev 3, §6; user
 ; decisions 2026-11-16; KEY-POLISH 2026-11-16: the key is a floor item, the whole locked door in its
 ; colour; DOOR-FRAME 2026-11-16: its arch too). Low-RAM cold block (INCLUDEd by lowram.asm): callable from any bank, pages nothing.
-; Callers: hero_door (lowram, the bump), floor_pickup (bank 7, key_take), fi_slot (R6, key_ink),
+; Callers: hero_door (lowram, the bump), floor_pickup (bank 7, key_take), fi_slot (R6; key_ink is in fi6.asm since GARG-PASS),
 ; build_room_map (bank 3, every door it stamps), fi_cells (lowram, room draws + scroll strips),
 ; room_show / room_shadow (lowram).
 ; State: LF_KEYC / LF_KEYM in LVL_FLAGS = the keys HELD; LVL_KEYROOM / LVL_KEYROOM2 stay for the whole
@@ -41,23 +41,7 @@ key_take:
                 ex   de, hl
                 jp   log_push                  ; (HOT; plain ASCII is a log stream: msgl.asm)
 
-;------------------------------------------------------------------------------
-; key_ink — KEY-POLISH: fi_slot (R6, fi6.asm) caches the IT_KEY type: its ink by the room of the entry
-; (fi_add's E = the FL_ROOM byte, which fi_slot pushed: SP + 4 here). The colour-1 key room
-; (LVL_KEYROOM2) -> Z, A = ATTR_KEY_M; else NZ, A = B (the type: fi_slot's item_ink then gives it_tab's
-; cyan, ATTR_KEY_C). The two key rooms differ (levelgen ksel), so one room never holds both keys.
-; Clobbers: A, F, HL.   ~90 T
-;------------------------------------------------------------------------------
-key_ink:        ld   hl, 4
-                add  hl, sp
-                ld   a, (hl)
-                and  FL_ROOM_MASK
-                ld   hl, LVL_KEYROOM2
-                cp   (hl)
-                ld   a, b
-                ret  nz
-                ld   a, ATTR_KEY_M
-                ret
+; (key_ink: GARG-PASS moved it to its only caller's region, R6 fi6.asm: -15 B low RAM for rl_ghost.)
 
 ;------------------------------------------------------------------------------
 ; key_door — hero_door's bump into a closed plank that door_open refused (locked or sealed).

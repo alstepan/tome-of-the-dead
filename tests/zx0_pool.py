@@ -873,7 +873,9 @@ def main():
         # Knight (1,900 B) go to banks 1 / 3 (8 B less than the Wizard there: bank 1 has ~no slack)
         # DECOR2-SHIP: U_WRAITH + G_DUST are bank-1 sources now (MAX_FRAMES 8): the variant's bank 1 is 6 B over,
         # so the dust block (47 B) rides in SRC6 too (187 B free there)
-        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_ORC", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD", "G_DUST"}))
+        # GARG-PASS: bank-1 perch1 (88 B, the Gargoyle's wake turn, from R6) puts the variant's bank 1 ~50 B over:
+        # the Necro bolt block G_NBOLT (104 B) rides in SRC6 too (~36 B free there)
+        s6 = ",".join(sorted((zs.SRC6_KINDS - {"K_DKNIGHT", "K_ORC", "K_MUMMY", "K_VAMPIRE"}) | {"K_WIZARD", "G_DUST", "G_NBOLT"}))
         variants.append(("src6", REPO, kit + ["SRC6_PAGES=14", "POOL_PROTO_CHECK=0", "POOL_LVL_CHECK=0"],
                          {"SRC6_KINDS": s6}))
     if a.baseline:                 # (an older checkout ignores the unknown define)
