@@ -1,0 +1,124 @@
+{
+ "_doc": "FOOD-7 = PACKAGE 5 FINAL with FOOD_BURN 7 and FOOD_N 2-3 (floor food) (balance_v2.md sec 8): F1 hunger 1/7 (FOOD-7) + A + C1-C4 + M1 + damage ramp + food (floor 3-4, drops 8 %, start 100) + Mage tune. Use: --ld-pkg4 --overrides tools/balance_food7.json --set param.PICKUP=0.75",
+ "param": {
+  "FOOD_BURN": 7,
+  "TELE_AMBUSH": 0.05,
+  "MON_COUNT": [
+   20,
+   21,
+   21,
+   25,
+   26,
+   25,
+   25,
+   18
+  ],
+  "NM3_LISTS": {
+   "3": [
+    "SKELETON",
+    "VAMPIRE",
+    "GHOST",
+    "BAT",
+    "GOBLIN",
+    "GOBLIN",
+    "VAMPIRE",
+    "GHOST"
+   ],
+   "4": [
+    "ORC",
+    "RAT",
+    "SPIDER",
+    "ARCHER",
+    "FIRE_IMP",
+    "ORC",
+    "ARCHER",
+    "RAT"
+   ],
+   "7": [
+    "ORC",
+    "GHOST",
+    "NECRO",
+    "FROST_WRAITH",
+    "MUMMY",
+    "SPIDER",
+    "NECRO",
+    "NECRO"
+   ],
+   "8": [
+    "NECRO",
+    "SKELETON",
+    "GHOST",
+    "VAMPIRE",
+    "ORC",
+    "FROST_WRAITH",
+    "NECRO",
+    "NECRO"
+   ]
+  },
+  "FEAR_SCR_T": 9,
+  "SCR_W": [
+   3,
+   2,
+   2,
+   1
+  ],
+  "SCR_N": [
+   2,
+   3
+  ],
+  "SCR_GUAR_D2": 1,
+  "MON_DMG_SCALE_D": [
+   1.0,
+   1.0,
+   1.9,
+   1.7,
+   2.6,
+   2.8,
+   3.0,
+   3.0
+  ],
+  "FOOD_N": [
+   2,
+   3
+  ],
+  "DROP_ALL_P": [
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08
+  ],
+  "FOOD_START": 100,
+  "MAGE_REGEN": 9,
+  "M_LVL_HP": 4
+ },
+ "kind": {
+  "Ghost": {
+   "ech": 8
+  }
+ },
+ "ab_rank": {
+  "Firebolt": {
+   "1": {
+    "bonus": -1
+   },
+   "2": {
+    "bonus": 1
+   },
+   "3": {
+    "bonus": 3
+   }
+  },
+  "Frost": {
+   "2": {
+    "bonus": 1
+   },
+   "3": {
+    "bonus": 3
+   }
+  }
+ }
+}

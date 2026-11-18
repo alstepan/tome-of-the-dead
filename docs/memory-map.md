@@ -3279,7 +3279,7 @@ moved SP; one page; not on tape, garbage before `new_game`):
 | `$5D00` | `BAG` | 20 × 3 | game: zeroed by `new_game`, kept across levels |
 | `$5D3C` | `WORN` | 4 × 3 | game (follows `BAG`: one 24-record scan) |
 | `$5D48` | `FOOD` | 1 | game (0 after `new_game`; T9 sets `FOOD_START` 80) |
-| `$5D49` | `FOOD_TMR` | 1 | game (turns since the last burn, period `FOOD_PERIOD` 6) |
+| `$5D49` | `FOOD_TMR` | 1 | game (turns since the last burn, period `FOOD_PERIOD` 7 (FOOD-7)) |
 | `$5D4A` | `HSTAGE` | 1 | game (`HS_FED` 0 / `OK` / `HUNGRY` / `WEAK`; thresholds 50 / 25 / 10) |
 | `$5D4B` | `HP_RG` | 1 | game (3E-T9, was `QPIN` byte 0 — the QUICK pin is cut, §8.11 Q3: FED HP regen turn counter 0..11) |
 | `$5D4C` | `HW_TMR` | 1 | game (3E-T9: turns in WEAK since the last faint check, 0..49; `$FF` on entering WEAK; **FAINT1: the faint clock**, rollover at 50 = `HW_REPEAT`, then `HW_REPEAT − FAINT_GAP` = 20; deferred = held at 49) |
@@ -3485,7 +3485,7 @@ overlay retypes generated ones), and `pu_add` takes it as a Heal potion.
 - **R6 `src/hunger6.asm`** (far6 only; r6.asm rules; **NEW-MON3 T1: the file is bank-0 `hunger0.asm`, item_food by FARB0**). `hunger_turn` (end_turn, bank 7: `ld hl,
   hunger_turn / call far6` right before `jp xp_turn`, not when DYING): (1) jump this turn
   (`JUMP_TURN == TURN_COUNTER`: try_jump stored counter + 1, end_turn incremented since; 0 B
-  outside R6) -> FOOD −2; (2) `FOOD_TMR` +1, at `FOOD_PERIOD` 6 (12 with `IT_C_PLENTY` /
+  outside R6) -> FOOD −2; (2) `FOOD_TMR` +1, at `FOOD_PERIOD` 7 (FOOD-7) (12 with `IT_C_PLENTY` /
   `IT_C_SCARAB` in `WORN` charm) -> 0, FOOD −1; floor 0, never fatal; (3) `hg_stage`; (4) FED:
   `HP_RG` +1, at 12 HP +1 (to MAXHP); WEAK: `HW_TMR` +1, at 50 `hg_faint` (FAINT1; was the WEAK line again); (5)
   `MP_HOLD` = WEAK (status or hunger) ? != 0 : HUNGRY ? `TURN_COUNTER` bit 0 : 0.

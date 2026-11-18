@@ -26,7 +26,7 @@ is dropped (counted, not an error).
     others type = POT_BY_ROLL[rnd(3)]. Then (FLOOR1) each entry in list order is
     re-checked against the item rules below (its own cell freed first); an
     illegal one is re-placed (non-start pool, scan fallback, same slot).
- 2. food:    n = 3 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
+ 2. food:    n = 2 + rnd(2); each: type = IT_F_CARROT + rnd(5), place(non-start).
  3. scrolls: n = 2 + rnd(2); each: r = rnd(8), type = IT_S_TELEPORT + max(0, r - 1) // 2
     (Teleport 3 / Fear 2 / Sleep 2 / Enchant 1 of 8, BALANCE-PKG5 C2); on D2 the LAST scroll is
     a Teleport if none came before (its rnd(8) consumed; C3), then place(non-start).
@@ -97,7 +97,7 @@ ARROWS_MAX = 24                             # 8.5 "capped 24" (checker only)
 
 POT_BY_ROLL = (T["IT_P_HEAL"], T["IT_P_MANA"], T["IT_P_CURE"])    # Q_POTION_TYPE
 POTION_COUNT_MIN = G.POTIONS_MIN             # 8.5 / levelgen (LARGER-D: 3..4 entries, from GEN_RNG)
-FOOD_N_MIN, FOOD_N_SPAN = 3, 2              # BALANCE-PKG5: food 3-4 (PKG4 3-5; LARGER-D T6: 4-5)
+FOOD_N_MIN, FOOD_N_SPAN = 2, 2              # FOOD-7B: floor food 2-3 (BALANCE-PKG5 3-4; PKG4 3-5; LARGER-D T6: 4-5)
 SCROLL_N_MIN, SCROLL_N_SPAN = 2, 2          # BALANCE-PKG5 C2: scrolls 2-3 (LARGER-D T6: exactly 2)
 SCROLL_W_TYPE = (0, 0, 0, 1, 1, 2, 2, 3)    # BALANCE-PKG5 C2: rnd(8) -> scroll offset (Teleport 3, Fear 2, Sleep 2, Enchant 1)
 SCROLL_GUAR_DEPTH = 2                       # BALANCE-PKG5 C3: >= 1 Teleport scroll on D2 (the last one forced)
@@ -497,7 +497,7 @@ def gen_level_items(b, master, hero, gear2=True, old_pool=False):
     glyph_pool = non_start                   # FLOOR1: the D8 lair exclusion is gone
 
     gen_potions(rng, b, lvl, pres, start, lair)
-    # 8.5 food 3-4
+    # 8.5 food 2-3
     for _ in range(FOOD_N_MIN + rng.rnd(FOOD_N_SPAN)):
         typ = D["IT_FOOD_LO"] + rng.rnd(D["IT_FOOD_HI"] - D["IT_FOOD_LO"] + 1)
         try_add(rng, b, lvl, glyph_pool, typ, 1)

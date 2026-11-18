@@ -766,7 +766,7 @@ ig_trap_ok:     call ig_desc
 
 ; --- data ---------------------------------------------------------------------
 ; ig_grp descriptors (game.md §8.5): n_lo (+ rnd(2)), type_lo, k (0 = the gear pool; 8 = the weighted scrolls)
-ig_grps:        DB   3, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1   ; food 3-4 (BALANCE-PKG5: was 3-5, PKG4; 4-5 LARGER-D T6; FLOOR1: the D8 lair allowed)
+ig_grps:        DB   2, IT_FOOD_LO, IT_FOOD_HI - IT_FOOD_LO + 1   ; food 2-3 (FOOD-7B user 2026-11-18: was 3-4; BALANCE-PKG5: was 3-5, PKG4; 4-5 LARGER-D T6; FLOOR1: the D8 lair allowed)
                 DB   2, IT_SCR_LO, IG_SCR_K    ; scrolls 2-3, the C2 weights (BALANCE-PKG5: was exactly 2 of 4 uniform; lair allowed)
                 DB   1, 0, 0                   ; gear 1-2
                 ASSERT $ - ig_grps == IG_GRP_N * IG_GRP_LEN
