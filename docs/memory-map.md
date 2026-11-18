@@ -7693,3 +7693,11 @@ The merge overflowed HOT_COPY, bank 3, low RAM and `B0_CODE2` (free before -> af
   bank 6 (faster).
 - **Merge resolutions:** `lowram.asm` / `panel_hot.asm` keep both sides; main.asm keeps BALANCE-PKG5's
   `gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN` (64) stub-window ASSERT (replaces FLY-CUT's `LOWRAM_SPARE >= 61`).
+
+## TOME-SWING ledger (`feat/tome-swing`, 2026-11-18; playtest bug: no swing animation on a melee hit on the Archmage's Tome)
+
+A melee hit on the Tome (bump `try_horizontal .tome`, FIRE `ic_melee .door`) only ran `tome_rel` -> `tome_strike`: no hero sequence
+was started (a body hit starts KS_ATTACK in `do_attack`'s tail). Fix: bank-7 `tome_melee` (= `tome_rel` + `jp tome_swing`) at both
+callers; low-RAM `tome_swing` (`ld hl, atk_seq / call far3 / scf / ret`) enters bank-3 `atk_seq` (a label on `do_attack`'s existing
+`kind_seq_ptr` + `start_seq` tail, 0 B). Spells / daggers / arrows / Power Strike / Whirlwind keep their abl_seq (they never go through `tome_melee`).
+Free before -> after (release / kit / trace): bank 7 8 / -- / -- -> **1** / **1** / **65** (+7); low RAM 22 / 24 / 24 -> **14 / 16 / 16** (-8); bank 3 30 / 26 / 26 unchanged; B0_CODE2 and HOT_COPY unchanged.

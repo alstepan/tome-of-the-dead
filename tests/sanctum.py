@@ -15,6 +15,7 @@ Seeded generated games (F3_GEN build, DEBUG_KIT=0), the real level_descend D7 ->
       per hit, the 5th (WIN2, user 2026-11-01) -> NOT GS_WIN: "THE TOME IS DESTROYED" + "A GATE
       GLEAMS, THE WAY DOWN", LF_GRATE_OPEN, the run goes on; out of range / facing away: no hit
       (Power Strike refused: no turn, no MP)
+  SW  TOME-SWING: a melee hit (bump / FIRE) plays the hero's KS_ATTACK (Warrior slash, Mage staff swing)
   A   the aura: gap 5 -> -1 hp a turn (either facing), gap 6 / storey 0 -> none; HP 1 -> GS_DEAD
   R   leaving the Sanctum and coming back keeps TOME_HP (no regeneration), the lectern redrawn
   W1  the destroyed Tome: a bump = a wall (no turn, no line), no aura, a dagger strikes nothing (never twice)
@@ -288,6 +289,26 @@ def miss(L, tag, do, gap, facing=True, turn=True):
           (p.rb("TOME_HP"), p.rw("TURN_COUNTER") - t0, mp0, p.rb("MP")))
 
 
+def swing(p, L, tag, keys):
+    """SW (TOME-SWING): a MELEE hit on the Tome (bump / FIRE) plays the hero's own KS_ATTACK (Warrior slash / Mage
+    STAFF_SWING) like a hit on a body: some tick of the turn has the hero in M_SEQ on his kind's KS_ATTACK row
+    (release builds: no ANIM_TRACE, so the sequence pointer is sampled)."""
+    play_mode(p)
+    p.wb("TOME_HP", 3)
+    L.at_gap(0)
+    p.set_ent(0, HP=200)
+    kind = p.ent(0)["KIND"]                                # (Mage: K_WIZARD -> its own wz_attack row)
+    row = (S["seq_rows"] & 0xFF00) | p.rb(S["kind_tab"] + S["KT_SEQ"] + kind)
+    want = p.h.read_word_le(row + S["KS_ATTACK"])
+    modes = []
+    p.turn(*keys, per_tick=lambda fr, h: modes.append((h["MODE"], p.h.read_word_le(S["P_ENTITIES"] + S["E_SEQL"]))))
+    p.until(lambda: p.idle(), 300)
+    check(f"SW {tag}: the hit plays the hero's KS_ATTACK ({want:#06x})",
+          p.rb("TOME_HP") == 2 and (S["M_SEQ"], want) in modes, (p.rb("TOME_HP"), want, modes[:6]))
+    p.tick(3)
+    play_mode(p)
+
+
 def warrior_hits(p, L):
     key = "H" if L.left else "L"
     p.wb("MP", 99)
@@ -296,6 +317,8 @@ def warrior_hits(p, L):
     p.wb("DAGGERS", 20)
     p.wb("ARROWS", 20)
     p.wb("HAS_BOW", 1)
+    swing(p, L, "Warrior bump", (key,))
+    swing(p, L, "Warrior FIRE", ("C",))
     five(L, "H1 melee bump", lambda: p.turn(key), 0)
     five(L, "H2 melee FIRE (sword icon)", lambda: p.turn("C"), 0)
     miss(L, "H2 melee FIRE", lambda: p.no_turn("C"), 1, turn=False)
@@ -438,7 +461,7 @@ def fx_tests(p, L, key):
     p.wb("TOME_HP", S["TOME_MAX"])
     if not S.get("TOME_FX2", 0):                         # (a kit build keeps the TOME-FX timing: no hook)
         return
-    fx_timing(p, L, [("melee bump", (key,), 0, False), ("melee FIRE", ("C",), 0, False), ("Power Strike", ("@1",), 0, True),
+    fx_timing(p, L, [("melee bump", (key,), 0, True), ("melee FIRE", ("C",), 0, True), ("Power Strike", ("@1",), 0, True),
                      ("Whirlwind", ("@2",), 0, True), ("dagger", ("@3",), 5, False), ("arrow", ("@4",), 13, False)], "Warrior")
     if BORDER_ON:                                        # (TOME_BORDER 1; a -D define is not in the .sym)
         fx_modal(p, L)
@@ -451,7 +474,7 @@ def fx_timing(p, L, cases, tag):
     first sample with TOME_FL != 0 (the strike's tick, after dn_tm's first count). Expected: TILE_ATTRS flash on
     [ref, ref + 1] (restored when dn_tm queues it), the displayed flash on [ref + 2, ref + 3] (paint and restore
     each reach the screen 2 ticks after they are queued; skipped for a swing_fx attack: Power Strike / Whirlwind
-    draw their own white swing over the cells), the border (TOME_BORDER 1: white, yellow on the last hit) on
+    draw their own white swing over the cells; so does the Warrior's melee slash since TOME-SWING), the border (TOME_BORDER 1: white, yellow on the last hit) on
     [ref + 1, ref + 2] (written at the end of the tick before the one that presents the flash) then black;
     TOME_BORDER 0 never touches it. The last hit leaves the ASH attrs, TOME_FL 0."""
     border_on = BORDER_ON
@@ -747,6 +770,9 @@ def mage(p):
     p.wmem(S["ARANK"], w16(1))                            # Spark r1 (range 6)
     five(L, "H7 Spark (Mage, range 6)", lambda: p.turn("@1"), 5)
     miss(L, "H7 Spark", lambda: p.turn("@1"), 6)
+    key = "H" if L.left else "L"
+    swing(p, L, "Mage bump", (key,))
+    swing(p, L, "Mage FIRE", ("C",))
     five(L, "H8 staff (Mage melee FIRE)", lambda: p.turn("C"), 0)
     p.wmem(S["ARANK"], w16(1 | 1 << 2))                   # Spark r1, Firebolt r1
     if S.get("TOME_FX2", 0):

@@ -344,6 +344,12 @@ tome_gone:      ld   a, TX_WIN
                 call grate_open.op             ; bank 7 (paged)
                 scf
                 ret
+; tome_swing — a melee hit struck the Tome (bank-7 tome_melee, bank 7 paged, IX = hero): the hero plays his
+; KS_ATTACK as against a body (bank-3 atk_seq, turn3.asm: do_attack's tail). CF = 1. Clobbers: AF, BC, DE, HL.
+tome_swing:     ld   hl, atk_seq
+                call far3
+                scf
+                ret
 ; game_win — GS_WIN: level_descend from D8 only (WIN2: the hero leaves through the gate the
 ; Tome's destruction opened, game.md §1.3). "YOU WIN!" (the end card's string) is the log line.
 ; Any bank. Clobbers: AF, BC, DE, HL.

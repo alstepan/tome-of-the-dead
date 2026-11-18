@@ -67,6 +67,16 @@ tome_strike:
                 scf
                 ret
 
+;------------------------------------------------------------------------------
+; tome_melee — a MELEE hit on the Tome (bump: bank7 try_horizontal .tome; FIRE: intent7 ic_melee .door): as
+; tome_rel, and a struck Tome plays the hero's own KS_ATTACK (Warrior slash / Mage staff swing) as a body hit
+; does (do_attack's tail, atk_seq). Spells / daggers / arrows / power attacks keep their abl_seq. CF = 1 struck.
+; Clobbers: all but IX.   +~0.4k T on a hit
+;------------------------------------------------------------------------------
+tome_melee:     call tome_rel
+                ret  nc
+                jp   tome_swing                ; low RAM: the hero's KS_ATTACK via bank-3 atk_seq, CF = 1
+
     IF TOME_FX
 ;------------------------------------------------------------------------------
 ; TOME-FX (user 2026-11-03). The lectern's 4 attrs live in TILE_ATTRS[T_LECT_TL..BR] (common ids, loaded at

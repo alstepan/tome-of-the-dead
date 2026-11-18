@@ -148,7 +148,7 @@ do_attack:
                 jr   nz, .setm
                 ld   a, MSG_M_MISS
 .setm:          ld   (ix+E_MSG), a
-                call kind_seq_ptr              ; attack sequence
+atk_seq:        call kind_seq_ptr              ; attack sequence (IX = the attacker; tome_swing enters here)
                 ld   de, KS_ATTACK
                 add  hl, de
                 ld   a, (hl)
