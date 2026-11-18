@@ -2136,7 +2136,8 @@ blob_icon:
 
 ;------------------------------------------------------------------------------
 ; tt_kflash — TUT-KEY-FLASH (user 2026-11-17: the key clearly visible, flashing once taken): at every D0 turn
-; end. Key still on B's floor (LVL_KEYROOM == the room; key_take clears it): FLASH (attr bit 7) on its 4
+; end. Key still on B's floor (LVL_KEYROOM == the room and the item marker still on the key's cell: W21-FIX,
+; key_take keeps LVL_KEYROOM, so the marker is the "not taken" test once LF_KEYC is gone): FLASH (attr bit 7) on its 4
 ; cells + the key slot's ink in FI_INK (erase_rect / the sprite pass repaint from it, so a redraw keeps it).
 ; Key held (LF_KEYC): a queued panel key redraw is drawn first (item_depth, it paints without FLASH), then
 ; FLASH on the 2 panel key cells; key_door's unlock redraw (PD_DEPTH) blanks them as on D1+.
@@ -2144,6 +2145,7 @@ blob_icon:
 ;------------------------------------------------------------------------------
 TUT_KEY_COL     EQU 8                   ; the key's col (tools/tut0_level.py ITEMS)
 KF_ATTR0        EQU SCREEN_ATTR + (STOREY_AIR - 2) * 32 + TUT_KEY_COL
+KF_MAP0         EQU ROOM_MAP + (STOREY_AIR - 2) * 32 + TUT_KEY_COL    ; its upper-left map cell (a T_ITEM0.. marker)
 tt_kflash:
                 ld   a, (LVL_FLAGS)
                 and  LF_KEYC
@@ -2159,7 +2161,10 @@ tt_kflash:
 .fl:            ld   a, (CUR_ROOM)
                 ld   hl, LVL_KEYROOM
                 cp   (hl)
-                ret  nz                        ; not the key room, or taken (ROOM_NONE)
+                ret  nz                        ; not the key room
+                ld   a, (KF_MAP0)              ; W21-FIX: taken (the id is kept now) = no item marker on
+                cp   T_ITEM0                   ; its cell (pp_take re-stamps it); 6 B, 20 T
+                ret  c
                 ld   hl, KF_ATTR0
                 set  7, (hl)
                 inc  l
@@ -2185,3 +2190,4 @@ tt_kflash:
                 ret
                 ASSERT (KF_ATTR0 & $FF) + 33 < $100 && (KF_ATTR0 >> 8) == ((KF_ATTR0 + 32) >> 8) && ICONS16_BYTES == 32
                 ASSERT (FI_INK & $FF) == 0 && (KEY_PAN_ATTR & $FF) + 1 < $100
+                ASSERT T_ITEM0 + 4 == TILE_IDS          ; ids >= T_ITEM0 are item markers only

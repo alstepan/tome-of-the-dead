@@ -50,7 +50,7 @@ the Mage run opens the page with the I key, the others through the BAG icon.
   S2 both facings in front of him, PNGs build/morrow_speak_face_{left,right}.png; S3 static (balloon bytes, the lectern
   copy); S4 room change / off-screen (scen_speak); C27 also il_go + the lectern ids restored
   TUT-KEY (2026-11-16): TK1 the key on B's floor (col 8), TK2 keyless at the door -> L77, TK3 the locked bump (0 turns),
-  TK4 the pickup (L24 / L25, panel key cell, D0), TK5 the unlock (1 turn, key spent) + into C, TK6 the log ends on G5
+  TK4 the pickup (L24 / L25, panel key cell, D0), TK5 the unlock (1 turn, key spent) + into C, TK5F no floor FLASH after it, TK6 the log ends on G5
   (L45 / L47); PNGs build/tut_key_{floor,locked,unlocked}.png, build/tut_last_line.png. S5 (review A): an engine line
   replacing his newest pending line is drawn as the engine's. C27 also item_depth's digit operand
   TUT-GEAR (2026-11-16, tut_gear.md): B9G = TV_BEAT 10 (B10..B15 at 11..16). G1 the taught route equips the helmet;
@@ -1520,6 +1520,9 @@ def scen_key(h):
           unl[:1] == ["YOU UNLOCK THE DOOR"] and p.rw("TURN_COUNTER") == tc + 1 and not bc_edge(p) & S["EG_LOCK"]
           and bc_edge(p) & S["EG_OPEN"] and not key_held(p) and at == [S["ATTR_HUD"]] * 2 and not ink and d0 and not said3,
           (unl, tc, p.rw("TURN_COUNTER"), hex(bc_edge(p)), key_held(p), at, ink, d0, said3))
+    fa3 = floor_key_attrs(p)                                     # W21-FIX: LVL_KEYROOM is kept after key_take, so
+    check("TK5F", f"key spent, still in B: its old floor cells do not FLASH ({[hex(a) for a in fa3]})",   # tt_kflash
+          p.rb("CUR_ROOM") == 4 and not any(a & 0x80 for a in fa3), (p.rb("CUR_ROOM"), fa3))  # needs the marker test
     # S5 (review A): an engine line replaces his newest pending line (ring full: log_room, as a hit / death line does)
     drain_log(p)
     drop0 = p.rb(S["LOG_Q"] + S["LQ_DROP"])
