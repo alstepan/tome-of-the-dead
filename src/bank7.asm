@@ -1004,7 +1004,7 @@ find_target:
                 ld   a, (hl)
                 ld   ixh, a
                 ld   a, (ix+E_FLAGS)
-                and  EF_HOSTILE | EF_DYING
+                and  EF_HOSTILE | EF_DYING | EF_GHOST   ; GARG-PASS: a perched Gargoyle is no target
                 cp   EF_HOSTILE
                 jr   nz, .pn
                 push hl
@@ -1279,7 +1279,7 @@ arrival_conflicts:
 ; Clobbers: A, F   ~60 T incl. call/ret
 ; act_mask — the same with A = the flag mask (ROOM-MEM (F): follow_select passes
 ; EF_ACTIVE | EF_DYING, so a PENDING body may follow the hero back).
-act_here:       ld   a, EF_ACTIVE | EF_PENDING | EF_DYING
+act_here:       ld   a, EF_ACTIVE | EF_PENDING | EF_DYING | EF_GHOST   ; GARG-PASS: arrival_conflicts skips a ghost
 act_mask:       and  (ix+E_FLAGS)
                 cp   EF_ACTIVE
                 ret  nz

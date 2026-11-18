@@ -106,14 +106,18 @@ level_reset_new:
 ; spawn_one — IX = free slot: A = kind, D = room, E = body-left col, C =
 ; storey 0/1, B = extra flags (EF_LEFT or 0). Walkers stand on the storey's
 ; floor (9s+8-h), flyers cruise at 9s+1; HP from the kind, render state reset.
+; GARG-PASS: K_GARGOYLE gets EF_GHOST (perched, intangible).
 ; Clobbers: A, BC, HL.
 ;------------------------------------------------------------------------------
 spawn_one:
                 ld   (ix+E_KIND), a
                 ld   (ix+E_ROOM), d
                 ld   (ix+E_X), e
-                ld   a, b
-                or   EF_ACTIVE | EF_HOSTILE
+                cp   K_GARGOYLE                ; GARG-PASS (§4.1): a resident Gargoyle spawns PERCHED and
+                ld   a, b                      ; intangible (EF_GHOST; RCD_AWAKE is clear in a zeroed /
+                jr   nz, .ng                   ; restored slot); only perch1's wake makes it solid. +6 B
+                or   EF_GHOST
+.ng:            or   EF_ACTIVE | EF_HOSTILE
                 ld   (ix+E_FLAGS), a
                 ld   a, c                      ; 9s = 8s + s (MUL_STOREY inlined:
                 add  a, a                      ; C already holds s, so the

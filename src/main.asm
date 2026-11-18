@@ -613,10 +613,7 @@ es_go:          jp   start_game                ; SMC: TUT0 — the operand (es_g
 ; kind_tab — page-aligned parallel byte arrays (KT_*), prototype §6.3. A6: two
 ; pages, K_MAX (32) B per array; no array crosses a page (KFIELD, feet_mod).
 ;==============================================================================
-; glow_tab — boss2a.asm glow_kat's GOLDEN GLOW attr steps (BOSS-RANGED: moved out of the
-; image tail into the kind_tab ALIGN pad, 4 of its 8 B, for ai_rhook's golden gate)
-glow_tab:       DB   $06, $46, $47, $46
-                ASSERT (glow_tab >> 8) == ((glow_tab + 3) >> 8)
+; (glow_tab: GARG-PASS moved it back after kind_tab, below boss2a.asm: the pad holds the rl_ghost hook)
 kind_tab_pad:                                  ; ALIGN padding starts here (headroom)
                 DS   (-($ + TILE_IDS)) & $FF, 0    ; B3B-5: tile_flags ends on the page
 ;------------------------------------------------------------------------------
@@ -755,6 +752,10 @@ dn_miss_s:      DB   "MISS", 0, DNA_MISS       ; D3-11 / LVL-FLOATER (dnfix2.asm
                 INCLUDE "sfx2.asm"              ; SND-5 sfx_req / sfx_msg (any bank calls them)
                 ; bars2.asm (bars_draw / num2): NEW-MON3 T1 -> bank-0 bars0.asm (src/nm3_b0.asm)
                 INCLUDE "boss2a.asm"            ; 3F-T8 og_adv / glow_kat (AMMO-COUNT: after kind_tab, its pad was 6 B)
+; glow_tab — boss2a.asm glow_kat's GOLDEN GLOW attr steps (BOSS-RANGED: was in the kind_tab ALIGN pad;
+; GARG-PASS: back after kind_tab, so the pad funds the anim_tick rl_ghost hook)
+glow_tab:       DB   $06, $46, $47, $46
+                ASSERT (glow_tab >> 8) == ((glow_tab + 3) >> 8)
                 INCLUDE "boss2.asm"             ; 3F-T8 golden stats / Ogre SLAM / PROVOKED / the glow's attr-only repaint
                 ; frt2.asm: NEW-MON3 T1 moved it before kind_tab (into the ALIGN pad the T1 moves freed)
                 INCLUDE "msg2.asm"              ; LOG-FIX: msg_dec, log_room (NEW-MON3 T9: msg_cat / msg_end -> low-RAM msgl.asm)

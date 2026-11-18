@@ -245,7 +245,7 @@ GATED = ("mix", "mage", "blair", "wroom", "wroom4", "lw24s", "lwalk4b")   # ADAP
 # reported like lwalk / lwalk4: 5 bodies walking in step (the monsters start with the hero, as on main) push some pure
 # render ticks past 2 frames (rwalk was 155.6k real on main too, perf_survey M2)   # C+TUT0: rwalk gated (real <= BUDGET); lwalk / lwalk4 reported measurements
 CAP_GATED = ("lightning", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast", "mkmix",
-             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4", "imp3", "pitv", "wr7")   # lwalk4: a measurement, not gated (see SCENARIOS)
+             "pmix", "umix", "qmix", "tdart", "tgas", "ttele", "talarm", "tstun", "tfaint", "tsearch", "tsense", "imix", "dmix", "tmix", "rroom", "nroom", "rcast", "sroom", "lglow", "omix", "bsum", "walarm", "walarm2", "vbat", "trickle", "otrickle", "aroom", "asum", "rfar", "sanct", "adeath", "ghost3", "glad", "wroom4", "lmix", "lmixw", "lmix4", "lhurt", "lhurt4", "imp3", "pitv", "wr7")   # lwalk4 / gpass*: measurements, not gated (see SCENARIOS)
 CAST_KEYS = ("rcast", "cast", "lcast", "lcastf", "lcasts", "advcast", "fzcast", "fzcast2", "fcast", "wcast", "wcast4", "dnum", "dkill", "acast")        # D3-5: worst ordinary tick <= CAP
 # B3B-3 (2 x 9): everything on the bottom storey (s 1) of room A, the PROTO
 # storey-2 layout moved up 3 rows (the floor row 20 -> 17).
@@ -683,6 +683,39 @@ SCENARIOS = {
         (5, 17, 9, HOSTILE),
         (3, 21, 13, HOSTILE),
         (1, 3, 10, HOSTILE)], [("WAIT", 4), ("FIRE", 3), ("WAIT", 5)], K_KNIGHT, None, "wr7"),
+    # GARG-PASS (user 2026-11-18): "gpass" = a PERCHED (EF_GHOST) Gargoyle at the cruise row in the walk path on a
+    # REAL D6 (the Gargoyle / Orc pool), the knight walking left through it with 4 Orcs chasing through it behind him
+    # (every body tweening across the statue on its way: rl_ghost puts the statue first in RLIST, so the cascade
+    # re-blits it under each walker). gpass_hook keeps it a ghost (EF_GHOST set, RCD_AWAKE clear) every tick: the
+    # wake would make it solid and stop the walkers. Slot 6 (the highest: rl_ghost shifts every monster entry).
+    "gpass": ("knight (real D6) walking left through a perched Gargoyle + 4 Orcs walking through it behind him", [
+        (5, 17, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 23, stand_y(1, 6), HOSTILE),
+        (4, 26, stand_y(1, 6), HOSTILE),
+        (6, 11, 10, HOSTILE)], [("H", 12), ("WAIT", 2)], K_KNIGHT, None, "gpass"),
+    # "gpass0" = the control: the same walk with the statue out of the path (storey 0, x 2: still a ghost, still
+    # first in RLIST, nothing crosses it). gpass - gpass0 = the render-order / cascade cost of the crossings.
+    # Both are measurements like lwalk4 (5 bodies walking in step: over the cap without any Gargoyle).
+    "gpass0": ("control: gpass with the perched Gargoyle out of the walk path (storey 0)", [
+        (5, 17, stand_y(1, 6), HOSTILE),
+        (3, 20, stand_y(1, 6), HOSTILE),
+        (1, 23, stand_y(1, 6), HOSTILE),
+        (4, 26, stand_y(1, 6), HOSTILE),
+        (6, 2, 1, HOSTILE)], [("H", 12), ("WAIT", 2)], K_KNIGHT, None, "gpass0"),
+    # "gpass3" = a real D5 (the Gargoyle / Skeleton pool), the knight + 3 Skeletons walking left
+    # through the perched Gargoyle (the lw24s load). Measured 130.6k work / 156.2k real: hero + 3+ walkers walking in step
+    # on a real decorated level pass the cap without any Gargoyle (lwalk4 / lw24): reported, not gated (GARG-PASS escalation).
+    "gpass3": ("knight (real D5) walking left through a perched Gargoyle + 3 Skeletons walking through it", [
+        (5, 17, stand_y(1, 6), HOSTILE),
+        (3, 21, stand_y(1, 6), HOSTILE),
+        (1, 25, stand_y(1, 6), HOSTILE),
+        (6, 11, 10, HOSTILE)], [("H", 12), ("WAIT", 2)], K_KNIGHT, None, "gpass3"),
+    "gpass30": ("control: gpass3 with the perched Gargoyle out of the walk path (storey 0)", [
+        (5, 17, stand_y(1, 6), HOSTILE),
+        (3, 21, stand_y(1, 6), HOSTILE),
+        (1, 25, stand_y(1, 6), HOSTILE),
+        (6, 2, 1, HOSTILE)], [("H", 12), ("WAIT", 2)], K_KNIGHT, None, "gpass30"),
     # C-H (user 2026-11-10, policy hybrid+h): the hurt frames are STA|MIR too. "lhurt" = the worst hurt tick: the
     # hero (knight) and 4 Skeletons (the widest resident kind with a hurt frame, 32x48) all facing LEFT and held
     # in KS_HURT every tick (lmix_hook with LMIX_KS = KS_HURT, the hero included). "lhurt4" = the same on the
@@ -1286,6 +1319,32 @@ def lmix_hook(st):
 
 LWALK_SEEN = {}
 WALK_KINDS = {"lw24": {1: "K_GOBLIN", 4: "K_RAT"}, "lw24g": {3: "K_GOBLIN", 1: "K_GOBLIN", 4: "K_GOBLIN"}}   # ADAPT band
+GPASS = {"slot": 0, "over": 0}
+GPASS_KEYS = ("gpass", "gpass0", "gpass3", "gpass30")
+
+
+def gpass_hook(st):
+    """"gpass" (GARG-PASS): the Gargoyle stays a ghost (perched) for the whole walk; counts the ticks a body overlapped
+    its box (the statue drawn under a crossing body)."""
+    p = st.p
+    sl = GPASS["slot"]
+    if not sl:
+        return
+    b = S["P_ENTITIES"] + sl * S["P_ENT_STRIDE"]
+    p.wb(b + S["E_FLAGS"], p.rb(b + S["E_FLAGS"]) | S["EF_GHOST"])
+    p.wb(b + S["E_POT"], p.rb(b + S["E_POT"]) & ~S["RCD_AWAKE"] & 255)
+    gx, gy = p.rb(b + S["E_X"]), p.rb(b + S["E_Y"])
+    for o in (0, 1, 3, 4, 5):
+        if not p.rb(S["P_ENTITIES"] + o * S["P_ENT_STRIDE"] + S["E_FLAGS"]) & 1:
+            continue
+        e = S["P_ENTITIES"] + o * S["P_ENT_STRIDE"]
+        k = p.rb(e)
+        ox, oy = p.rb(e + S["E_X"]), p.rb(e + S["E_Y"])
+        ow, oh = p.rb(S["kind_tab"] + S["KT_BW"] + k), p.rb(S["kind_tab"] + S["KT_BH"] + k)
+        if ox < gx + 3 and gx < ox + ow and oy < gy + 4 and gy < oy + oh:
+            GPASS["over"] += 1
+
+
 LWALK_KEYS = ("lwalk", "lwalk4", "rwalk", "lw24", "lw24g", "lw24s", "lwalk4b")
 LMIX_GO = False                                    # lmix_hook: the first turn's monster phase has run
 
@@ -1449,10 +1508,11 @@ def run_scenario(h, scen):
     name, placements, keys = scen[:3]
     LMIX_DRAWN = None
     SHOOT_SLOTS.clear()                           # NEW-MON3 T10a: shooter_hook idles outside pitv / wr7
+    GPASS["slot"] = 0                             # GARG-PASS: gpass_hook idles outside gpass
     SHOOT_SEEN[:] = [0, 0]
     p = game.T(h)
-    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b", "imp3", "pitv", "wr7")
-    rdepth = 7 if real4 and scen[5] == "wr7" else 4          # NEW-MON3 T10a: wr7 on a real D7
+    real4 = len(scen) > 5 and scen[5] in ("lmix4", "lhurt4", "lwalk4", "lwalk4b", "imp3", "pitv", "wr7") + GPASS_KEYS
+    rdepth = {"wr7": 7, "gpass": 6, "gpass0": 6, "gpass3": 5, "gpass30": 5}.get(scen[5], 4) if real4 else 4   # NEW-MON3 T10a: wr7 on a real D7
     LMIX_KS = S["KS_HURT"] if len(scen) > 5 and scen[5] in ("lhurt", "lhurt4") else S["KS_ATTACK"]
     if real4:                                     # C-F1: a real generated D4, not the PROTO fixture
         p.proto_start = 0
@@ -1559,6 +1619,21 @@ def run_scenario(h, scen):
             p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
         p.set_ent(0, HP=250, MAXHP=250)
         p.wb("BLIT_MISS", 0)
+    elif real4 and scen[5] in GPASS_KEYS:         # GARG-PASS: 4 Orcs / 3 Skeletons + the perched Gargoyle (slot 6)
+        GPASS["slot"] = 6
+        for slot, x, y, _ in placements:
+            kn = "K_GARGOYLE" if slot == 6 else "K_SKELETON" if scen[5] in ("gpass3", "gpass30") else "K_ORC"
+            yy = y if slot == 6 else stand_y(1, p.rb(S["kind_tab"] + S["KT_BH"] + S[kn]))
+            p.set_ent(slot, KIND=S[kn], Y=yy, PY=yy * 8, HP=60, MAXHP=60, POT=1)
+            p.wb(S["P_ENTITIES"] + slot * S["P_ENT_STRIDE"] + S["E_GOLD"], 0)
+        p.set_ent(6, FLAGS=EF_ACTIVE | EF_HOSTILE | S["EF_GHOST"])
+        p.set_ent(0, HP=250, MAXHP=250, FLAGS=p.ent(0)["FLAGS"] | EF_LEFT)
+        p.wb("BLIT_MISS", 0)
+        GPASS["over"] = 0
+        if gpass_hook not in TICK_HOOKS:
+            TICK_HOOKS.append(gpass_hook)
+        if lmix_hook in TICK_HOOKS:
+            TICK_HOOKS.remove(lmix_hook)
     elif real4 and scen[5] in ("pitv", "wr7"):   # NEW-MON3 T10a: the F-1 / P-1 shooters, counters held at 0
         assert p.rb("NM3_VAR") == (scen[5] == "wr7")
         kinds = ("K_ORC", "K_ALIAS", "K_ALIAS") if scen[5] == "pitv" else ("K_ALIAS",) * 3
@@ -2070,7 +2145,7 @@ def Proto_cls():
 
 
 ALL_KEYS = ("mix,mage,heavy,lightning,cast,lcast,lcastf,lcasts,advcast,fzcast,fzcast2,fcast,wcast,wcast4,acast,mkmix,pmix,umix,qmix,"
-            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,imp3,pitv,wr7,tut0")
+            "tdart,tgas,ttele,talarm,tstun,tfaint,tsearch,tsense,imix,dmix,tmix,rroom,nroom,rfar,bsum,aroom,asum,walarm,walarm2,vbat,trickle,otrickle,rcast,sroom,lglow,blair,omix,lqmix,sanct,adeath,dnum,dkill,ghost3,ghost5,glad,wroom,wroom4,lmix,lmixw,lmix4,lhurt,lhurt4,lwalk,lwalk4,rwalk,lw24,lw24g,lw24s,lwalk4b,imp3,pitv,wr7,gpass,gpass0,gpass3,gpass30,tut0")
 
 
 def swing_pass(keys):
@@ -2120,6 +2195,8 @@ def main():
                     fails += run_tut0(h)[1]
                 continue
             st, bad = run_scenario(h, SCENARIOS[key])
+            if key in GPASS_KEYS:
+                print(f"gpass overlap  : {GPASS['over']} body-ticks on the statue's box", flush=True)
             if swing_only:
                 if getattr(st, "swing", None) is not None:
                     print(f"[swing] {key} {st.swing}", flush=True)
