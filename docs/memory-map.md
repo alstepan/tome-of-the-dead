@@ -25,7 +25,7 @@
 | 1    | PROTO: sprite sources (virtual $8000-$BFFF), ZX0-packed since A5: 6,947 of 16,384 B (A6); + `vdata` (D3-TX: the text block moved to bank 0; **3E-T1: its boot-only part moved to the bank-6 boot block**); **C3-0: `ui1_code` (3C UI code, via `far1`)** after it; **3E-T1: then the packed overlay streams `ovl_blobs`** (**R6: moved to the R6 region**; bank 1 now ends at `bank1_end`, 1,300 B free) | PROTO |
 | 2    | (also $8000 fixed)                | system   |
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 0 (newgame0.asm, B0CODE; was bank 7 since MEM-SND); **`$F048-$FFFF` AY player slot** (A8; **D3-11: 4,024 B from `$F048`, 4,023 B used, 1 B free; bank-3 cold code +8 B**; **RECLAIM-C (a): 4,032 B from `$F040`, 4,023 B used `$F040..$FFF6`, 9 B free; bank-3 cold code +48 B**; **M0 (L3): 4,080 B from `$F010`, 4,023 B used `$F010..$FFC6`, 57 B free; bank-3 cold code `$C000..$EFC7`, 72 B free**; **MEM-RECLAIM w3: 4,144 B from `$EFD0` (was `$EFA0`), 121 B free**; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
-| 4    | PROTO: pre-shift sprite pool; **TUT0-T1: `BLOB_ORG` `$DDD0..$FFFF` (`BLOB_RES` 8,752; TUT-KEY-FLASH, was `$DE20`; TUT-GEAR, was `$DF01` TUT-KEY, `$DF37` MORROW-SPEAK, `$E1B2` / `$E1B4` C+TUT0, `$E000` TUT0-F2, `$E800` / 6,144) = the D0 tutorial blob from boot until the D1+ pool overwrites it** (unpacked once per power-on by the INSTR overlay; "TUT0-T1"); build-time only: the `tap_loader` + overlay raw scratch `$C000..` (never loaded) | PROTO    |
+| 4    | PROTO: pre-shift sprite pool; **TUT0-T1: `BLOB_ORG` `$DDA4..$FFFF` (`BLOB_RES` 8,796; TUT-TREASURE, was `$DDD0`; TUT-KEY-FLASH, `$DE20`; TUT-GEAR, was `$DF01` TUT-KEY, `$DF37` MORROW-SPEAK, `$E1B2` / `$E1B4` C+TUT0, `$E000` TUT0-F2, `$E800` / 6,144) = the D0 tutorial blob from boot until the D1+ pool overwrites it** (unpacked once per power-on by the INSTR overlay; "TUT0-T1"); build-time only: the `tap_loader` + overlay raw scratch `$C000..` (never loaded) | PROTO    |
 | 5    | normal screen (also $4000 fixed); low RAM `$6000-$7FFF` buffers + **cold code** (boot, generator) + frame descriptors (A6) | system   |
 | 6    | PROTO: pre-shift sprite pool `$C000..POOL6_END` (**SRC6 spike: ends at `POOL6_END` = `SRC6_ADDR` `$E400`**; R6: was `R6_ADDR` `$E500`); **3E-T1: until the hero start, `BOOT6_ADDR..SRC6_ADDR` = the boot block** (boot-only code + data, own tape block, dead after boot — "Boot block"; R6 / SRC6: moved down from the top); **SRC6 spike (2026-10-27): `SRC6_ADDR..R6_ADDR` = the permanent bank-6 sprite-source region** (`SRC6_LEN` = `SRC6_PAGES` × 256, default 256 B; ZX0 blocks read by `zx0_frame`; on the boot block's tape block — "SRC6 region"); **R6 (2026-10-21): `R6_ADDR..$FFFF` = the permanent R6 region** (6,912 B: resident code via `far6` + packed overlay streams, own tape block — "R6 region") | PROTO    |
 | 7    | **displayed screen during play** (screen 2, `$C000-$DAFF`, A7 double buffer) + **8 level tilesets** `$FA40-$FF07` (M0: `TSET_BASE` `$FA40`, then the high bank-7 code `b7h_code..b7h_end` to `$FFFF`; MEM-RECLAIM w2a: deduplicated, 1,224 B, was `$FAA0-$FF67`; was 8 × 320 B at `$DB00-$DFFF` / `$FAA0-$FF9F`) + **D3-S2: bank-7 cold code** `$DB00-$F7FF` (`far7`; was the bitmap shadow + (w2a) tileset slots 0–3) + the attr shadow `$F800-$FA3F` | system / PROTO |
@@ -7528,6 +7528,16 @@ No fixed address moved. Release build (`-DDEBUG_KIT=0`), delta vs main a68a176:
 - Choice screen: the sub-line TS_CHOICE3 now uses the 6x8 game font (`print6`, x = 8 * `TC_COL3` 5, run `TC_LEN3` 22
   cells) instead of the ROM font; 0 net resident bytes (tsp is the PF_RAM helper).
 
+## TUT-TREASURE (`feat/tut-treasure`, 2026-11-18; user: the treasure lesson; armour / ring / amulet stay untaught)
+- D0 only. B14 gets a new group **G3b** between G3 and the old G4: **L84 `EACH BOSS DROPS A TREASURE`** (26) · **L85 `READ ITS
+  POWERS IN YOUR BAG`** (27) (ids: L77 / L80-L83 used, L78 / L79 reserved by R3-LOST in tutorial_d0.md 14.7). New `tut_tail` pair 3
+  (pairs 4 / 5 = G4 / G5, end 6; B3 / B5 tails move to pairs 7 / 9: `TUT_TI_B3` 7, `TUT_TI_B5` 9); `tut_tail_hold` `%00111100`
+  (G3b holds, droppable like G4 / G5: the grate still opens after G3, `TB_P2` = 0, so the group delays nothing). **L52 stays
+  after G4** (now tail pair 4): the FH_VICTORY_EXTRAS pending code maps relative pair 0 -> L48, 2 -> L52, 1 / 3+ -> none.
+- **`BLOB_ORG` `$DDD0` -> `$DDA4`**: raw blob 8,744 -> **8,788 B (+44: two packed lines, 2 tail pair + 4 code bytes)**, tail 8, `BLOB_RES` 8,796.
+  D0 pool margin below `BLOB_ORG` 336 -> **292 B** (Warrior; `POOL_SIM_MARGIN` 64 inside; ASSERTs green). `tests/tut0.py` TT1 + the
+  `first_lines` order.
+
 ## TUT-KEY ledger (`feat/tut-key`, 2026-11-16; user-approved TUT-KEY + B14 ending fix + MORROW-SPEAK review follow-ups A-D)
 
 - **Key on the floor (docs/design/tutorial_d0.md §2.2 / §3 B7, B10).** `tools/tut0_level.py` ITEMS + `(ROOM_B, 0, 8, IT_KEY, 1)`
@@ -7739,7 +7749,7 @@ deriver (deriver + tables 3,876 B, was 4,017 as ported; 22 B of cold helpers mov
   (`SRC0_KINDS` = Gargoyle + Fire Imp): **SRC0 1,879 -> 1,312 B** (B0 +567), bank-1 free 3 -> **116**;
 - **the pool carve:** `defs.asm` `DG2_RES` **2,064** raises `POOL_START` `$EFBE` -> **`$F7CE`** (POOL_CAP 22,594 -> 20,530):
   **D8 Warrior slack 2,320 -> 176 B** (measured cliff: `DG2_RES` <= 1,680 keeps 624, 1,696..2,080 gives 176, >= 2,088 does not
-  fit; ASSERT `DG2_RES <= 2080`); D0 pool top `$D460` -> `$DC80` (Warrior; Mage `$D660`): **336 B below `BLOB_ORG` `$DDD0`** (TUT-GEAR / TUT-KEY-FLASH; the
+  fit; ASSERT `DG2_RES <= 2080`); D0 pool top `$D460` -> `$DC80` (Warrior; Mage `$D660`): **292 B below `BLOB_ORG` `$DDA4`** (336 before TUT-TREASURE's 44 B) (TUT-GEAR / TUT-KEY-FLASH; the
   641 first written here was against the old `$DF01`), `POOL_SIM_MARGIN` 64 inside, ASSERTed `PS_PTR + POOL_SIM_MARGIN <= BLOB_ORG`.
 - **state out of low RAM:** the deriver's state is the STRUCT `DGV` (80 B, IY-based) in the gap after `ROOM_MAP`'s buffer
   (`DG_VARS` `$62A0..$62FF`); the run lists (`DG_SLOT0` / `DG_SLOT1`, 17 B each), the moss candidates (`DG_MLIST`, 28 B) and

@@ -35,7 +35,7 @@ TUT_RAM         EQU PF_RAM + $90        ; $5E90: PF_RAM's free middle ($5E7A..$5
 TV_BEAT         EQU TUT_RAM + 0         ; current beat 0..16 (TUT-GEAR: 10 = B9G)  (test-observable)
 TV_STAGE        EQU TUT_RAM + 1         ; ST_*                          (test-observable)
 TV_TI           EQU TUT_RAM + 2         ; tail pair index (ST_TAIL)
-TV_XP           EQU TUT_RAM + 3         ; B14 extras pending: 1 = L48 check, 2 = L52 check
+TV_XP           EQU TUT_RAM + 3         ; B14 extras pending: 1 = L48 check, 3 = L52 check (TUT-TREASURE: the relative pair + 1)
 TV_NAG          EQU TUT_RAM + 4         ; R2 nudge: off-task WAIT turns of this beat (saturates at NUDGE_T2 + 1; not counted in B6 / B10-B12, see tt_repeat)
 TV_FL           EQU TUT_RAM + 5         ; TFB_* bits
 TV_PTR          EQU TUT_RAM + 6         ; the flashing pointer rect id ($FF none)
@@ -974,8 +974,10 @@ tt_step:
                 cp   TUT_FH_VICTORY_EXTRAS
                 jr   nz, .nx
                 ld   a, b
-                cp   2
-                jr   nc, .nx
+                cp   3
+                jr   nc, .nx                   ; TUT-TREASURE: rel 0 = G3 (L48), 1 = treasure (none),
+                cp   1                         ; 2 = G4 (L52: XP 3 -> .x2); the later groups: none
+                jr   z, .nx
                 inc  a
                 ld   (TV_XP), a
 .nx:            ld   c, TUT_NONE

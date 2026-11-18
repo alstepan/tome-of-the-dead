@@ -105,7 +105,7 @@ loading picture + `PRESS ANY KEY` (`GS_ANYKEY`; release-first, key swallowed), t
 → `BLOB_ORG`, `in_stub`, `es_go` patch). The BOOT4 trailer and `TT_BOOT4_REC` are unchanged.
 **Reclaim:** the page streams and code leave tape and BOOT4 (estimate ≈ 1.1–1.3 KB packed, a few seconds
 of loading). This is boot-only space: it does **not** fund §4's resident bytes. It gives the D0 blob
-more room (blob spare is 8 B today) for Tutorial v2's lines.
+more room for Tutorial v2's lines (built as TUT-TREASURE: blob spare is 8 B again at `BLOB_ORG` `$DDA4`; the pool margin below it is 292 B).
 
 **The tutorial pointer's new home: the main menu, row 10** (between `1 START` rows 8–9 and
 `2 HERO` rows 11–12; the same FONT6 sub-line style as rows 16 / 20), cols 0–20 (left of the hero
@@ -137,11 +137,10 @@ task); archive `instructions_screen.md`, `.txt`, `instructions_treasures.md` to 
 
 ## 8. Tutorial v2 hook (pointer beats only; the full spec comes later)
 
-- **B3 tail** (book read: the player has just used the page), one scroll group, no new trigger:
-  `PICK AN ITEM IN THE BAG:` (24) · `BELOW IT, SEE WHAT IT DOES` (26).
-- **B14, new G4** (before the old G4, droppable like G4–G5): `EACH BOSS DROPS A TREASURE` (26) ·
-  `READ ITS POWERS IN YOUR BAG` (27).
-- 4 lines ≈ 105 B raw in the D0 blob (needs blob room: §5 reclaim). Line ids are assigned in the v2 spec.
+- **B3 tail pointer pair: DROPPED (user 2026-11-18)**; `READ ITS STATS BELOW. EQUIP IT` (L82) already covers it.
+- **B14 G3b: BUILT (TUT-TREASURE 2026-11-18)**, between G3 and the old G4, droppable like G4-G5, the grate still opens after G3:
+  **L84** `EACH BOSS DROPS A TREASURE` (26) · **L85** `READ ITS POWERS IN YOUR BAG` (27). +44 B raw in the D0 blob
+  (`BLOB_ORG` `$DDA4`); L52 stays after G4. Armour / ring / amulet stay untaught.
 ## 9. Open questions (defaults in bold)
 
 1. ICON MODE row 20: **unchanged** / add the quick item's numbers in the numbers field.
