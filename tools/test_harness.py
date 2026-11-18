@@ -24,7 +24,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zrcp import Zrcp  # noqa: E402
 
-ZESARUX = "/Applications/zesarux.app/Contents/MacOS/zesarux"
+# ZESARUX_BIN: CI (Linux) points this at the source-built binary; macOS default otherwise.
+ZESARUX = os.environ.get("ZESARUX_BIN", "/Applications/zesarux.app/Contents/MacOS/zesarux")
 # ZRCP_PORT: run suites from parallel worktrees without killing each other's
 # emulator (launch() pkills whatever holds its port).
 DEFAULT_PORT = int(os.environ.get("ZRCP_PORT", "10000"))
