@@ -268,7 +268,7 @@ LVL_HDR_LEN     EQU 16
 EDGE_TAB        EQU LVL_HDR + LVL_HDR_LEN   ; $6E90: EDGE_SLOTS (8) B, EDGES_H used; then $6E98 TRK_PHASE,
                                     ; $6E99 TRK_PREV (3F-T12), $6E9A TOME_HP (M0), $6E9B TOME_FL (TOME-FX2),
                                     ; $6E9C DN_QN (PERF-GHOST), $6E9D TRAP_LIST (item_defs.asm)
-DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B, DECOR2's per-build plan (reserved; attempt zeroes it: harmless)
+DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B spare (was DECOR2's run list; DECOR2-SHIP: the NEXT_MAP gap DG_SLOT0/1)
 DG_PLAN_LEN     EQU 16
 LVL_KEYROOM2    EQU DG_PLAN - 2     ; $6EAE (LARGER-D T4, the T2 spare after TRAP_N): colour-1 (magenta) key room id,
                                     ; ROOM_NONE = none (1-lock level / D0). attempt zeroes it, then writes it (test-observable)

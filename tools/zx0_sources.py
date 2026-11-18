@@ -77,11 +77,11 @@ if os.environ.get("SRC6_KINDS") is not None:
 # stream; the banks 1 / 3 and SRC6 sources are full: 914 B for the Gargoyle / Fire Imp / Frost Wraith / dust).
 # FD_BLK = real - SRC0_VDELTA ($6000: virtual $6000..$7FFF = bank 0 in zx0_frame). SRC0_KINDS in the
 # environment overrides (test builds; it REPLACES the set).
-SRC0_KINDS = {"K_GARGOYLE", "K_ALIAS", "U_WRAITH", "G_DUST"}
+SRC0_KINDS = {"K_GARGOYLE", "K_ALIAS"}   # DECOR2-SHIP: U_WRAITH + G_DUST back to bank 1 (MAX_FRAMES 8 freed 522 B there)
 if os.environ.get("SRC0_KINDS") is not None:
     SRC0_KINDS = {k.strip() for k in os.environ["SRC0_KINDS"].split(",") if k.strip()}
 SCRATCH_LEN = 1536          # GEN_SCRATCH_LEN (src/defs.asm); ASSERTed in the output too
-MAX_FRAMES = 4              # user decision: blocks of 3-4 frames of one kind
+MAX_FRAMES = 8              # DECOR2-SHIP (was 4, A5 "blocks of 3-4 frames"): blocks of <= 8 frames of one kind, raw <= SCRATCH_LEN (asserted): -726 B packed
 
 
 def fail(msg):

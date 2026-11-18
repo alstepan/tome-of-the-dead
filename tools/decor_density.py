@@ -10,6 +10,7 @@ x 8 depths x every present non-Sanctum room, and counts per depth:
 Needs a build (game_lib reads build/tome-of-the-dead.sym, WZ_BUILD_DIR honoured).
 
     python3 tools/decor_density.py [seeds=1000] [depth ...]
+    python3 tools/decor_density.py [seeds=1000] --decor2 [--md]     # DECOR2 old-vs-new metric report (decor_rules2.md §5)
 """
 import os
 import sys
@@ -19,6 +20,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "tests"))
 sys.path.insert(0, os.path.join(REPO, "tools"))
 import decorgen as DG           # noqa: E402
+import decorgen2 as D2          # noqa: E402
 import levelgen as G            # noqa: E402
 import room_model as RM         # noqa: E402
 from game_lib import S          # noqa: E402
@@ -54,6 +56,7 @@ def why_not(m, row, col, w, h, cls, fl):
 class Probe(DG.Room):
     """DG.Room with try_place reporting the outcome of every attempt to self.log."""
     log = None
+    objs = None
 
     def try_place(self, rng, obj, row_of):
         name, base, w, h, fl, cls = obj
@@ -82,6 +85,8 @@ class Probe(DG.Room):
             res = why_not(self.m, row, col, w, h, cls, fl)
         real = self._place(row, col, obj, area)
         assert real == (res is None), (name, res, real)
+        if real:
+            self.objs.append(dict(name=name, cls=cls, row=row, col=col, w=w, h=h, src="old", grp=None))
         self.log.append((name, cls, res or "placed", area, w * h))
         return real
 
@@ -113,19 +118,284 @@ def decorate(m, depth, seed):
     rng = DG.Rng(seed)
     room = Probe(m, True, DG.WALL_MAX[depth])
     room.log = []
+    room.objs = []
     DG.patch_pass(room, rng, depth)
     before = list(room.m)
     DG.cobwebs(room, rng, depth)
     room.ncob = sum(1 for a, b in zip(before, room.m) if a != b)
+    room.objs += [dict(name="COBWEB", cls=DG.C_COMP + 1, row=i // COLS, col=i % COLS, w=1, h=1, src="old", grp=None)
+                  for i, (a, b) in enumerate(zip(before, room.m)) if a != b]
     mn = DG.menu(depth)
     for _ in range(DG.tries_of(depth)):
         room.try_place(rng, mn[rng.rnd(len(mn))], None)
     return room.m, room
 
 
+# ----------------------------------------------------------------------------------------------
+# DECOR2 metrics (docs/design/decor_rules2.md §5): the same measurements on the old and the new deriver
+# ----------------------------------------------------------------------------------------------
+LIGHTS = ("TORCH_TALL", "TORCH_SLIM", "BRAZIER", "BRAZIER_BIG")
+PLANNED = ("frame", "centre", "flank", "gallery", "single")
+
+
+def patch_ids(depth):
+    ids = {DG.D["T_WALL_DITHER"], DG.D["T_WALL_PATCH"], DG.D["T_WALL_FADE"]}
+    for o in DG.LEVEL[depth]:
+        if o[0] in ("PATCH_A", "PATCH_B"):
+            ids |= set(range(o[1], o[1] + o[2] * o[3]))
+    return ids
+
+
+def comps(cells):
+    """sizes of the 8-connected components of a set of (r, c)."""
+    left, out = set(cells), []
+    while left:
+        stack = [left.pop()]
+        n = 1
+        while stack:
+            r, c = stack.pop()
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    q = (r + dr, c + dc)
+                    if q in left:
+                        left.remove(q)
+                        stack.append(q)
+                        n += 1
+        out.append(n)
+    return out
+
+
+def gap(a, b):
+    """empty cols between two objects' column spans (negative = overlap)."""
+    return max(b["col"] - (a["col"] + a["w"]), a["col"] - (b["col"] + b["w"]))
+
+
+def room_metrics(base, m, objs, flags, key, depth):
+    """-> dict of per-room measurements (summarize() says what each means)."""
+    st, pit = D2.analyze(base)
+    out = {}
+    vis = [o for o in objs if o["cls"] in (DG.C_MOUNT, DG.C_CEIL, DG.C_FLOOR)]
+    lights = [o for o in objs if o["name"] in LIGHTS]
+    pids = patch_ids(depth)
+    cells = [(i // COLS, i % COLS) for i, t in enumerate(m) if t in pids]
+    out["speckle"] = sum(1 for n in comps(cells) if n == 1)
+
+    def near(o):
+        s = o["row"] // 9
+        for l in lights:
+            if l is not o and l["row"] // 9 == s and gap(o, l) <= 3:
+                return True
+        for sd, edge, kind, _n in st[s]["faces"]:
+            if kind == "wall" and ((sd == "L" and 0 <= o["col"] - edge <= 3) or
+                                   (sd == "R" and 0 <= edge - (o["col"] + o["w"] - 1) <= 3)):
+                return True
+        return False
+
+    out["vis"] = len(vis)
+    out["anch"] = sum(1 for o in vis if o["src"] in PLANNED or (o["cls"] == DG.C_CEIL and near(o)))
+    pats = [o for o in objs if o["cls"] in (DG.C_PATCH, DG.C_COMP)]
+    out["patches"] = len(pats)
+    out["patch_anch"] = sum(1 for o in pats if near(o))
+    out["patch_anch"] = sum(1 for o in pats if near(o))
+    # mirrored pair: same record, same row, the gap's centre = a focal / object centre +- 1/2 col
+    mir = framed = False
+    for i, a in enumerate(vis):
+        for b in vis[i + 1:]:
+            if a["name"] != b["name"] or a["row"] != b["row"]:
+                continue
+            a_, b_ = (a, b) if a["col"] < b["col"] else (b, a)
+            lo, hi = a_["col"] + a_["w"], b_["col"] - 1
+            if hi < lo or hi - lo > 12:
+                continue
+            mid = (lo + hi) / 2
+            s = a_["row"] // 9
+            cand = [(c + (w - 1) / 2, k) for c, w, k in st[s]["focal"]]
+            if s == 0 and pit:
+                cand.append((pit[0] + (pit[1] - 1) / 2, "pit"))
+            cand += [(o["col"] + (o["w"] - 1) / 2, "obj") for o in vis if o is not a and o is not b
+                     and o["row"] // 9 == s and lo <= o["col"] and o["col"] + o["w"] - 1 <= hi]
+            for cc, kind in cand:
+                if abs(cc - mid) <= 0.5:
+                    mir = True
+                    framed = framed or (kind == "shaft" and a["name"] in LIGHTS)
+    out["mirrored"], out["lair_framed"] = mir, framed
+    nl = len(lights)
+    out["nlights"], out["lit"] = nl, nl > 0
+    # near-duplicates: same record, same storey, <= 6 empty cols apart, not one pair / gallery / cluster
+    out["neardup"] = sum(1 for i, a in enumerate(vis) for b in vis[i + 1:]
+                         if a["name"] == b["name"] and a["row"] // 9 == b["row"] // 9 and gap(a, b) <= 6
+                         and not (a["grp"] is not None and a["grp"] == b["grp"]))
+    # fill spacing: gaps between neighbouring mount / floor objects of a storey (not within one group)
+    gaps = []
+    for s in (0, 1):
+        mf = sorted((o for o in vis if o["cls"] in (DG.C_MOUNT, DG.C_FLOOR) and o["row"] // 9 == s),
+                    key=lambda o: o["col"])
+        for a, b in zip(mf, mf[1:]):
+            if a["row"] + a["h"] <= b["row"] or b["row"] + b["h"] <= a["row"]:
+                continue                                                         # no shared rows (banner over a brazier)
+            if (a["src"] in ("fill", "old") or b["src"] in ("fill", "old")) \
+                    and not (a["grp"] is not None and a["grp"] == b["grp"]):     # unrelated = one of them is fill / old
+                gaps.append(b["col"] - (a["col"] + a["w"]))
+    out["gaps"] = gaps
+    # negative space: largest decor-free col run in rows 1..7 of each storey
+    free = []
+    for s in (0, 1):
+        best = cur = 0
+        for c in range(1, COLS - 1):
+            if any(DG.is_decor(m[(9 * s + r) * COLS + c]) for r in range(1, 8)):
+                cur = 0
+            else:
+                cur += 1
+                best = max(best, cur)
+        free.append(best)
+    out["free"] = free
+    out["empty"] = sum(1 for s in (0, 1) if not any(DG.is_decor(m[(9 * s + r) * COLS + c]) for r in range(9) for c in range(COLS)))
+    # clearance (R3)
+    mf = [o for o in vis if o["cls"] in (DG.C_MOUNT, DG.C_FLOOR)]
+    out["margin"] = sum(1 for o in mf if o["col"] <= 2 or o["col"] + o["w"] - 1 >= 29)
+    out["margin_ceil"] = sum(1 for o in vis if o["cls"] == DG.C_CEIL and o["name"] != "MOSS"
+                             and (o["col"] <= 2 or o["col"] + o["w"] - 1 >= 29))
+    zone = type("Z", (), {"pit": pit})()
+    out["pit_zone"] = sum(1 for o in vis if o["cls"] == DG.C_FLOOR and D2.Room2.zone_hit(zone, o["col"], o["w"], o["row"]))
+    # gradient
+    cob = [o for o in objs if o["name"] == "COBWEB"]
+    out["cob"], out["cob0"] = len(cob), sum(1 for o in cob if o["row"] < 9)
+    moss = [o for o in objs if o["name"] == "MOSS"]
+    out["moss_cells"] = sum(o["w"] for o in moss)
+    out["moss_strip_cells"] = sum(o["w"] for o in moss if o["w"] >= 2)
+    # roles
+    out["start_s1"] = sum(1 for o in mf if o["row"] >= 9) if flags & D2.RDF_START else None
+    out["deadend_dark"] = (not nl) if flags & D2.RDF_DEADEND and not flags & (D2.RDF_START | D2.RDF_LAIR) and not key else None
+    out["lair_lit"] = bool(nl) if flags & D2.RDF_LAIR else None
+    out["key_lit"] = bool(nl) if key else None
+    return out
+
+
+def collect(n, depths, mode):
+    """-> {depth: [room metric dicts]}; mode 'old' = decorgen via Probe, 'new' = decorgen2."""
+    res = {d: [] for d in depths}
+    for d in depths:
+        for seed in range(1, n + 1):
+            blk = bytes(G.generate(d, seed * 7919 & 0xFFFF or 1))
+            for r in range(G.NCELL):
+                o = G.LOFF_DESC + r * S["RD_STRIDE"]
+                fl = blk[o + S["RD_FLAGS"]]
+                if not fl & S["RDF_PRESENT"] or fl & S["RDF_SANCTUM"]:
+                    continue
+                base = RM.base_room(blk, r)
+                sd = blk[o + S["RD_SEED"]] | blk[o + S["RD_SEED"] + 1] << 8
+                rid, flags, key = RM.room_role(blk, r)
+                if mode == "old":
+                    m, room = decorate(base, d, sd)
+                    objs = room.objs
+                    nl, ng, nw, mw = room.nl, room.ng, room.nw, room.maxwall
+                else:
+                    m, _al, objs = D2.decorate(base, d, sd, True, (rid, flags, key))
+                    nl = sum(1 for x in objs if x["name"] in LIGHTS)
+                    ng = sum(x["w"] for x in objs if x["name"] in LIGHTS)
+                    nw = sum(DG.COMP_AREA if x["cls"] == DG.C_COMP else x["w"] * x["h"]
+                             for x in objs if x["cls"] in (DG.C_PATCH, DG.C_COMP))
+                    mw = DG.WALL_MAX[d]
+                assert nl <= DG.MAX_LARGE and ng <= DG.MAX_GLYPH and nw <= mw, (mode, d, seed, r, nl, ng, nw)
+                # solidity / footprint: decor only ever lands on T_AIR cells of the base map
+                assert all(a == b or a == DG.T_AIR for a, b in zip(base, m)), (mode, d, seed, r)
+                mm = room_metrics(base, m, objs, flags, key, d)
+                mm["mood"] = getattr(objs, "mood", None)
+                mm["cells"] = sum(1 for a, b in zip(base, m) if a != b)
+                mm["objects"] = len(objs)
+                mm["ids"] = len({t for t in m if 32 <= t < 60} - {t for t in base if 32 <= t < 60})
+                mm["flags"], mm["key"] = flags, key
+                res[d].append(mm)
+    return res
+
+
+def median(v):
+    v = sorted(v)
+    return v[len(v) // 2] if v else float("nan")
+
+
+def summarize(rooms):
+    """metric name -> value for a list of per-room dicts."""
+    n = len(rooms) or 1
+    sm = lambda k: sum(r[k] for r in rooms)                                     # noqa: E731
+    sel = lambda k: [r[k] for r in rooms if r[k] is not None]                    # noqa: E731
+    frac = lambda v: 100 * sum(1 for x in v if x) / len(v) if v else float("nan")   # noqa: E731
+    gaps = [g for r in rooms for g in r["gaps"]]
+    free = [f for r in rooms for f in r["free"]]
+    lit = [r for r in rooms if r["lit"]]
+    return {
+        "rooms": len(rooms),
+        "objects/room": sm("objects") / n,
+        "decor cells/room": sm("cells") / n,
+        "bare rooms %": 100 * sum(1 for r in rooms if not r["objects"]) / n,
+        "visible obj/room (mount+ceil+floor)": sm("vis") / n,
+        "speckle cells/room": sm("speckle") / n,
+        "rooms with speckle %": 100 * sum(1 for r in rooms if r["speckle"]) / n,
+        "anchored ratio % (visible objs)": 100 * sm("anch") / (sm("vis") or 1),
+        "patches anchored % (light/wall)": 100 * sm("patch_anch") / (sm("patches") or 1),
+        "mirrored rooms % (all)": frac([r["mirrored"] for r in rooms]),
+        "mirrored % of rooms with a light": frac([r["mirrored"] for r in lit]),
+        "mirrored % of LIT-mood rooms": frac([r["mirrored"] for r in rooms if r["mood"] == "LIT"]),
+        "mood LIT %": 100 * sum(1 for r in rooms if r["mood"] == "LIT") / n,
+        "mood DIM %": 100 * sum(1 for r in rooms if r["mood"] == "DIM") / n,
+        "mood DARK %": 100 * sum(1 for r in rooms if r["mood"] == "DARK") / n,
+        "mood CALM %": 100 * sum(1 for r in rooms if r["mood"] == "CALM") / n,
+        "near-dup rooms %": 100 * sum(1 for r in rooms if r["neardup"]) / n,
+        "gap min (mount/floor)": min(gaps) if gaps else float("nan"),
+        "gap median": median(gaps),
+        "gaps < 3 %": 100 * sum(1 for g in gaps if g < 3) / (len(gaps) or 1),
+        "storeys with free run >= 8 %": 100 * sum(1 for f in free if f >= 8) / (len(free) or 1),
+        "median largest free run": median(free),
+        "empty storeys %": 100 * sm("empty") / (2 * n),
+        "margin violations mount/floor": sm("margin"),
+        "margin violations chain": sm("margin_ceil"),
+        "pit-zone floor objects": sm("pit_zone"),
+        "lair: lights flank grate %": frac([r["lair_framed"] for r in rooms if r["flags"] & D2.RDF_LAIR]),
+        "start: storey-1 mount/floor objs": sum(sel("start_s1")),
+        "dead ends without lights %": frac(sel("deadend_dark")),
+        "lair rooms lit %": frac(sel("lair_lit")),
+        "key rooms lit %": frac(sel("key_lit")),
+        "rooms with 0 lights %": 100 * sum(1 for r in rooms if not r["nlights"]) / n,
+        "rooms with 2 lights %": 100 * sum(1 for r in rooms if r["nlights"] >= 2) / n,
+        "cobwebs/room": sm("cob") / n,
+        "cobwebs on storey 0 %": 100 * sm("cob0") / (sm("cob") or 1),
+        "moss cells in strips %": 100 * sm("moss_strip_cells") / sm("moss_cells") if sm("moss_cells") else float("nan"),
+        "distinct decor ids/room": sm("ids") / n,
+    }
+
+
+def decor2_report(n, depths, md=False):
+    old, new = collect(n, depths, "old"), collect(n, depths, "new")
+    so = {d: summarize(old[d]) for d in depths}
+    sn = {d: summarize(new[d]) for d in depths}
+    so["all"] = summarize([r for d in depths for r in old[d]])
+    sn["all"] = summarize([r for d in depths for r in new[d]])
+    cols = [f"D{d}" for d in depths] + ["all"]
+    fmt = lambda v: "-" if v != v else (f"{v:.0f}" if abs(v) >= 100 or v == int(v) else f"{v:.2f}")   # noqa: E731
+    if md:
+        print("| metric | " + " | ".join(cols) + " |")
+        print("|---|" + "---|" * len(cols))
+    else:
+        print(f"{n} seeds per depth, non-Sanctum rooms; old = decorgen.py, new = decorgen2.py (DECOR2 P2)")
+        print(f"{'metric':42s} " + " ".join(f"{c:>8s}" for c in cols))
+    for k in so["all"]:
+        for tag, S_ in (("old", so), ("new", sn)):
+            cells = [fmt(S_[d][k]) for d in depths] + [fmt(S_["all"][k])]
+            if md:
+                print(f"| {k} ({tag}) | " + " | ".join(cells) + " |")
+            else:
+                print(f"{k + ' ' + tag:42s} " + " ".join(f"{c:>8s}" for c in cells))
+    return so, sn
+
+
 def main(argv):
+    flags = [a for a in argv[1:] if a.startswith("--")]
+    argv = [argv[0]] + [a for a in argv[1:] if not a.startswith("--")]
     n = int(argv[1]) if len(argv) > 1 else 1000
     depths = [int(x) for x in argv[2:]] or list(range(1, 9))
+    if "--decor2" in flags:
+        decor2_report(n, depths, "--md" in flags)
+        return
     rows = {}
     for d in depths:
         agg, res, att = Counter(), Counter(), Counter()
@@ -137,7 +407,7 @@ def main(argv):
                 fl = blk[o + S["RD_FLAGS"]]
                 if not fl & S["RDF_PRESENT"] or fl & S["RDF_SANCTUM"]:
                     continue
-                base = RM.render_room(bytes(blk), r, decor=False)
+                base = RM.base_room(bytes(blk), r)
                 sd = blk[o + S["RD_SEED"]] | blk[o + S["RD_SEED"] + 1] << 8
                 m, room = decorate(base, d, sd)
                 if checked < 20:                      # == the reference deriver (and so the Z80)

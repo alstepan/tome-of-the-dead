@@ -82,7 +82,7 @@ def main():
 
         def run_code(body):
             """DI, body, record CF, EI; -> (ok, T, CF)."""
-            res = STUB + 100
+            res = S["tut_stub_end"]              # DECOR2-SHIP: STUB + 100 ran into boot / gen_idles
             code = bytes([0xF3] + body + [0x9F, 0x32] + w16(res) + [0xFB, 0x00, 0x18, 0xFE])   # sbc a,a / ld (res),a
             end = STUB + len(code) - 3
             p.z.cmd("write-memory %d %s" % (STUB, " ".join(str(b) for b in code)))

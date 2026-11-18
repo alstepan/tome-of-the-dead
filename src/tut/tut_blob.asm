@@ -38,3 +38,6 @@ blob_base:
                 ASSERT {b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} != 0             ; (the read is real)
                 ASSERT {b tut0_floor_list + TUT0_GEAR_FL * FL_STRIDE + FL_ITEM} == IT_H_HELM  ; TUT-GEAR: tut_d0's class pick
                 ASSERT {b tut0_lvl_state} == 1  ; LVL_DEPTH during D0: tt_hook's "D0" digit operand ('0' - 1)
+                ; DECOR2-SHIP: decor_gen.asm's legacy-path selector (LVL_NROOMS < ROOMS_MIN -> the B3B-9 algorithm,
+                ; D0's searched RD_SEEDs) and tests/room_model.py rely on D0 having fewer rooms than any generated level
+                ASSERT LVL_NROOMS - LVL_HDR < TUT0_HDR_COPY && {b tut0_lvl_state + LVL_NROOMS - LVL_HDR} < ROOMS_MIN
