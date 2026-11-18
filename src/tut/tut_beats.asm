@@ -194,8 +194,8 @@ tut_beats:
               TUT_PR_SCROLL, TUT_NONE, TUT_FH_NONE, TUT_BF_H0
 ; B14 Victory (C): blink -> beside the grate, TALK; Goblin dead: G1 L42/L56,
 ; G2 L57/L58, tail pairs 0.. (p3 = TUT_TI_B14 -> index 2 after B1's 2-pair run) =
-; G3 L59/L43, G4 L46/L44, G5 L45/L47 (TUT-KEY: the grate line last); grate opens after tail pair p2 = 0 (G3);
-; FH_VICTORY_EXTRAS adds L48 (after G3) / L52 (after G4)
+; G3 L59/L43, G3b L84/L85 (TUT-TREASURE), G4 L46/L44, G5 L45/L47 (TUT-KEY: the grate line last); grate opens after tail pair p2 = 0 (G3);
+; FH_VICTORY_EXTRAS adds L48 (after G3) / L52 (still after G4, now tail pair 4)
         TBEAT TUT_RC, TUT_TK_GOB_DEAD, 0, TUT_TI_B14, TUT_SP_GRATE, TUT_PF_BLINK | TUT_POSE_TALK, \
               TUT_NONE, TUT_NONE, TL_L42, TL_L56, TL_L57, TL_L58, \
               TUT_NONE, TUT_NONE, TUT_FH_VICTORY_EXTRAS, TUT_BF_TAIL | TUT_BF_GRATE | TUT_BF_H1 | TUT_BF_H2
@@ -209,27 +209,28 @@ tut_beats_end:
 ; =============================================================================
 ; Tail groups (TUT_BF_TAIL): pairs of line ids shown one group per turn after
 ; G2, starting at pair index p3, ending at a
-; ($FF,$FF) pair. 10 pairs = 20 B. R2: B3 / B5 pairs APPENDED (B14 keeps 2..5).
+; ($FF,$FF) pair. 11 pairs = 22 B. R2: B3 / B5 pairs APPENDED (B14 keeps 2..6; TUT-TREASURE inserted pair 3).
 ; =============================================================================
 TUT_TI_B14      EQU 2
-TUT_TI_B3       EQU 6
-TUT_TI_B5       EQU 8
+TUT_TI_B3       EQU 7
+TUT_TI_B5       EQU 9
 tut_tail:
         DEFB TL_L07, TUT_NONE           ; 0  B1 G3: WAIT ({D}) BY ME TO HEAR AGAIN
         DEFB TUT_NONE, TUT_NONE         ; 1  end (B1)
         DEFB TL_L59, TL_L43             ; 2  B14 G3 (the grate opens after this one)
-        DEFB TL_L46, TL_L44             ; 3  B14 G4 (TUT-KEY 2026-11-16: the pause hint, then the key + boss)
-        DEFB TL_L45, TL_L47             ; 4  B14 G5 (its grate is the way down; ON THE GRATE, PRESS {D}: last)
-        DEFB TUT_NONE, TUT_NONE         ; 5  end (B14)
-        DEFB TL_L63, TL_L64             ; 6  B3 tail (R2): scrolls from bar or bag, empty icons
-        DEFB TUT_NONE, TUT_NONE         ; 7  end (B3)
-        DEFB TL_L70, TL_L71             ; 8  B5 tail (R2): WEAK, no leap
-        DEFB TUT_NONE, TUT_NONE         ; 9  end (B5)
+        DEFB TL_L84, TL_L85             ; 3  B14 G3b (TUT-TREASURE 2026-11-18: boss treasure, read in the bag; droppable)
+        DEFB TL_L46, TL_L44             ; 4  B14 G4 (TUT-KEY 2026-11-16: the pause hint, then the key + boss)
+        DEFB TL_L45, TL_L47             ; 5  B14 G5 (its grate is the way down; ON THE GRATE, PRESS {D}: last)
+        DEFB TUT_NONE, TUT_NONE         ; 6  end (B14)
+        DEFB TL_L63, TL_L64             ; 7  B3 tail (R2): scrolls from bar or bag, empty icons
+        DEFB TUT_NONE, TUT_NONE         ; 8  end (B3)
+        DEFB TL_L70, TL_L71             ; 9  B5 tail (R2): WEAK, no leap
+        DEFB TUT_NONE, TUT_NONE         ; 10 end (B5)
 tut_tail_end:
-; TUT0-F2: bit i = tail pair i holds (B14 G3..G5: the Tome / sandbox / grate lines; B1's L07 not).
-; tt_step tests bit (i mod 8): R2's pairs 6 and 8 land on bits 6 / 0, both clear (they scroll).
+; TUT0-F2: bit i = tail pair i holds (B14 G3..G5 + the treasure group: pairs 2..5; B1's L07 not).
+; tt_step tests bit (i mod 8): the B3 / B5 pairs 7 and 9 land on bits 7 / 1, both clear (they scroll).
 tut_tail_hold:
-        DEFB %00011100
+        DEFB %00111100
 
 ; TUT0-F4 R4-3 goal lines (tt_goal / tt_gvis): one line id per beat ($FF none; bit 7 = a
 ; tut_cpairs class pair), pinned on row 20 while the beat waits for the player; also the

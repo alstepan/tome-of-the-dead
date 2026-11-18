@@ -931,6 +931,12 @@ def fight(p, run, use_scroll, n=70):
     return bool(p.rb("ST1_KILLS")), used
 
 
+def _grate_open_mark(p, run):
+    """TUT-TREASURE: the log lines seen at the first sample with the grate open (None until then)."""
+    if getattr(run, "grate_first", None) is None and p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"]:
+        run.grate_first = [l.rstrip() for l in p.LOG]
+
+
 def after_fight_to_exit(p, run, heal=False, waits=0, png=None):
     """The Goblin is dead: (optionally) heal and wait out `waits` turns, then walk STRAIGHT to the grate and step into it
     (the grate opens after the 3rd victory group). run.exit_mark = len(p.LOG) before the turn that leaves D0.
@@ -940,10 +946,12 @@ def after_fight_to_exit(p, run, heal=False, waits=0, png=None):
         run.used_heal = True
     for _ in range(waits):
         T(p, "WAIT")
+        _grate_open_mark(p, run)
     gx = 22                                                      # the grate {22,2}: cols 22-24, the storey-1 floor
     for _ in range(40):
         e = p.ent(0)
         run.grate_post.append(p.rb("LVL_FLAGS") & S["LF_GRATE_OPEN"])
+        _grate_open_mark(p, run)
         if e["X"] == gx:
             break
         run.exit_mark = len(p.LOG)
@@ -1035,7 +1043,7 @@ def first_lines(hero):
     return ["L01", "L03", "L05", "L54", "L65", "L08", "L67", "L11", "L60", "L13", "L14" + c, "L63", "L16", "L17", "L19", "L21",
             "L70", "L23", "L24",
             "L26", "L28", "L30b", "L31", "L80", "L60", "L81", "L82", "L83" + c, "L33", "L34", "L35" + c, "L37", "L38" + c, "L39", "L41", "L42", "L56", "L57",
-            "L58", "L59", "L43", "L46", "L44", "L45", "L47"]      # TUT-KEY: G4 L46 / L44, G5 L45 / L47 (the grate last)
+            "L58", "L59", "L43", "L84", "L85", "L46", "L44", "L45", "L47"]      # TUT-KEY: G4 L46 / L44, G5 L45 / L47 (the grate last)
 
 
 def log_order(p, keys, scheme="keys"):
@@ -1233,6 +1241,13 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     check("C15", f"{tag}: after the kill L56 / L57 / L58 are logged before the hero steps into the grate (walking straight)",
           all(line("TL_" + k, scheme) in pre for k in ("L56", "L57", "L58")),
           [k for k in ("L56", "L57", "L58") if line("TL_" + k, scheme) not in pre])
+    gf = getattr(run, "grate_first", None) or []
+    check("TT1", f"{tag}: TUT-TREASURE: L84 / L85 (boss treasure, read in the bag) after G3's L43 and before G4's L46, in B14 order; "
+          "the grate opened right after G3 (L43 logged, the treasure group and G4 not yet)",
+          line("TL_L43", scheme) in gf and line("TL_L84", scheme) not in gf and line("TL_L46", scheme) not in gf
+          and line("TL_L84", scheme) in lines and line("TL_L85", scheme) in lines
+          and lines.index(line("TL_L43", scheme)) < lines.index(line("TL_L84", scheme)) < lines.index(line("TL_L85", scheme)) < lines.index(line("TL_L46", scheme)),
+          (gf[-3:], [l for l in lines[-8:]]))
     if final:
         d1, a1 = d1_after(p)
         bad = d1_equal(SHARED["plain"][0], d1, a1 | SHARED["plain"][1])

@@ -974,8 +974,10 @@ tt_step:
                 cp   TUT_FH_VICTORY_EXTRAS
                 jr   nz, .nx
                 ld   a, b
-                cp   2
-                jr   nc, .nx
+                cp   3
+                jr   nc, .nx                   ; TUT-TREASURE: rel 0 = G3 (L48), 1 = treasure (none),
+                cp   1                         ; 2 = G4 (L52: XP 3 -> .x2); the later groups: none
+                jr   z, .nx
                 inc  a
                 ld   (TV_XP), a
 .nx:            ld   c, TUT_NONE

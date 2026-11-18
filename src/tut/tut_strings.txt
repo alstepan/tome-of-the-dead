@@ -11,6 +11,7 @@
 # reworded (L23: the shaft is a ladder top, entered with DOWN, not by walking on).
 # TUT-KEY (2026-11-16): L47 reworded (the grate shaft is entered with DOWN, as L23); L77 new.
 # TUT-GEAR (2026-11-16): L80-L82, L83W / L83M new (B9G).
+# TUT-TREASURE (2026-11-18): L84 / L85 new (B14 treasure group).
 # MORROW-SPEAK review A: a log line's expanded bytes (keys at 5) must be <= LOG_MAX - 1
 # (tt_line prefixes his marker byte; linted by tools/tutpack.py).
 
@@ -105,6 +106,9 @@ TL_L81 = CURSOR: {L} {R} {U} {D}
 TL_L82 = READ ITS STATS BELOW. EQUIP IT
 TL_L83W = WORN! DEF +1: BLOWS HURT LESS
 TL_L83M = WORN! MAX MP +1: MORE SPELLS
+# --- TUT-TREASURE (2026-11-18): B14's treasure group (L84 / L85; L78 / L79 stay reserved for R3-LOST) ---
+TL_L84 = EACH BOSS DROPS A TREASURE
+TL_L85 = READ ITS POWERS IN YOUR BAG
 # --- R2 icon tour (s13.3): entry pair, slot lines (W / M where the class differs) ---
 TL_I00a = THE LIT ICON IS YOUR CHOICE
 TL_I00b = PICK: {L} {R}. LEAVE: {U}
