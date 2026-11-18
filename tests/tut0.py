@@ -544,7 +544,7 @@ QS_SCROLL_ICON = S["QS_SLOT0"] + S["QS_SCROLL"]
 STAND_Y = (S["STAND_Y0"], S["STAND_Y1"])
 
 
-PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 24, 1), (22, 28, 2, 2)]  # tut_rects (row, col, w, h)
+PTR_RECTS = [(18, 27, 3, 2), (18, 18, 3, 2), (18, 21, 3, 2), (18, 24, 3, 2), (21, 30, 2, 1), (21, 0, 30, 1), (20, 0, 24, 1), (22, 28, 2, 2), (18, 3, 3, 2)]  # tut_rects (row, col, w, h)
 
 # --- TUT0-F4 R4: the goal line (row 20 cols 0..23) and the hold prompt (cols 24..31) ---------------------
 FONT6 = open(os.path.join(REPO, "assets", "gfx", "fonts", "font6x8.bin"), "rb").read()
@@ -599,6 +599,7 @@ class Run:
         self.p, self.beats, self.rooms, self.blob_bad = p, [], [], []
         self.grate, self.grate_post, self.exit_mark, self.used_heal, self.blocked = [], [], 0, False, []
         self.ptr_bad, self.ptr_seen, self.ptr_cells = [], set(), 0
+        self.ic2_on, self.ic2_leak = [], []                      # TUT-ICONFLASH: ICON2 (slot 2) flashing with L13 current / leaking after
         self.wake_mark = None
         self.bal = dict(n=0, bad=[], side=set(), front=0, back=0, ink=0, room=None, nlog=0, hid=0, eng=0)
         self.png, self.png_done = False, {}                      # MORROW-SPEAK: the facing PNGs (one run saves them)
@@ -635,6 +636,12 @@ class Run:
     def ptr_check(self):
         """V3 sampler: with a pointer up, no blank rect cell (8 bitmap bytes 0) has FLASH, every non-blank one has."""
         pid = tv(self.p, "TV_PTR")
+        if pid != 8 and not self.p.rb("ICON_MODE") and self.p.rb("GAME_STATE") == GS_PLAYING:
+            a = self.p.z.read_memory(0x5800, 768)             # TUT-ICONFLASH: no FLASH on slot 2's cells once the group is gone
+            if any(a[32 * r + c] & 0x80 for r in (18, 19) for c in (3, 4, 5)):
+                self.ic2_leak.append((tv(self.p, "TV_BEAT"), pid))
+        if pid == 8:
+            self.ic2_on.append((tv(self.p, "TV_BEAT"), tv(self.p, "TV_STAGE")))
         if pid == 0xFF or pid >= len(PTR_RECTS):
             return
         fr = self.p.frame()
@@ -1190,6 +1197,9 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
     check("C3", f"{tag}: B0-B10 walked (the book read from the page, the pear eaten, the cure drunk) to room C", ok, st(p))
     check("V3", f"{tag}: no blank cell in a pointer rect has FLASH set; non-blank cells do ({run.ptr_cells} cells, rects seen {sorted(run.ptr_seen)})",
           not run.ptr_bad and run.ptr_cells > 0, run.ptr_bad[:4])
+    check("IF1", f"{tag}: TUT-ICONFLASH: slot 2 (cols 3-5, rows 18-19: {'Power Strike' if hero == 0 else 'Spark'}) FLASHes while L13 / L14 is "
+          f"current (ICON2 seen {len(run.ic2_on)}x, beats {sorted({b for b, _ in run.ic2_on})}); no FLASH on it in any other sample ({run.ic2_leak[:3]})",
+          len(run.ic2_on) > 0 and {b for b, _ in run.ic2_on} == {3} and not run.ic2_leak, (run.ic2_on[:3], run.ic2_leak[:3]))
     arank_mid = p.rb("ARANK")
     check("C3", f"{tag}: bag READ turned the page: ARANK != 0, the book is gone",
           p.rb("ARANK") != 0 and bag_slot(p, S["IT_BOOK"]) is None, p.rb("ARANK"))
