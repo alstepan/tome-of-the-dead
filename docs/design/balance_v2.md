@@ -370,3 +370,18 @@ with the sim's semantics, with these notes:
 - Firebolt r1 bonus −1 is signed in `ab_rank` (`$FF`); a 0 roll hurts 1 (deal_hit), and the sim now floors a spell's final
   damage at 1 the same way (`strike`) and reads RK_BONUS signed.
 
+
+## 9. FOOD-7 (user ruling 2026-11-18, playtest of package 5: "a little less food")
+
+`FOOD_PERIOD` 8 -> 7 (`src/item_defs.asm:245`); the 8 % kill drop, start 100 and everything else are unchanged. 0 B. Sim: `tools/balance_food7.json`
+= `balance_pkg5_final.json` with `FOOD_BURN` 7 (`--ld-pkg4 --overrides tools/balance_food7.json --set param.PICKUP=0.75`, 10 000 runs, seed 1, `--jobs 4`).
+Starving = died HUNGRY with an empty bag, as a share of deaths (the §8 definition).
+
+| Period | average W / M | E1 W / M | largest depth share (avg W / M) | starving deaths (avg W / M) | HUNGRY + empty bag before D5 (avg W / M) | food median D3 / D6 entry (avg W) |
+|---|---|---|---|---|---|---|
+| 8 (§8) | 16.4 / 16.7 | 37.6 / 44.0 | D4 46 % / D3 41 % | 8 / 15 % (12 % mean) | 11 / 15 % | 56 / 52 |
+| 7 | 9.0 / 11.1 | 24.2 / 29.2 | D4 38 % / D3 51 % | 22 / 36 % (29 % mean) | 31 / 36 % | 55 / 50 |
+
+Interpretation: one turn of period is a cliff, not a nudge. The median food level barely moves, but the tail with an empty bag at HUNGRY grows 2.5x and
+costs 7-12 pts of average win rate and 12-15 pts of E1, so period 7 leaves the average band (15-25) and the E1 W band (30-40 had E1 M above it; now E1 M is in it).
+If the player feels food is still too plentiful, trim it through the floor food count or the drop rate rather than the period. (The E1 M row of §8 reads 43.6 there, 44.0 on re-run.)
