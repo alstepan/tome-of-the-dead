@@ -7805,6 +7805,6 @@ the merge (release / `-DDEBUG_KIT=1` / `-DANIM_TRACE_ON=1`):
 
 A melee hit on the Tome (bump `try_horizontal .tome`, FIRE `ic_melee .door`) only ran `tome_rel` -> `tome_strike`: no hero sequence
 was started (a body hit starts KS_ATTACK in `do_attack`'s tail). Fix: bank-7 `tome_melee` (= `tome_rel` + `jp tome_swing`) at both
-callers; low-RAM `tome_swing` (`ld hl, atk_seq / call far3 / scf / ret`) enters bank-3 `atk_seq` (a label on `do_attack`'s existing
+callers; low-RAM `tome_swing` (clear the hero's E_MSG / E_HIT / E_TGT, `ld hl, atk_seq / call far3 / scf / ret`) enters bank-3 `atk_seq` (a label on `do_attack`'s existing
 `kind_seq_ptr` + `start_seq` tail, 0 B). Spells / daggers / arrows / Power Strike / Whirlwind keep their abl_seq (they never go through `tome_melee`).
-Free before -> after (release / kit / trace): bank 7 8 / -- / -- -> **1** / **1** / **65** (+7); low RAM (on main after DECOR2-SHIP, 30 / 32 / 32) -> **22 / 24 / 24** (-8; measured 22 / 24 / 24 -> 14 / 16 / 16 before the merge); bank 3 30 / 26 / 26 unchanged; B0_CODE2 and HOT_COPY unchanged.
+Free before -> after (release / kit / trace): bank 7 8 / -- / -- -> **1** / **1** / **65** (+7); low RAM (on main after DECOR2-SHIP, 30 / 32 / 32) -> **12 / 14 / 14** (-18: `tome_swing` 8 + review fix 10, E_MSG / E_HIT / E_TGT cleared so `do_impact` does not act on the last body blow's target; measured 22 / 24 / 24 -> 12 on the release build); bank 3 30 / 26 / 26 unchanged; B0_CODE2 and HOT_COPY unchanged.

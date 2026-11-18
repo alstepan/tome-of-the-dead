@@ -345,8 +345,12 @@ tome_gone:      ld   a, TX_WIN
                 scf
                 ret
 ; tome_swing — a melee hit struck the Tome (bank-7 tome_melee, bank 7 paged, IX = hero): the hero plays his
-; KS_ATTACK as against a body (bank-3 atk_seq, turn3.asm: do_attack's tail). CF = 1. Clobbers: AF, BC, DE, HL.
-tome_swing:     ld   hl, atk_seq
+; KS_ATTACK as against a body (bank-3 atk_seq, turn3.asm: do_attack's tail), E_MSG / E_HIT / E_TGT cleared. CF = 1. Clobbers: AF, BC, DE, HL.
+tome_swing:     xor  a                         ; no body was struck: clear the last blow's E_MSG / E_HIT / E_TGT, or
+                ld   (ix+E_MSG), a             ; do_impact (the swing's IMPACT) flashes / logs the old target
+                ld   (ix+E_HIT), a             ; (as power_fire does)
+                ld   (ix+E_TGT), a
+                ld   hl, atk_seq
                 call far3
                 scf
                 ret

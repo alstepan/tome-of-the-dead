@@ -289,24 +289,41 @@ def miss(L, tag, do, gap, facing=True, turn=True):
           (p.rb("TOME_HP"), p.rw("TURN_COUNTER") - t0, mp0, p.rb("MP")))
 
 
-def swing(p, L, tag, keys):
-    """SW (TOME-SWING): a MELEE hit on the Tome (bump / FIRE) plays the hero's own KS_ATTACK (Warrior slash / Mage
-    STAFF_SWING) like a hit on a body: some tick of the turn has the hero in M_SEQ on his kind's KS_ATTACK row
-    (release builds: no ANIM_TRACE, so the sequence pointer is sampled)."""
+def swing(p, L, tag, keys, frames, other):
+    """SW (TOME-SWING): a MELEE hit on the Tome (bump / FIRE) plays the hero's own KS_ATTACK like a hit on a body:
+    the hero's drawn frame (DFID) shows every frame in `frames` (Warrior slash: windup + slash; Mage: STAFF_RAISE +
+    STAFF_SWING) and none of `other` (the other hero's). Stale blow state must not leak: E_MSG / E_HIT / E_TGT are
+    seeded (1 / 3 / 2) with HP 9 in slot 2 (a stand-in target); after the hit they are clear, the stand-in takes no flash / damage."""
     play_mode(p)
     p.wb("TOME_HP", 3)
     L.at_gap(0)
     p.set_ent(0, HP=200)
-    kind = p.ent(0)["KIND"]                                # (Mage: K_WIZARD -> its own wz_attack row)
-    row = (S["seq_rows"] & 0xFF00) | p.rb(S["kind_tab"] + S["KT_SEQ"] + kind)
-    want = p.h.read_word_le(row + S["KS_ATTACK"])
-    modes = []
-    p.turn(*keys, per_tick=lambda fr, h: modes.append((h["MODE"], p.h.read_word_le(S["P_ENTITIES"] + S["E_SEQL"]))))
+    base = S["P_ENTITIES"]
+    p.set_ent(2, FLT=0, FLA=0, HP=9)                      # slot 2: no entity needed, do_impact flashes whatever is there
+    p.wb(base + S["E_MSG"], 1)
+    p.wb(base + S["E_HIT"], 3)
+    p.wb(base + S["E_TGT"], 2)
+    seen, flashed = set(), []
+
+    def snap(fr, h):
+        seen.add(h["DFID"])
+        r = p.ent(2)
+        flashed.append((r["FLT"], r["FLA"], r["HP"]))
+    p.turn(*keys, per_tick=snap)
     p.until(lambda: p.idle(), 300)
-    check(f"SW {tag}: the hit plays the hero's KS_ATTACK ({want:#06x})",
-          p.rb("TOME_HP") == 2 and (S["M_SEQ"], want) in modes, (p.rb("TOME_HP"), want, modes[:6]))
+    ok_seq = all(S[f] in seen for f in frames) and not any(S[f] in seen for f in other)
+    clr = [p.rb(base + S[k]) for k in ("E_MSG", "E_HIT", "E_TGT")]
+    tgt_ok = all(fl == 0 and hp == 9 for fl, fa, hp in flashed)
+    check(f"SW {tag}: the hit draws {'/'.join(frames)} (not {'/'.join(other)}), the hero's E_MSG / E_HIT / E_TGT clear, "
+          "a stale target neither flashes nor loses HP",
+          p.rb("TOME_HP") == 2 and ok_seq and clr == [0, 0, 0] and tgt_ok, (p.rb("TOME_HP"), sorted(seen), clr, flashed[:4]))
+    p.set_ent(2, FLT=0, FLA=0, HP=0)
     p.tick(3)
     play_mode(p)
+
+
+KN_SW = ("FID_knight_windup", "FID_knight_slash")
+WZ_SW = ("FID_wizard_staffraise", "FID_wizard_staffswing")
 
 
 def warrior_hits(p, L):
@@ -317,8 +334,8 @@ def warrior_hits(p, L):
     p.wb("DAGGERS", 20)
     p.wb("ARROWS", 20)
     p.wb("HAS_BOW", 1)
-    swing(p, L, "Warrior bump", (key,))
-    swing(p, L, "Warrior FIRE", ("C",))
+    swing(p, L, "Warrior bump", (key,), KN_SW, WZ_SW)
+    swing(p, L, "Warrior FIRE", ("C",), KN_SW, WZ_SW)
     five(L, "H1 melee bump", lambda: p.turn(key), 0)
     five(L, "H2 melee FIRE (sword icon)", lambda: p.turn("C"), 0)
     miss(L, "H2 melee FIRE", lambda: p.no_turn("C"), 1, turn=False)
@@ -771,8 +788,8 @@ def mage(p):
     five(L, "H7 Spark (Mage, range 6)", lambda: p.turn("@1"), 5)
     miss(L, "H7 Spark", lambda: p.turn("@1"), 6)
     key = "H" if L.left else "L"
-    swing(p, L, "Mage bump", (key,))
-    swing(p, L, "Mage FIRE", ("C",))
+    swing(p, L, "Mage bump", (key,), WZ_SW, KN_SW)
+    swing(p, L, "Mage FIRE", ("C",), WZ_SW, KN_SW)
     five(L, "H8 staff (Mage melee FIRE)", lambda: p.turn("C"), 0)
     p.wmem(S["ARANK"], w16(1 | 1 << 2))                   # Spark r1, Firebolt r1
     if S.get("TOME_FX2", 0):
