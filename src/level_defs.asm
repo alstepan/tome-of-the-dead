@@ -173,7 +173,7 @@ EG_LINK_BIT     EQU 0
 EG_DOOR_BIT     EQU 1
 EG_OPEN_BIT     EQU 2
 EG_LOCK_BIT     EQU 3               ; LARGER-D T8: hero_door clears it (key / far-side bolt)
-EG_SEAL_BIT     EQU 4               ; P3: seal_open (R6 boss6.asm) clears it on the Archmage's death
+EG_SEAL_BIT     EQU 4               ; P3: seal_open (bank 1 tome1.asm) clears it on the Archmage's death
 EG_LOCKC_BIT    EQU 5
 EG_NEARR_BIT    EQU 6
                 ASSERT EG_LOCK == 1 << EG_LOCK_BIT && EG_LOCKC == 1 << EG_LOCKC_BIT && EG_NEARR == 1 << EG_NEARR_BIT

@@ -1108,6 +1108,21 @@ SEQB_LEN        EQU 160             ; REGION 1, SEQ_BYTES (bank 2, code_end .. F
                                     ; RAM, SEQ2_LEN, sq0.asm). T9: the hero's block moved to SEQH_BYTES, D8 needs 256.
                                     ; 3F-T13bc: 256 -> 288; D3-11 review: back to 256
 SEQ2_LEN        EQU 112             ; REGION 2 (lowram.asm seq2_bytes): >= the level's region-2 blocks (ASSERTed per depth)
+; RECLAIM-SV R1 (user ruling 2026-11-18: the ROM system variables $5C00..$5CDA hold data / boot-installed code;
+; after boot nothing reads them but SYS_FRAMES; memory-map "RECLAIM-SV ledger"): region 2 lives at the bottom of them.
+SEQ2            EQU $5C00           ; runtime-only (tape / .sna never write it; sq_reset sets the pointer, sq_load fills it)
+seq2_bytes      EQU SEQ2
+                ASSERT SEQ2 + SEQ2_LEN <= SYS_FRAMES   ; SYS_FRAMES $5C78..$5C7A is LIVE (the ISR bumps it): never overlap
+; RECLAIM-SV INSTALL TARGETS (R2 / R4 / R5): regions that hold code only after the boot overlay's in_tut copied it there
+; (instr_ovl.asm; sources src/sv_r2.asm / sv_r4.asm / sv_r5.asm, DISP'd by main.asm "RECLAIM-SV INSTALL BLOCKS").
+; Code placed in one must NEVER run before in_tut (nothing before it does: boot -> in_flow); a block is installed
+; only when non-empty. Free here = the region minus SV_Rn_LEN (DISPLAYed by main.asm).
+SV_R2           EQU SYS_FRAMES + 3  ; R2: the sysvar hole $5C7B..$5CDA (UDG / COORDS .. CHANS + the dead BASIC line; 96 B)
+SV_R2_END       EQU $5CDB           ; = DN_KEY (combat_defs.asm; ASSERTed in main.asm)
+; R4: lowram.asm print_char .. print_str_end (the print code, dead after in_flow), used by those labels directly (an EQU of
+; a low-RAM label would differ between assembler passes: the cold block's base converges in pass 3)
+SV_R5           EQU STACK_BOTTOM    ; R5: the ISR stack's slack $BE00..$BE2F (bank 2; the ISR uses ISR_STK_NEED of 64 B)
+SV_R5_END       EQU ISR_STK - ISR_STK_NEED
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
 ; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
 ; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)

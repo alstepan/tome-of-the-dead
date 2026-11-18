@@ -14,7 +14,7 @@
 ; build_room_map draws an open exit), the bank-7 attr shadow + a queued
 ; restore of rows 16-17 (rect_repaint, low RAM), "A GATE GLEAMS, THE WAY
 ; DOWN". Before the unique is placed (drop_put needs TF_FLOOR: never on the
-; open gate). P3 (F3_GEN): on D8 -> R6 seal_open instead, LF_GRATE_OPEN stays clear
+; open gate). P3 (F3_GEN): on D8 -> bank-1 seal_open instead, LF_GRATE_OPEN stays clear
 ; (any killer, the Archmage's own Mirror Helm return too). IX kept.
 ; grate_open.op — WIN2 (user 2026-11-01), from low-RAM tome_gone (bank 7 paged): the
 ; Tome is destroyed, the D8 gate opens: no XP; CUR_ROOM is the Sanctum (no exit
@@ -66,8 +66,8 @@ grate_open:
                 call rect_repaint              ; (low RAM: shadow_rect, restore_page, queue_damage)
 .msg:           ld   a, TX_GATE_GLEAMS
                 jp   msg_push
-.seal:          ld   hl, seal_open             ; R6 tome6.asm: LF_SEAL_OPEN, EG_SEAL off, "THE SEAL BREAKS"
-                jp   far6
+.seal:          ld   hl, seal_open             ; bank 1 tome1.asm (RECLAIM-SV R3; was R6): LF_SEAL_OPEN, EG_SEAL off, "THE SEAL BREAKS"
+                jp   far1
 ;------------------------------------------------------------------------------
 ; boss_chk — far7 (w2b: was far6) from lp_transition right after lp_enter (bank 3): the lair
 ; boss must always exist on the level while it lives (LF_UNIQUE clear): as an

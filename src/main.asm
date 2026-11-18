@@ -1426,6 +1426,56 @@ TUT_STUB_ROOM   EQU sel_tab - check_paging      ; check_paging + str_lock (sel_t
                 SAVEBIN "build/ovl/stub.bin", ovl_raw_stub, TUT_STUB_LEN   ; C+TUT0: game.py #50's reference (the
                                                ; .sna's scratch copy is overwritten by BOOT4)
                 DISPLAY "GAME TUT0 stubs: ", /D, TUT_STUB_LEN, " B at ", /H, check_paging, " (room ", /D, TUT_STUB_ROOM, ", free ", /D, TUT_STUB_ROOM - TUT_STUB_LEN, ")"
+;------------------------------------------------------------------------------
+; RECLAIM-SV INSTALL BLOCKS (R2 sysvar hole, R4 dead print code, R5 ISR stack slack): three more
+; boot-installed regions in the tele_lri pattern. Each block's source (sv_r2 / sv_r4 / sv_r5.asm) is DISP'd
+; at its region; in_tut LDIRs a non-empty one into place (empty today: no code, no LDIR, 0 packed bytes).
+; BEFORE the overlay in source order (its {b} reads these bytes). The regions are in no tape block and not in
+; the .sna before in_tut (SV_R2 / SV_R5 zeros, SV_R4 the print code, dead after in_flow): code there must not run
+; before in_tut (guard: boot -> in_flow -> in_tut references none of them; ASSERTed below that the regions
+; sit outside every other fixed buffer and that SYS_FRAMES / the live ISR stack are untouched).
+;------------------------------------------------------------------------------
+ovl_raw_sv2:
+                DISP SV_R2
+sv2_base:
+                INCLUDE "sv_r2.asm"
+sv2_end:
+                ENT
+ovl_raw_sv4:
+                DISP print_char
+sv4_base:
+                INCLUDE "sv_r4.asm"
+sv4_end:
+                ENT
+ovl_raw_sv5:
+                DISP SV_R5
+sv5_base:
+                INCLUDE "sv_r5.asm"
+sv5_end:
+                ENT
+SV_R2_LEN       EQU sv2_end - sv2_base
+SV_R4_LEN       EQU sv4_end - sv4_base
+SV_R5_LEN       EQU sv5_end - sv5_base
+SV_R2_ROOM      EQU SV_R2_END - SV_R2
+SV_R4_ROOM      EQU print_str_end - print_char
+SV_R5_ROOM      EQU SV_R5_END - SV_R5
+                ASSERT SV_R2_LEN <= SV_R2_ROOM && SV_R4_LEN <= SV_R4_ROOM && SV_R5_LEN <= SV_R5_ROOM
+                ASSERT SV_R2 >= SYS_FRAMES + 3 && SV_R2_END <= DN_KEY                ; R2: above the LIVE SYS_FRAMES, below the numbers' queue
+                ASSERT SEQ2 + SEQ2_LEN <= SV_R2                                      ; R1 below R2 (and below SYS_FRAMES)
+                ASSERT print_str_end > print_str && print_str > print_char  ; R4: exactly the print code
+                ASSERT SV_R5 == STACK_BOTTOM && SV_R5_END <= ISR_STK - ISR_STK_NEED   ; R5: the ISR keeps its measured need
+                ASSERT ISR_SAVE_ALT == 0 || SV_R5_LEN == 0                           ; isr_alt would sit at STACK_BOTTOM
+    IF SV_R2_LEN > 0
+                SAVEBIN "build/ovl/sv2.bin", ovl_raw_sv2, SV_R2_LEN
+    ENDIF
+    IF SV_R4_LEN > 0
+                SAVEBIN "build/ovl/sv4.bin", ovl_raw_sv4, SV_R4_LEN
+    ENDIF
+    IF SV_R5_LEN > 0
+                SAVEBIN "build/ovl/sv5.bin", ovl_raw_sv5, SV_R5_LEN
+    ENDIF
+                DISPLAY "GAME RECLAIM-SV install targets (boot-installed, empty = free): R2 sysvar hole ", /H, SV_R2, "..", /H, SV_R2_END - 1, " ", /D, SV_R2_ROOM - SV_R2_LEN, " of ", /D, SV_R2_ROOM, " B free; R4 print area ", /H, print_char, " ", /D, SV_R4_ROOM - SV_R4_LEN, " of ", /D, SV_R4_ROOM, " B free; R5 ISR stack slack ", /H, SV_R5, "..", /H, SV_R5_END - 1, " ", /D, SV_R5_ROOM - SV_R5_LEN, " of ", /D, SV_R5_ROOM, " B free (ISR needs ", /D, ISR_STK_NEED, ")"
+                DISPLAY "GAME RECLAIM-SV R1 seq2 ", /H, SEQ2, "..", /H, SEQ2 + SEQ2_LEN - 1,  " (", /D, SEQ2_LEN, " B), sysvar bytes left: ", /D, SYS_FRAMES - SEQ2 - SEQ2_LEN, " B ", /H, SEQ2 + SEQ2_LEN, "..", /H, SYS_FRAMES - 1, " + ", /D, SV_R2_END - SYS_FRAMES - 3 - SV_R2_LEN, " B in R2"
 ovl_raw_instr:
                 DISP INSTR_ORG
 instr_ovl_main:

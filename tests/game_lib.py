@@ -67,6 +67,18 @@ HAS_TRACE = "ANIM_TRACE" in S   # RECLAIM-C2: release builds have no render trac
 F3 = bool(S.get("F3_GEN", 0))   # P3: the build's generator mode (default 1): oracles call generate(..., f3=F3)
 
 
+def sv_blocks():
+    """RECLAIM-SV: [(name, cpu address, bytes)] of the boot-installed R2 (sysvar hole) / R4 (print code) / R5 (ISR
+    stack slack) blocks, from build/ovl/sv<n>.bin (main.asm SAVEBIN, written only when the block is non-empty:
+    SV_R<n>_LEN). All three sit in always-mapped RAM (bank 5 / bank 5 / bank 2), so a CPU-view read sees them."""
+    out = []
+    for n, base in ((2, S["SV_R2"]), (4, S["print_char"]), (5, S["SV_R5"])):
+        ln = S.get("SV_R%d_LEN" % n, 0)
+        if ln:
+            out.append(("R%d" % n, base, open(os.path.join(BUILD_DIR, "ovl", "sv%d.bin" % n), "rb").read()[:ln]))
+    return out
+
+
 def tset_slot(rd, slot):
     """MEM-RECLAIM w2a: bank-7 tileset record `slot` (= depth - 1) expanded to the
     old 320-B slot image (32 glyphs of ids 32..63 + 32 attrs + 32 TILE_FLAGS), i.e.

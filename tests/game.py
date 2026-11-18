@@ -2246,6 +2246,13 @@ def tape_rest(h, p):
     lri = open(os.path.join(BUILD_DIR, "ovl", "lri.bin"), "rb").read()[:n1]
     h.expect("50 tape: tele_lri block installed over tape_tab == lri.bin", bytes(l5[m1:m1 + n1]), bytes(lri))
     l5[m1:m1 + n1] = s5[m1:m1 + n1] = bytes(n1)
+    # RECLAIM-SV: in_tut's R2 / R4 / R5 blocks (sysvar hole, print code, ISR stack slack; empty today) == build/ovl/sv<n>.bin
+    from game_lib import sv_blocks
+    for nm, a, b in sv_blocks():
+        off = (5 * 16384 + a - 0x4000) if nm != "R5" else (2 * 16384 + a - 0x8000)
+        h.expect("50 tape: RECLAIM-SV %s block installed at %#x == sv.bin" % (nm, a), bytes(ram[off:off + len(b)]), bytes(b))
+        if nm == "R4":                                   # the print code is in the compared cold block: blank both
+            l5[a - S["lowram_code"]:a - S["lowram_code"] + len(b)] = s5[a - S["lowram_code"]:a - S["lowram_code"] + len(b)] = bytes(len(b))
     h.expect("50 bank 5 low-RAM cold code (bar the TUT stubs + tele_lri over tape_tab) == .sna", l5 == s5, True)
     # the D0 blob (bank 4 BLOB_ORG..$FFFF) is unpacked once per power-on by instr_ovl in_tut
     bo4 = 4 * 16384 + S["BLOB_ORG"] - 0xC000

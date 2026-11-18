@@ -58,6 +58,24 @@ in_tut:         ld   a, BANK_BLOB              ; = BANK_BOOT4 (main.asm ASSERT)
                 ld   de, lri_base              ; (= tape_tab: dead now, read above)
                 ld   bc, LRI_LEN
                 ldir
+    IF SV_R2_LEN > 0                           ; RECLAIM-SV: the sysvar hole / dead print code / ISR stack slack
+                ld   hl, in_sv2                ; (main.asm "RECLAIM-SV INSTALL BLOCKS"; none today, no code here)
+                ld   de, SV_R2
+                ld   bc, SV_R2_LEN
+                ldir
+    ENDIF
+    IF SV_R4_LEN > 0
+                ld   hl, in_sv4                ; (after in_flow: its "PRESS ANY KEY" was the last print_str)
+                ld   de, print_char
+                ld   bc, SV_R4_LEN
+                ldir
+    ENDIF
+    IF SV_R5_LEN > 0
+                ld   hl, in_sv5
+                ld   de, SV_R5
+                ld   bc, SV_R5_LEN
+                ldir
+    ENDIF
                 ld   hl, ts_choice
                 ld   (es_go + 1), hl           ; SMC target (main.asm enter_select)
                 ret
@@ -67,6 +85,22 @@ in_stub:                                       ; = main.asm's installed block as
                 DUP  LRI_LEN, tsi                  ; (tele_lri.asm, pad, tut_stub.asm at check_paging)
                 DB   {b ovl_raw_lri + tsi}
                 EDUP
+
+    IF SV_R2_LEN > 0
+in_sv2:        DUP  SV_R2_LEN, svi2
+                DB   {b ovl_raw_sv2 + svi2}
+                EDUP
+    ENDIF
+    IF SV_R4_LEN > 0
+in_sv4:        DUP  SV_R4_LEN, svi4
+                DB   {b ovl_raw_sv4 + svi4}
+                EDUP
+    ENDIF
+    IF SV_R5_LEN > 0
+in_sv5:        DUP  SV_R5_LEN, svi5
+                DB   {b ovl_raw_sv5 + svi5}
+                EDUP
+    ENDIF
 
 in_flow:
                 call in_ft                     ; RECLAIM-D: frame_tab -> FRT first
