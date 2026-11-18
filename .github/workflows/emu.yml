@@ -79,14 +79,15 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.local/zesarux
-          key: zesarux-${{ runner.os }}-${{ env.ZESARUX_TAG }}-v1
+          key: zesarux-${{ runner.os }}-${{ env.ZESARUX_TAG }}-v2-O2
 
       - name: Build ZEsarUX
         if: steps.cache-zesarux.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 --branch "$ZESARUX_TAG" https://github.com/chernandezba/zesarux /tmp/zesarux
           cd /tmp/zesarux/src
-          ./configure --prefix "$HOME/.local/zesarux" \
+          # configure adds no -O flag of its own: without this the emulator is built -O0 (5-8x slower)
+          CFLAGS="-O2" ./configure --prefix "$HOME/.local/zesarux" \
               --disable-curses --disable-cursesw --disable-aa --disable-caca \
               --disable-xwindows --disable-xext --disable-xvidmode --disable-sdl --disable-fbdev \
               --disable-dsp --disable-alsa --disable-pulse --disable-sndfile --disable-pcspeaker \
