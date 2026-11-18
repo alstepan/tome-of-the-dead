@@ -3,7 +3,7 @@
 PROTO rooms A-D (LVL_DEPTH poked to 1 where the engine pickup must run), plus one generated game.
 
   K1  KEY-POLISH floor key: an IT_KEY entry in LVL_KEYROOM (B) is drawn on entry (key icon, $45) and the
-      entry grants NOTHING; standing on it picks it up: LF_KEYC, LVL_KEYROOM := ROOM_NONE, the entry
+      entry grants NOTHING; standing on it picks it up: LF_KEYC, LVL_KEYROOM kept (W21-FIX: DECOR2 reads it), the entry
       FL_EMPTY, the cell no longer a marker, "YOU FIND A CYAN KEY", SFX_PICKUP, KEY-PANEL: the cyan panel
       key cell (24-25, 21) attr $45 + the key glyph, the magenta one (27-28, 21) blank; a re-entry gives nothing
   K2  the IT_KEY entry in LVL_KEYROOM2 (A) is magenta ($43); its pickup: LF_KEYM, "YOU FIND A MAGENTA KEY",
@@ -220,8 +220,8 @@ def main():
             fr = p.composed_frame()
             ent = p.z.read_memory(S["FLOOR_LIST"] + KEY_SLOT * 4, 1)[0]
             mk = p.z.read_memory(S["ROOM_MAP"] + (PLATE_ROW1 + 2) * 32 + KEY_COL, 1)[0]
-            check("K1 standing on it: LF_KEYC, LVL_KEYROOM := ROOM_NONE, entry FL_EMPTY, no marker left",
-                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM"), ent, mk < S["T_ITEM0"]) == (KEYC, 0xFF, 0xFF, True),
+            check("K1 standing on it: LF_KEYC, LVL_KEYROOM kept (W21-FIX), entry FL_EMPTY, no marker left",
+                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM"), ent, mk < S["T_ITEM0"]) == (KEYC, 1, 0xFF, True),
                   (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM"), ent, mk))
             check("K1 log: YOU FIND A CYAN KEY", log_row(fr, 23) == text6("YOU FIND A CYAN KEY"), "")
             check("K1 the pickup sound: SFX_PICKUP", sfx == S["SFX_PICKUP"], hex(sfx))
@@ -244,8 +244,8 @@ def main():
             p.turn("WAIT")
             drain()
             fr = p.composed_frame()
-            check("K2 its pickup: LF_KEYM too, LVL_KEYROOM2 := ROOM_NONE",
-                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM2")) == (KEYC | KEYM, 0xFF),
+            check("K2 its pickup: LF_KEYM too, LVL_KEYROOM2 kept (W21-FIX)",
+                  (p.rb("LVL_FLAGS") & (KEYC | KEYM), p.rb("LVL_KEYROOM2")) == (KEYC | KEYM, 0),
                   (hex(p.rb("LVL_FLAGS")), p.rb("LVL_KEYROOM2")))
             check("K2 log: YOU FIND A MAGENTA KEY", log_row(fr, 23) == text6("YOU FIND A MAGENTA KEY"), "")
             check("K2 both held: both key cells drawn ($45 / $43), the old (30, 19) cell blank (composed + displayed)",

@@ -5,16 +5,19 @@
 ; Callers: hero_door (lowram, the bump), floor_pickup (bank 7, key_take), fi_slot (R6, key_ink),
 ; build_room_map (bank 3, every door it stamps), fi_cells (lowram, room draws + scroll strips),
 ; room_show / room_shadow (lowram).
-; State: LF_KEYC / LF_KEYM in LVL_FLAGS = the keys HELD; LVL_KEYROOM / LVL_KEYROOM2 := ROOM_NONE when
-; that key is taken; EG_LOCK cleared on unlock (key) or far-side bolt. All of it is level state, so a
-; new level / new game (level_gen) resets it. D0 (tutorial) / PROTO: no IT_KEY floor entry, so no
-; engine pickup (the tutorial keeps its own B-room key, tut_turn.asm tt_glob).
+; State: LF_KEYC / LF_KEYM in LVL_FLAGS = the keys HELD; LVL_KEYROOM / LVL_KEYROOM2 stay for the whole
+; level (W21-FIX: the DECOR2 deriver's dg_iskey reads them, so a re-entered key room must rebuild the
+; same decor after the pickup; "taken" = the floor entry gone); EG_LOCK cleared on unlock (key) or far-side bolt. All of it is level state, so a
+; new level / new game (level_gen) resets it. D0 (tutorial, since TUT-KEY): the B-room key is an IT_KEY
+; floor entry of the level image (tools/tut0_level.py ITEMS, TUT0_KEY_FL), picked up by this same engine
+; path; tut_turn.asm adds only the flash (tt_kflash) and the beats. PROTO: no IT_KEY entry, no pickup.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
 ; key_take — KEY-POLISH: floor_pickup (bank 7) found an IT_KEY entry of CUR_ROOM under the hero (the key
-; lies on the floor of its key room: items_ovl.asm ig_key). A = CUR_ROOM: its colour's key HELD, the key
-; room forgotten (ROOM_NONE: then only key_ink read it), the line, the panel key cell queued (PD_DEPTH).
+; lies on the floor of its key room: items_ovl.asm ig_key). A = CUR_ROOM: its colour's key HELD, the line,
+; the panel key cell queued (PD_DEPTH). The key room id is KEPT (W21-FIX: it was := ROOM_NONE, which flipped
+; dg_iskey and so the room's DECOR2 mood / composition on every re-entry after the pickup).
 ; The caller frees the entry (pp_take: FL_EMPTY, SFX_PICKUP, the cell re-stamped). A room that is no key
 ; room (a poked list): nothing. Clobbers: AF, BC, DE, HL.   ~0.5k T + log_push
 ;------------------------------------------------------------------------------
@@ -29,8 +32,7 @@ key_take:
                 ld   b, LF_KEYM
                 cp   (hl)
                 ret  nz
-.got:           ld   (hl), ROOM_NONE
-                ld   hl, LVL_FLAGS
+.got:           ld   hl, LVL_FLAGS
                 ld   a, (hl)
                 or   b
                 ld   (hl), a

@@ -37,6 +37,9 @@ blob_base:
                 ASSERT ({b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} & RDX_D) == 0   ; tt_mercy's grate-step rule
                 ASSERT {b tut0_room_desc + TUT0_ROOM_C * RD_STRIDE + RD_EXITS} != 0             ; (the read is real)
                 ASSERT {b tut0_floor_list + TUT0_GEAR_FL * FL_STRIDE + FL_ITEM} == IT_H_HELM  ; TUT-GEAR: tut_d0's class pick
+                ASSERT {b tut0_floor_list + TUT0_KEY_FL * FL_STRIDE + FL_ITEM} == IT_KEY      ; W21-FIX: tt_kflash's key entry,
+                ASSERT {b tut0_floor_list + TUT0_KEY_FL * FL_STRIDE + FL_ROOM} == TUT0_ROOM_B ; storey 0 (FL_ROOM == the room id)
+                ASSERT {b tut0_floor_list + TUT0_KEY_FL * FL_STRIDE + FL_COL} == TUT_KEY_COL
                 ASSERT {b tut0_lvl_state} == 1  ; LVL_DEPTH during D0: tt_hook's "D0" digit operand ('0' - 1)
                 ; DECOR2-SHIP: decor_gen.asm's legacy-path selector (LVL_NROOMS < ROOMS_MIN -> the B3B-9 algorithm,
                 ; D0's searched RD_SEEDs) and tests/room_model.py rely on D0 having fewer rooms than any generated level
