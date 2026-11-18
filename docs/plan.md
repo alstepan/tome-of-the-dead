@@ -40,9 +40,12 @@ and per-task evidence: `docs/history.md`.
 
 **CURRENT ORDER (manager, 2026-11-18; user: DECOR2 + Tutorial v2 before the release; run independent work in parallel):**
 - DONE 2026-11-17/18: TUT-GEAR (#74), BALANCE-PKG4 (#73), TUT-KEY-FLASH (#75), FLY-CUT 2b (#76), BALANCE-PKG5 (#77: plenty of food, D3+ melee ramp, safe Teleport, weighted scrolls, Mage tune), DECOR2 Z80 (#78), Tome-hit attack animation (#79). TOO WEAK TO JUMP (4b) was already merged as #35.
-1. **FOOD-7** (in progress, staff/Sonnet, `feat/food-period-7`): user playtest 2026-11-17 "a little less food" → `FOOD_PERIOD` 8 → 7 (user 2026-11-18: keep the 8 % kill drop); sim before/after in balance_v2.md §9 → user playtest in Fuse.
+1. **FOOD-7** (in progress, staff/Sonnet, `feat/food-period-7`): user playtest 2026-11-17 "a little less food" → `FOOD_PERIOD` 8 → 7 (user 2026-11-18: keep the 8 % kill drop); sim before/after in balance_v2.md §9 → user playtest 2026-11-18: still too much food, reduce further (lever pending).
 2. **TUT-TREASURE** (in progress, staff/Sonnet, `feat/tut-treasure`) — closes **Tutorial v2 (4c)**: B14 group `EACH BOSS DROPS A TREASURE` / `READ ITS POWERS IN YOUR BAG` before the old G4 (item_info.md §8). User 2026-11-18: armour/ring/amulet stay untaught (found by play via WORN + rows 18–19); the B3-tail pointer pair is cut (L82 covers it). Designer check 2026-11-18: every other 4c element is covered by B9G, the icon tour and the item beats.
-3. **v1.2 RELEASE** (6b) — after 1 + 2 merge and the user playtest; each public step needs the user's OK.
+3. **W21-FIX** (staff, `fix/w21-decor`, stacked on TUT-TREASURE): world.py W21 failed since DECOR2 (#78): `key_take` cleared LVL_KEYROOM(2), so a re-entered key room rebuilt with different decor. Ids now kept all level (−2 B); D0 TUT-KEY-FLASH guards on the key's own FLOOR_LIST entry (new tut0 TK5F, mutation-checked). Review: ship.
+4. **CI-EMU** (junior): optional/nightly emulator job (world.py + lock8 at least) — CI runs no emulator suites today, which is how W21 slipped.
+5. **GARG-PASS** (designer → staff, user 2026-11-18): monsters pass through a perched (inactive) Gargoyle so it cannot be identified by blocking others; spec pending.
+6. **v1.2 RELEASE** (6b) — after 1–3 merge and the user playtest; each public step needs the user's OK.
 Backlog: bot planner ping-pong (tests/pt_bot.py, low), `PL_FRAME_ADD` "worst level D8" display bug, B21 budget scenario. (Stale suites d8_stress / endcard_k / roommem: fixed, see Open items D8S1 / ECK1 / ROOMMEM1.)
 
 **TUT0 — DEPTH-0 TUTORIAL: DONE — merged to main 7ab186f (PR #19, squash, 2026-11-11).** Spec `docs/design/tutorial_d0.md`, decisions `docs/design/tut0_split.md`. Blob in bank 4 (now `$E1B4`, 8 B free after the C merge), mentor Brother Morrow, Goblin, mercy heal, sandbox reset into D1; R4 key clarity (pinned goal line, ▶ ANY KEY, nudges 6/18). Playtest round 3: OK. Known/accepted: B3 inside ICON MODE leaves row 20 blank until the turn ends.
