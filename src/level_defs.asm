@@ -271,8 +271,8 @@ EDGE_TAB        EQU LVL_HDR + LVL_HDR_LEN   ; $6E90: EDGE_SLOTS (8) B, EDGES_H u
 DG_PLAN         EQU LVL_HDR + $30   ; $6EB0: 16 B spare (was DECOR2's run list; DECOR2-SHIP: the NEXT_MAP gap DG_SLOT0/1)
 DG_PLAN_LEN     EQU 16
 GARG_STIR       EQU DG_PLAN         ; GARG-CHAIN (new_monsters.md 4.1b): 0 = no chain armed, else the storey (0 / 1) of the first Gargoyle that
-                                    ; woke, + 1: the room's perched Gargoyles on that storey wake one a monster pass. Cleared by level_reset and
-                                    ; lp_transition (a room exit / teleport). Test-observable
+                                    ; woke, + 1: the room's perched Gargoyles on that storey wake one a monster pass. Cleared by low-RAM vis_room_sync (a room
+                                    ; exit / teleport / level change). Test-observable
 GARG_SPENT      EQU DG_PLAN + 1     ; GARG-CHAIN: non-zero = a Gargoyle already woke in this monster pass (stir_arm sets it, bank-3 pl_seg3
                                     ; clears it at the start of every pass). Test-observable
 ICON_FL         EQU DG_PLAN + 2     ; ICON-FLASH (game.md 5 "Reading"): 0 = no flash, else the first attr cell's column (3 * slot) of the ability icon a

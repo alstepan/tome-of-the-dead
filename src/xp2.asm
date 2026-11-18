@@ -12,7 +12,7 @@
 XPN_COUNT       EQU 8
 xpn_tab:        DW   44, 110, 220, 374, 550, 770, 1012, 1265     ; LARGER-D T5 package 3
                 ASSERT $ - xpn_tab == XPN_COUNT * 2 && XPN_COUNT == LVL_MAX - 1
-                ; XP-BAR (info1.asm xp_bar): every threshold delta (incl. 0 -> L2) must fit a byte (max 253 today)
+                ; XP-BAR (sv_r2.asm xp_bar, the R2 boot-installed block): every threshold delta (incl. 0 -> L2) must fit a byte (max 253 today)
                 ASSERT {xpn_tab} <= 255
                 ASSERT {xpn_tab + 2} - {xpn_tab} <= 255 && {xpn_tab + 4} - {xpn_tab + 2} <= 255
                 ASSERT {xpn_tab + 6} - {xpn_tab + 4} <= 255 && {xpn_tab + 8} - {xpn_tab + 6} <= 255

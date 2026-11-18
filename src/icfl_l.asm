@@ -6,7 +6,7 @@
 ; the cells re-ORed + pmark_rect'ed (R4 ic_mark; present copies them to screen 2) only when it is missing. While PD_ICONS is
 ; pending nothing is touched (the slot may not be drawn yet). Once elapsed (or on a stale wrap) bit 7 is cleared
 ; on the cells and ICON_FL = 0. level_reset zeroes ICON_FL (panel_init redraws every icon cell; no cell keeps a
-; stale FLASH); the poll never runs on the death / win / pause / bag screens, which repaint the cells.
+; stale FLASH); the death / win card (end_scr0 runs panel_tick -> icon_poll) zeroes ICON_FL when it draws the card; pause / bag repaint the cells.
 ; Clobbers: A, DE (HL, BC kept).   ~1.5k T on a (re)apply, ~0.4k T otherwise while active
 ic_fl:          ld   a, (ICON_FL)
                 or   a

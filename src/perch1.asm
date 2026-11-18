@@ -26,9 +26,10 @@ perch1:         bit  EF_GHOST_BIT, (ix+E_FLAGS)
 .gh:            call get_box                   ; (bank 2) C x, B y, D w, E h
                 call box_free                  ; (bank 2) 2. CF = a body overlaps the statue
                 ret  c
-                ld   hl, PERCH_FAR             ; GARG-REDRAW: ... or a PENDING one (a squeezed body / a door arrival:
-                call pend_hit.go               ; (bank 2) pend_hit with a "current box" no body meets; keeps BC, DE,
-                ret  c                         ; IX; ~1.1k T a waiting turn) (+7 B)
+                ld   a, (PEND_N)               ; ... or a PENDING one (a squeezed body / a door arrival): only when the room has any
+                or   a                         ; (pend_hit's own fast path; the .go entry skips it: ~1.1k T a statue a pass saved)
+                call nz, gh_pend              ; (R4 sv_r4.asm: pend_hit.go with a "current box" no body meets; keeps BC, DE, IX; CF out)
+                ret  c                         ; (+1 B vs the direct call)
                 jp   stir_gate                 ; GARG-CHAIN (low RAM, garg_l.asm): the armed chain wakes me (jp .wk); else the hero
                                                ; mid-ladder leaves it perched (ret nz), or it comes back to .st (-2 B here)
 .st:            call storey_ref                ; (bank 2; A, HL)

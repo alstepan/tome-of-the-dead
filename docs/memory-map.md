@@ -7903,7 +7903,7 @@ the IM 2 ISR does not save or use IY).
 | R1 | `seq2_bytes` (112 B `DS`, lowram.asm) -> EQU `SEQ2` `$5C00` | **-112 B** low-RAM cold block (spare 11 -> 123) |
 | R3 | `jump_pit` (low RAM) -> R6 `jump6.asm` `jump_pit6` (`far6` from `try_jump`, +~0.1k T per jump attempt: turn-level); `seal_open` R6 `tome6.asm` -> bank 1 `tome1.asm` (`far1` from `boss7.asm` `grate_open.seal`) | **-74 B** low RAM (spare 123 -> 197); R6 free 70 -> **3**; bank 1 free 28 -> **11** |
 | R2 | sysvar hole `$5C7B..$5CDA` as an install target | 96 B |
-| R4 | dead-after-`in_flow` print code `print_char .. print_str_end` (`$78E3`, 68 B) as an install target | 68 B |
+| R4 | dead-after-`in_flow` print code `print_char .. print_str_end` (`$7824` after XP-BAR / GARG / ICON-FLASH moved the cold block; was `$78E3`, 68 B) as an install target | 68 B |
 | R5 | ISR stack slack `$BE00..$BE2F` (bank 2; the ISR keeps `ISR_STK_NEED` 16 of its 64 B, `ISR_STK = $BE40`) | 48 B |
 
 ### Install blocks (R2 / R4 / R5; the `tele_lri` pattern)
@@ -7962,3 +7962,5 @@ A book that learns a NEW ability (abil_learn's L = 1) FLASHes the slot's 6 attr 
 - **Code:** R4 `src/sv_r4.asm`: `ic_learn` 34 B (fx_book `.learn` now `call ic_learn` = far7 abil_learn + the arm; D0 skip via `item_depth.d + 1` == `'0' - 1`; fx6 -3 B) + `ic_mark` 14 B (pmark_rect tail). Cold block `src/icfl_l.asm`: `ic_fl` 77 B, `call`ed first in `icon_poll` (bank 2 `icons.asm`, +3 B; HL / BC kept; 33 T idle). Bank 3 `level_reset` +3 B (`ICON_FL` := 0).
 - **RAM:** `ICON_FL` `$6EB2` (0 = none, else the first cell's column), `ICON_FLT` `$6EB3` word (`DG_PLAN` + 2 / + 3; with GARG-CHAIN's two bytes, 12 of the 16 DG_PLAN spare bytes stay free).
 - **Free after both (release):** cold block **2** (197 -> 83 GARG-CHAIN -> 2: ic_fl 77 + vis_room_sync 4), R4 68 -> **23**, R2 1, R5 48, bank 1 **2**, bank 3 **10** (level_reset +3 for ICON_FL), bank 2 6 -> **3** (the 3 B kind_tab ALIGN pad is gone: icon_poll +3), R6 3, text headroom 10, HOT_COPY 3.
+- **Review fixes:** `end_scr0 .card` zeroes `ICON_FL` (`nm3_b0.asm`, +4 B B0_CODE2, free 14; the card's `panel_tick` polls `icon_poll`; iconflash F7 death + win). R4 also holds `gh_pend` 6 B (perch1's PENDING test only when `PEND_N != 0`, ~1.1k T saved per perched Gargoyle per monster pass): R4 free 17, bank 1 free 2.
+

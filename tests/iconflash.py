@@ -11,6 +11,7 @@ hook), R4 ic_mark. Release build (-DDEBUG_KIT=0), PROTO room A.
   F4  the 2nd new ability (k 1, a Mage's Firebolt): its own slot (col 6), the first slot's cells are not flashing
   F5  D0 (item_depth's digit operand = '0' - 1, the tutorial's marker): a new ability arms nothing
   F6  level_reset clears ICON_FL; the 6 cells are redrawn without FLASH by panel_init
+  F7  learn -> die (GS_DEAD) / win (GS_WIN) -> the end card within the 100 frames: end_scr0 zeroes ICON_FL, no FLASH bit on the card
 Run: ZRCP_PORT=<port> python3 tests/iconflash.py
 """
 import sys
@@ -20,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 import game_lib  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_WIZARD, attr_at, cell_bytes  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_WIZARD, GS_DEAD, GS_WIN, attr_at, cell_bytes  # noqa: E402
 from lp import T as LPT, w16  # noqa: E402
 
 DRV = S["GEN_SRC"] + 0x2C0      # the play-free stub window (as nm3b.py): the low-RAM stub room is tiny now
@@ -127,6 +128,20 @@ def run(h, p, check):
     p.wb("ICON_FL", 6)
     ok = p.code([0x21] + w16(S["level_reset"]) + [0xCD] + w16(S["far3"]))
     check("F6 level_reset (far3) clears ICON_FL", ok and p.rb("ICON_FL") == 0, (ok, p.rb("ICON_FL")))
+
+    # F7 the end card (end_scr0 -> panel_tick -> icon_poll -> ic_fl must not re-flash the card's cells), death and win
+    for st, nm in ((GS_DEAD, "death"), (GS_WIN, "win")):
+        p.boot(K_WIZARD)
+        p.wmem(S["ARANK"], [0, 0])
+        learn(0)
+        settle(6)
+        p.wb("GAME_STATE", st)
+        p.end_card(8)
+        p.tick(6)
+        f = p.frame()
+        cells = [bool(attr_at(f, c, r) & 0x80) for r in (ROW, ROW + 1) for c in range(0, 32)]
+        check(f"F7 {nm} card within the flash window: ICON_FL = 0, no FLASH bit in rows 18-19",
+              p.rb("ICON_FL") == 0 and not any(cells), (p.rb("ICON_FL"), [i for i, c in enumerate(cells) if c]))
 
 
 if __name__ == "__main__":

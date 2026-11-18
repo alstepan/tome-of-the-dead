@@ -300,7 +300,7 @@ log_drop:       push hl
 ; item — any, incl. a whole log message (scroll + line, <= ~21k T) — and
 ; re-checks: items keep coming until the queue is empty or the 2nd frame has
 ; begun, so it ends below ~92k T. A tick already in its 2nd frame draws ONE
-; small item (HP / ICONS / DEPTH, <= ~4.5k T): the render-bound heavy ticks
+; small item (HP / ICONS / DEPTH, <= ~5.5k T: item_depth is ~5.4k since XP-BAR): the render-bound heavy ticks
 ; reach ~116k T before the panel (budget.py), a log item there could pass the
 ; 126k T cap; the log waits for a 1st-frame tick (in a fight: the turn's last,
 ; light ANIM ticks — budget.py reports the latency).

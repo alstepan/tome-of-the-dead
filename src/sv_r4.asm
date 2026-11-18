@@ -46,6 +46,11 @@ ic_mark:        ld   c, l
                 pop  hl
                 ret
 
+; gh_pend - perch1's PENDING-body test (GARG-WAKE): pend_hit.go with HL = PERCH_FAR (a "current box" no body meets); perch1 calls it
+; only when PEND_N != 0. Keeps BC, DE, IX; CF = a PENDING body overlaps the statue's box (BC, DE).
+gh_pend:       ld   hl, PERCH_FAR
+                jp   pend_hit.go
+
     IFDEF SV_TEST
                 DB   $54, $A5, $5A, $C3
     ENDIF
