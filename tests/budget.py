@@ -524,7 +524,7 @@ SCENARIOS = {
     # P3: "sanct" = room A as the D8 Sanctum (LVL_SANCTUM 0: LARGER-D T4 the lectern's left-wall geometry, gap =
     # x - 3; was the right wall), the hero at x 3 facing it: every FIRE a melee Tome hit (far6 tome_geo6 + the line) and every end_turn
     # the aura (far6 + 1 hp); TOME_HP 99 (no win). "adeath" = room A as the D8 lair: a Skeleton = LP_BOSS at
-    # 1 hp adjacent, FIRE kills it -> mon_drop -> grate_open -> R6 seal_open on the death tick (asserted)
+    # 1 hp adjacent, FIRE kills it -> mon_drop -> grate_open -> bank-1 seal_open on the death tick (asserted)
     "sanct": ("knight in the Sanctum, melee Tome hits + the aura every turn", [], [("FIRE", 6)], K_KNIGHT,
               None, "sanct"),
     "adeath": ("knight kills the D8 boss (seal_open on its death tick) + rat, goblin, bat", [

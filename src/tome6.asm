@@ -2,32 +2,11 @@
 ; tome6.asm — P3 the Tome ending, R6 part (r6.asm rules: far6 only, no SMC, no
 ; bank-3 / bank-1 / bank-7 code or data). game.md §1.1 / §1.3, user rulings
 ; 2026-10-31. The bank-7 hits are tome7.asm, the aura low RAM (lowram.asm).
-;   seal_open   far6 from bank-7 grate_open on D8 (the Archmage died).
+;   (seal_open: bank 1 tome1.asm since RECLAIM-SV R3)
 ;   tome_geo6   far6 from bank-7 tome_in / low-RAM tome_aura: the hero vs the lectern.
 ;==============================================================================
 
-;------------------------------------------------------------------------------
-; seal_open — far6 from bank-7 grate_open on D8 (F3_GEN; the Archmage's death
-; does not open the D8 grate, the Tome's destruction does: tome_gone): the Archmage died — by any hand, its own Mirror Helm return
-; included (deal_hit's kill -> mon_drop -> grate_open). Resident: nothing is
-; unpacked on the death tick. LF_SEAL_OPEN; EG_SEAL off the lair<->Sanctum edge
-; (EDGE_TAB + 6 = 9-10 or + 7 = 10-11 (LARGER-D T4): both bits cleared, cheaper than finding S's;
-; the other edge never carries a seal), so the door is an ordinary closed door:
-; it keeps its T_DOOR_LOCK plank on screen until a bump opens it (door_open reads
-; the edge only; the planks then go as for any door). "THE SEAL BREAKS".
-; Clobbers: A, BC, DE, HL.   ~1.5k T (the line)
-;------------------------------------------------------------------------------
-seal_open:
-                ld   hl, LVL_FLAGS
-                set  LF_SEAL_OPEN_BIT, (hl)
-                ld   l, (EDGE_TAB + 6) & $FF
-                res  EG_SEAL_BIT, (hl)
-                inc  l
-                res  EG_SEAL_BIT, (hl)
-                ld   a, TX_SEAL_BREAKS
-                jp   msg_push
-                ASSERT (LVL_FLAGS >> 8) == ((EDGE_TAB + 7) >> 8) && LF_SEAL_OPEN == 1 << LF_SEAL_OPEN_BIT && GRID_BOT == 9
-                ASSERT EG_SEAL == 1 << EG_SEAL_BIT
+; (RECLAIM-SV R3: seal_open moved to bank 1, src/tome1.asm, far1 from boss7: R6 room for jump_pit6.)
 
 ;------------------------------------------------------------------------------
 ; tome_geo6 — IX = hero (passed through far6). The lectern stands on storey 1

@@ -1516,7 +1516,12 @@ try_jump:
                 ld   a, b
                 add  a, e
                 cp   FLOOR_ROW0
-                call z, jump_pit               ; storey 0: TMP7 = x_f, JUMP_ARC
+                jr   nz, .np                   ; storey 0: TMP7 = x_f, JUMP_ARC (RECLAIM-SV R3: R6 jump_pit6,
+                push bc                        ; far6 passes no BC: it re-reads x = E_X, IX = hero; +~0.1k T a jump
+                ld   hl, jump_pit6             ; attempt, a turn-level cost)
+                call far6
+                pop  bc
+.np:
                 push bc
                 ld   a, (TMP7)
                 ld   c, a
@@ -1571,66 +1576,7 @@ try_jump:
 .no:            or   a
                 ret
 
-;------------------------------------------------------------------------------
-; jump_pit — try_jump on the storey-0 floor: C = x, TMP6 = dx, TMP7 = x',
-; JUMP_ARC = n | D7. Pit p, width W (pit_w; game.md §2.4 "Landing in a pit",
-; §2.5): x' in p .. p+W-3 -> fall at x'; else W >= 4 and a hole col in the
-; cleared span -> fall at x_f = p+W-3 (right) / p (left), n = 2 |x_f - x|.
-; Sets JA_FALL_BIT on a fall.  Keeps BC, DE.  Clobbers: A, HL
-;------------------------------------------------------------------------------
-jump_pit:
-                push bc
-                ld   a, (TMP7)
-                ld   c, a
-                call pit_range                 ; H = p, L = W - 2 (p = 0: no pit)
-                pop  bc
-                jr   c, .fall                  ; p <= x' <= p+W-3: x_f = x'
-                inc  h
-                dec  h
-                ret  z                         ; no pit
-                ld   a, l
-                cp   2
-                ret  c                         ; narrow: never cut short
-                ld   a, (TMP6)
-                dec  a
-                jr   nz, .left
-                ld   a, (TMP7)                 ; right: hole in x+3 .. x'-1 iff
-                dec  a                         ; p <= x'-1 and p+W-1 >= x+3
-                cp   h
-                ret  c
-                ld   a, h
-                add  a, l
-                sub  2
-                cp   c
-                ret  c
-                ld   a, h
-                add  a, l
-                dec  a                         ; x_f = p+W-3
-                jr   .cut
-.left:          ld   a, h                      ; left: hole in x'+3 .. x-1 iff
-                cp   c                         ; p <= x-1 and p+W-1 >= x'+3
-                ret  nc
-                add  a, l
-                dec  a
-                ld   l, a
-                ld   a, (TMP7)
-                cp   l
-                ret  nc
-                ld   a, h                      ; x_f = p
-.cut:           ld   (TMP7), a
-                sub  c
-                jr   nc, .ab
-                neg                            ; |x_f - x|
-.ab:            add  a, a
-                ld   l, a                      ; n = 2 |x_f - x|
-                ld   a, (JUMP_ARC)
-                and  ~JA_N & $FF
-                or   l
-                ld   (JUMP_ARC), a
-.fall:          ld   a, (JUMP_ARC)
-                set  JA_FALL_BIT, a
-                ld   (JUMP_ARC), a
-                ret
+; (RECLAIM-SV R3: jump_pit moved to R6 jump6.asm as jump_pit6, far6 from try_jump: -74 B low RAM.)
 
 ; pit_range — C = x of a body standing on the storey-0 floor (game.md §2.5,
 ; §1.1 "Wide pit" (4)): CF = 1 iff the room has a pit p and p <= x <= p+W-3
