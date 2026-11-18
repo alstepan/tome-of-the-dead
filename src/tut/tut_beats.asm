@@ -99,7 +99,7 @@ TUT_PR_STATUS   EQU 4                   ; (TUT0-F2: the key-icon rect is gone, L
 TUT_PR_BARS     EQU 5
 TUT_PR_ROW20    EQU 6
 TUT_PR_HELM     EQU 7                   ; TUT-GEAR: the panel's worn helmet cell (rows 22-23, cols GEAR_COL + 2 * WS_HELM)
-TUT_PR_ICON2    EQU 8                   ; TUT-ICONFLASH: slot 2 (Power Strike / Spark), rows 18-19 cols 3-5 (both classes)
+TUT_PR_ICON2    EQU 8                   ; TUT-ICONFLASH: 2nd icon (1-based slot 2 = TV_ISLOT 1: Power Strike / Spark), rows 18-19 cols 3-5 (both classes)
 TUT_R20_W       EQU 24                  ; ROW20 = cols 0..23 (TUT0-F4 R4-6, was 26; <= HP_COL, ASSERT tut_turn); = the goal line's width
 
 ; one record = 16 B (ASSERTed). Group = 2 line ids (second may be $FF).
@@ -314,6 +314,6 @@ tut_rects:
         DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-23 (TUT0-F4 R4-6: the hold
                                         ; prompt owns 24-31; ASSERT tut_turn)
         DEFB LOG_ROW, GEAR_COL + 2 * WS_HELM, 2, 2   ; TUT-GEAR HELM: the worn helmet's 16x16 cell (icons6.asm worn_draw)
-        DEFB 18,  3, 3, 2               ; TUT-ICONFLASH ICON2 (slot 2, cols 3..5)
+        DEFB 18,  3, 3, 2               ; TUT-ICONFLASH ICON2 (2nd icon, TV_ISLOT 1, cols 3..5)
 tut_rects_end:
         ASSERT tut_rects_end - tut_rects == 4 * (TUT_PR_ICON2 + 1)
