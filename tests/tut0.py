@@ -2421,6 +2421,23 @@ def scen_keys(h):
         check("K2", f"FIRE redefined to {fk}: the slot-1 tour line reads '{want}'", got == [want], got)
 
 
+def scen_l52(h):
+    """TUT-TREASURE regression: the Goblin killed with the Sleep scroll unread -> B14's L52 still comes after G4 (behind the
+    new treasure group): L43 < L84 < L85 < L46 < L44 < L52 < L45 < L47 (and L48 after L43 when HP < max + a Heal: not forced here)."""
+    for hero, name in ((0, "Warrior"), (1, "Mage")):
+        p = start(h, hero)
+        p.page_via = p.scroll_via = "icon"
+        run = Run(p)
+        go_to_C(p, run, True)
+        fight(p, run, False)
+        after_fight_to_exit(p, run, heal=False, waits=6)
+        L = [l.rstrip() for l in p.LOG]
+        ids = ("L43", "L84", "L85", "L46", "L44", "L52", "L45", "L47")
+        pos = [L.index(line("TL_" + k)) if line("TL_" + k) in L else -1 for k in ids]
+        check("TT2", f"{name}: scroll unread -> L52 after G4 (L46 / L44) and before G5 (L45 / L47); full B14 order {ids}",
+              -1 not in pos and pos == sorted(pos), dict(zip(ids, pos)))
+
+
 def main():
     t0 = time.monotonic()
     scen = [("static", lambda h: scen_static()), ("plain", scen_plain),
@@ -2435,7 +2452,7 @@ def main():
             ("visual_w", lambda h: scen_visual(h, 0)), ("visual_m", lambda h: scen_visual(h, 1)),
             ("tour_w", lambda h: scen_tour(h, 0)), ("tour_m", lambda h: scen_tour(h, 1)),
             ("tour_k", lambda h: scen_tour(h, 0, scheme="kemp")), ("left", scen_left), ("keys", scen_keys),
-            ("speak", scen_speak), ("key", scen_key), ("gear", scen_gear)]
+            ("speak", scen_speak), ("key", scen_key), ("gear", scen_gear), ("l52", scen_l52)]
     pick = set(filter(None, os.environ.get("TUT0_SCEN", "").split(",")))   # TUT-KEY: a subset by name (default: all)
     with Harness() as h:
         h.launch(EMU_ARGS)
