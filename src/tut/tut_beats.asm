@@ -99,6 +99,7 @@ TUT_PR_STATUS   EQU 4                   ; (TUT0-F2: the key-icon rect is gone, L
 TUT_PR_BARS     EQU 5
 TUT_PR_ROW20    EQU 6
 TUT_PR_HELM     EQU 7                   ; TUT-GEAR: the panel's worn helmet cell (rows 22-23, cols GEAR_COL + 2 * WS_HELM)
+TUT_PR_ICON2    EQU 8                   ; TUT-ICONFLASH: 2nd icon (1-based slot 2 = TV_ISLOT 1: Power Strike / Spark), rows 18-19 cols 3-5 (both classes)
 TUT_R20_W       EQU 24                  ; ROW20 = cols 0..23 (TUT0-F4 R4-6, was 26; <= HP_COL, ASSERT tut_turn); = the goal line's width
 
 ; one record = 16 B (ASSERTed). Group = 2 line ids (second may be $FF).
@@ -130,10 +131,10 @@ tut_beats:
               TL_L65, TL_L66, TL_L67, TL_L68, TL_L08, TL_L09, \
               TUT_NONE, TUT_NONE, TUT_FH_PITFALL, TUT_BF_G2PRE | TUT_BF_H0 | TUT_BF_H2
 ; B3 Book + bag (A): A2, POINT_DN; G0 L11/L60 (pointer BAG; R2: the BAG steps are the icon
-; target, tut_tgt); ARANK<>0: G1 L13 + class L14 W/M, tail pair 6 L63/L64 (scroll; p3 = 6)
+; target, tut_tgt); ARANK<>0 (TUT-ICONFLASH: pointer ICON2 = the new ability's slot): G1 L13 + class L14 W/M, tail pair 6 L63/L64 (scroll; p3 = 6)
         TBEAT TUT_RA, TUT_TK_ARANK, 0, TUT_TI_B3, TUT_SP_A2, TUT_POSE_PT_DN, \
               TL_L11, TL_L60, TL_L13, TUT_CP_L14, TUT_NONE, TUT_NONE, \
-              TUT_PR_BAG, TUT_NONE, TUT_FH_BOOK_DISCARD, TUT_BF_TAIL | TUT_BF_H0 | TUT_BF_H1
+              TUT_PR_BAG, TUT_PR_ICON2, TUT_FH_BOOK_DISCARD, TUT_BF_TAIL | TUT_BF_H0 | TUT_BF_H1
 ; B4 Ladder (A): blink -> A3, IDLE; L16; standing on storey 1
         TBEAT TUT_RA, TUT_TK_STOREY, 1, 0, TUT_SP_A3, TUT_PF_BLINK | TUT_POSE_IDLE, \
               TL_L16, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, TUT_NONE, \
@@ -313,5 +314,6 @@ tut_rects:
         DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-23 (TUT0-F4 R4-6: the hold
                                         ; prompt owns 24-31; ASSERT tut_turn)
         DEFB LOG_ROW, GEAR_COL + 2 * WS_HELM, 2, 2   ; TUT-GEAR HELM: the worn helmet's 16x16 cell (icons6.asm worn_draw)
+        DEFB 18,  3, 3, 2               ; TUT-ICONFLASH ICON2 (2nd icon, TV_ISLOT 1, cols 3..5)
 tut_rects_end:
-        ASSERT tut_rects_end - tut_rects == 4 * (TUT_PR_HELM + 1)
+        ASSERT tut_rects_end - tut_rects == 4 * (TUT_PR_ICON2 + 1)
