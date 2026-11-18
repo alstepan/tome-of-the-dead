@@ -180,6 +180,65 @@ also never FROZEN, so its ink can never collide with the `$45` tint.
   (+7 B bank 1; `tests/nm3b.py` G3p). (The GARG-REDRAW statue-as-background repair was dropped, user 2026-11-18:
   the render stays the GARG-PASS overlap-repair cascade.)
 
+### 4.1b GARG-CHAIN: the statues come alive together (user 2026-11-18)
+Scope: the **current room only** (its active slots). Floor-wide was rejected: it would end the disguise for the rest of the floor.
+- **Trigger = any wake of a perched Gargoyle**: proximity (gap ≤ 2), any HP loss, the missed bump. Each sets the room
+  flag `GARG_STIR`. Not a trigger: an awake follower walking in through a door, or an ALARM wave arriving. Both are already awake
+  or are not a wake.
+- **Staggered, one per turn.** While `GARG_STIR` is set, on each monster pass the **first perched Gargoyle in slot order** that
+  is eligible wakes on its own turn. It runs the §4.1 wake path: AWAKE, faces the hero, `ga_wake`, the line, **the turn spent**.
+  At most **one** chain wake per pass (a turn stamp beside the flag). The others stay perched until a later pass.
+  Proximity and damage wakes still work as in §4.1, do not use the per-pass slot, and can add to it.
+- **Overlap delay kept.** A perched Gargoyle with a body overlapping it is not eligible. The pass's chain wake goes to
+  the next eligible one in slot order. The overlapped one tries again on every later pass until it is clear.
+- **No cap.** `ROOM_MAX` 3 already limits it to 2 chained wakes.
+- **Fairness.** Every Gargoyle spends the turn it wakes in, so the hero gets ≥ 1 action after each wake before that statue can
+  strike. Staggering means the attacks ramp up 1, 2, 3 per round instead of 3 at once.
+- **Burst check** (worst case: 3 statues in one room on D5–D6, all of them able to reach the hero). Gargoyle atk 4 (scaled), 1d6 → **1d16 on D5 /
+  1d17 on D6** after `dsc_roll` (w 166 / 179). Hero at LVL = d: Warrior 24 + 6·4 = **48** HP on D5 (54 on D6), eva 2, DEF ~2 → 65 %
+  to hit, ~6.6 net damage a hit. Mage 16 + 4·4 = **32** HP (36), eva 1 → 70 %, ~8.5 a hit.
+  All 3 at once: Mage −17.9 expected a round, **max 48 = dead in one round from full**. Warrior −12.9 a round, max 42.
+  Staggered: the first 2 rounds bring 3 attacks instead of 6. Mage −18 expected (worst 48 spread over 2 rounds, with a turn
+  between to drink, cast or retreat). Warrior −13. That is in line with a D5–D6 Mummy pair, so the stagger alone keeps
+  the burst fair and no cap is needed. Geometry also softens it: a chained statue is usually more than 2 gaps away (or it would have
+  woken by proximity), so it needs flight steps before it can strike.
+- **Message.** Each chain wake prints the existing `THE GARGOYLE WAKES UP.` (0 new strings). The stagger makes it one line
+  per turn, which reads as a ripple. Off-screen and other-storey wakes print it too: that is the hero's warning.
+  Sound: whatever the §4.1 wake already plays. No new SFX.
+- **Edge cases.** Statues on the other storey, off-screen, or with the hero mid-ladder wake anyway (the room is alive). They then
+  chase on the Ghost path. Room exit clears `GARG_STIR`. ROOM-MEM / VISITED re-entry re-perches every Gargoyle as today, the
+  chained ones included (stored hp is kept; a hurt one wakes at once by the hp rule, which re-arms the chain).
+  An already-awake Gargoyle (a follower) is unaffected and does not arm the chain by entering. ALARM-wave statues that arrive
+  perched are room residents, so an armed chain wakes them in turn.
+- **Cost (engineer).** No slot loop is needed: the stagger lives in the perched-turn routine. That is a flag test, a turn-stamp gate,
+  a call to the existing overlap test, then a jump to the existing wake path. About 18–24 B plus 2 B of RAM. Arming from the damage and miss paths
+  costs about 3–5 B each in bank 3 (60 B free). Clearing the flag on room exit is 0 B if the 2 B sit in the room-local
+  state that room entry already zeroes, else +4 B. **Main risk: bank 1 has ~11 B after RECLAIM-SV, which is short of
+  ~20 B.** Options: put the gate in R4 / low-RAM slack and far-call it, or reclaim. Same-turn waking was rejected partly
+  because it needs a slot loop and per-body wake anims (~+15 B more) as well as the burst.
+- **Sim.** `tools/balance_sim.py` models perch (`PERCH_X`) but not the chain. Junior task (Python, haiku-eligible): param
+  `GARG_CHAIN` 0/1. When 1, a perch wake sets a room flag, and each later turn the first perched Gargoyle in the list wakes
+  (spending its turn). Run it on `tools/balance_food7.json` with GARG_CHAIN 0 vs 1, 10 000 runs, seed 1. Read the **delta**,
+  not the bands: the FOOD-7B sim is starvation-bound. Expected ≤ 1 pt, because Gargoyles are ~1/8 of the D5–D6 bodies.
+
+**User rulings 2026-11-18 (as built, supersede the text above where they differ):**
+- **Same room AND same storey.** The chain wakes the first perched Gargoyle (slot order) in the CURRENT room on the **storey of the
+  first one woken** (`GARG_STIR` = that storey + 1, 0 = off). Statues on the other storey are NOT chained (they keep the §4.1 proximity rule).
+  The "other storey / off-screen wakes anyway" edge case above is withdrawn.
+- **Trigger = the proximity wake only, in practice.** A perched statue (`EF_GHOST`) takes no damage and is never bumped (GARG-PASS), so the
+  HP-loss / missed-bump wakes only ever hit solid door arrivals, which by ruling arm nothing. Arming sits in the one shared wake path
+  (`perch1.wk` -> `stir_arm`); a chained wake runs the same path (already armed: it only spends the pass).
+- **One per pass, hero acts between.** `GARG_SPENT` (set by every wake, cleared by bank-3 `pl_seg3`, once per monster pass) replaces the
+  turn stamp. The arming wake spends its own pass, so the first chained wake is the NEXT pass. Overlapped (any body, PENDING included via
+  `pend_hit.go`) statues are skipped in `perch1` before the chain gate, retried every pass.
+- **New log line `THE STATUES STIR!`** (`TX_STIR`, `src/strings.txt`) printed once when the chain arms, ONLY if another perched Gargoyle
+  (active, `EF_GHOST`, same room, same storey) exists; each chained wake reuses `THE GARGOYLE WAKES UP.`.
+- **Clears** on a room exit / teleport (`lp_transition`) and on a new level (`level_reset`); ROOM-MEM re-entry re-perches as today.
+- **Sim** (`chore/sim-gchain` a9ef6e5): balance delta within noise, no tuning.
+- **Cost as built:** low RAM `src/garg_l.asm` (`stir_gate` 43 B + `stir_arm` 71 B = 114 B; the joiner scan is most of it), bank 1 +1 B,
+  bank 3 +11 B (pl_seg3 4, level_reset 3, lp_transition 4), text +13 B, 2 B RAM (`GARG_STIR` / `GARG_SPENT` = `DG_PLAN`, spare).
+  Tests: `tests/nm3b.py` GC1..GC6 + R1.
+
 ### 4.2 Fire Imp ranged row (F-1) — RANGED-SPEC table row
 
 | Kind | Range r | Cool N | Hit rule | Damage | On hit | Step-away | Climbs | FX |

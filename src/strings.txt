@@ -30,9 +30,11 @@
 # log0.asm (bank 0) appends " -D" / " -D HP H" / " +G" (<= 10 chars, ASSERTed).
 
 # --- whole log lines ----------------------------------------------------------
+# GARG-CHAIN: stir = the first perched Gargoyle wakes with another on its storey
 welcome         "YOU ENTER THE DUNGEON"
 descend         "YOU DESCEND DEEPER"
 locked          "THE DOOR IS LOCKED"
+stir            "THE STATUES STIR!"
 fall            "YOU FALL INTO A PIT"
 died            "YOU DIED - PRESS ENTER"
 win             "THE TOME IS DESTROYED"

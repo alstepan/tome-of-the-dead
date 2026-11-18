@@ -87,6 +87,7 @@ def check(name, ok, got=None):
 STRIDE = S["P_ENT_STRIDE"]
 ENT = S["P_ENTITIES"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT, EF_DYING = 1, 2, 4, 8, 16
+EF_PENDING = S["EF_PENDING"]
 GH = S["EF_GHOST"]
 PERCHED = EF_ACTIVE | EF_HOSTILE | GH                   # GARG-PASS: a resident perched Gargoyle (spawn_one)
 EF = {k: S["E_" + k] for k in ("KIND", "ROOM", "FLAGS", "X", "Y", "HP", "MAXHP", "POT", "PX", "PY", "MODE",
@@ -503,6 +504,77 @@ def part_g(p, w):
     check("G5 arrival_conflicts: the hero's arrival box on a ghost leaves it non-PENDING (a ghost)",
           w.e(3, "FLAGS") == PERCHED, w.e(3, "FLAGS"))
 
+# ------------------------------------------------------------------------------------------------- GC
+def part_gc(p, w):
+    """GARG-CHAIN (new_monsters.md 4.1b): the first proximity wake arms GARG_STIR (storey + 1); each later monster
+    pass (real resolve_monsters) wakes the first eligible perched Gargoyle on that storey, one a pass."""
+    gy1, gy0 = 10, 1                                     # the cruise rows of storey 1 / 0
+    gw = w.kt[KG]["bw"]
+    KO = S["K_ORC"]
+    oh = w.kt[KO]["bh"]
+    ax = 14
+    pas = [0xCD] + w16(S["build_live"]) + [0xCD] + w16(S["resolve_monsters"])
+
+    def awake(sl):
+        return bool(w.e(sl, "POT") & AWAKE) and not w.e(sl, "FLAGS") & GH
+
+    def lines():
+        return p.rb("LOG_QN")
+
+    def setup(statues, hero_x):
+        w.clear()
+        w.rows()
+        w.hero(hero_x)
+        for sl, x, y in statues:
+            w.put(sl, KG, x, y, flags=PERCHED)
+        p.wb("GARG_STIR", 0)
+        p.wb("GARG_SPENT", 0)
+        p.wb("LOG_QN", 0)
+
+    # GC1 pass 1: A (slot 3) wakes by proximity and arms the chain (storey 1 -> 2); B / D (storey 1) stay perched
+    # (the pass is spent); the other-storey C never wakes; "THE STATUES STIR!" + the wake line = 2 log lines
+    setup([(3, ax, gy1), (4, 26, gy1), (5, 24, gy0), (6, 4, gy1)], ax + gw + 1)   # D far left, B far right: A / B fly off
+    ingame(p, pas)
+    st = [awake(3), awake(4), awake(5), awake(6)]
+    check("GC1 proximity wake of A arms the chain (GARG_STIR = 2) and spends the pass: B, C, D still perched",
+          st == [True, False, False, False] and p.rb("GARG_STIR") == 2 and p.rb("GARG_SPENT") == 1, (st, p.rb("GARG_STIR")))
+    check("GC1 the STIR line + the wake line were queued (2 lines)", lines() == 2, lines())
+    # GC2 pass 2: B (first perched on the storey, slot 4) wakes; pass 3: D; pass 4: C (storey 0) never
+    seq = []
+    for _ in range(3):
+        ingame(p, pas)
+        seq.append((awake(4), awake(5), awake(6)))
+    check("GC2 one chain wake a pass in slot order: pass 2 -> B, pass 3 -> D, pass 4 nothing (C, other storey, stays perched)",
+          seq == [(True, False, False), (True, False, True), (True, False, True)], seq)
+    check("GC2 the chained wakes printed the wake line only (no 2nd STIR): 4 lines in all", lines() == 4, lines())
+    # GC3 STIR only with a joiner: A alone; A + a statue on the other storey only
+    for tag, others in (("alone", []), ("with a statue on the other storey only", [(4, 24, gy0)])):
+        setup([(3, ax, gy1)] + others, ax + gw + 1)
+        ingame(p, pas)
+        check(f"GC3 {tag}: A wakes, the chain is armed, but no STIR line (1 line)",
+              awake(3) and p.rb("GARG_STIR") == 2 and lines() == 1, (lines(), p.rb("GARG_STIR")))
+    # GC4 an overlapped statue is skipped (the next one wakes), retried once the body is gone (PENDING counts too)
+    for pend in (0, EF_PENDING):
+        setup([(4, 24, gy1), (6, 20, gy1)], 2)
+        p.wb("GARG_STIR", 2)
+        w.put(5, KO, 24, stand_y(1, oh), flags=EF_ACTIVE | EF_HOSTILE | pend)   # an Orc on B's box (slot 5)
+        ingame(p, pas)
+        first = (awake(4), awake(6))
+        p.wb(ENT + 5 * STRIDE + EF["FLAGS"], 0)
+        ingame(p, pas)
+        check(f"GC4 {'PENDING ' if pend else ''}body on B: skipped, D wakes first; body gone: B wakes next pass",
+              first == (False, True) and awake(4), (first, awake(4)))
+    # GC5 the other storey's chain never reaches a statue on this storey
+    setup([(3, 20, gy1)], 2)
+    p.wb("GARG_STIR", 1)                                 # armed on storey 0
+    ingame(p, pas)
+    check("GC5 chain armed on storey 0: a storey-1 statue (hero far) stays perched", not awake(3), w.e(3, "POT"))
+    # GC6 cleared by level_reset
+    p.wb("GARG_STIR", 2)
+    ingame(p, bank3([0xCD] + w16(S["level_reset"])))
+    check("GC6 level_reset clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
+    w.clear()
+
 
 def GI_bank3(p, addr):
     """one byte of bank 3 at addr ($C000..): paged in by a stub."""
@@ -562,7 +634,9 @@ def part_r(p, w):
     w.hero(1)
     w.put(5, KG, 20, gy, hp=11, rcd=1 | AWAKE)
     w.p.wmem(S["P_ENTITIES"] + 5 * STRIDE + EF["MAXHP"], [14])
+    p.wb("GARG_STIR", 2)
     xfer(Y)
+    check("R1 a room exit (lp_transition) clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
     check(f"R1 leave room {X} -> {Y}: the awake Gargoyle parked (E_ROOM = X | LPK_PARK)",
           w.e(5, "ROOM") == X | PARK and w.e(5, "KIND") == KG, (w.e(5, "ROOM"), w.e(5, "KIND")))
     xfer(X, hx=1)
@@ -870,6 +944,7 @@ def main():
         part_c(p, w)
         part_w(p, w)
         part_g(p, w)
+        part_gc(p, w)
         part_p(p, w)
         part_f(p, w, 6)
         part_r(p, w)

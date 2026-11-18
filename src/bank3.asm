@@ -52,6 +52,7 @@
 ;------------------------------------------------------------------------------
 level_reset:
                 xor  a
+                ld   (GARG_STIR), a            ; GARG-CHAIN: no chain armed on a new level (+3 B)
                 ld   (POTIONS_TAKEN), a        ; bits index this level's FLOOR_LIST
                 ld   (EXIT_KIND), a
                 ld   (MSG_Q), a

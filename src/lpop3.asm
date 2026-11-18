@@ -249,6 +249,8 @@ lp_bank:        ld   (LPV_ROOM), a
 ;   ~5-25k T (tests/lp.py reports the measured worst; gameplay is frozen)
 ;------------------------------------------------------------------------------
 lp_transition:
+                xor  a
+                ld   (GARG_STIR), a            ; GARG-CHAIN: a room exit / teleport ends the chain (every Gargoyle re-perches)
                 ld   a, (LVL_DEPTH)
                 or   a
                 ret  z
