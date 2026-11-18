@@ -900,7 +900,7 @@ try_horizontal:
                 ld   a, (TMP6)
                 jp   hero_door                 ; lowram: opened (CF = 1) / locked (0)
 .tome:          call face_tmp6                 ; (bank 2) the hero faces it (keeps C)
-                jp   tome_rel                  ; WIN2: through the geometry: adjacent (gap 0) < C = nx
+                jp   tome_melee                ; WIN2: through the geometry: adjacent (gap 0) < C = nx
                                                ; (>= 2: the lectern is at cols 1-2 / 29-30): a hit,
                                                ; CF = 1; destroyed (TOME_HP 0): CF = 0, a wall, no turn
 .noex:          pop  af                        ; .edge: no exit that way -> .blocked (EXIT_KIND 0, CF = 0)

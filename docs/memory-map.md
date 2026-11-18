@@ -7801,3 +7801,10 @@ the merge (release / `-DDEBUG_KIT=1` / `-DANIM_TRACE_ON=1`):
   (its bank 1 was 6 B over). Goldens: none changed (every golden room is a PROTO room, seed 0; D0 keeps its decor). Gate on the
   release build: world W13 + W14, tut0, tut0_level, lock8, d8_stress, sanctum, roommem, drip, trap_cells, budget, zx0_pool,
   gfx_integrity, zx0_roundtrip, tut0_adv_par: 0 failures. W13 profile (10 rooms) 73.0k..101.9k T (port 80.5k..119.7k).
+## TOME-SWING ledger (`feat/tome-swing`, 2026-11-18; playtest bug: no swing animation on a melee hit on the Archmage's Tome)
+
+A melee hit on the Tome (bump `try_horizontal .tome`, FIRE `ic_melee .door`) only ran `tome_rel` -> `tome_strike`: no hero sequence
+was started (a body hit starts KS_ATTACK in `do_attack`'s tail). Fix: bank-7 `tome_melee` (= `tome_rel` + `jp tome_swing`) at both
+callers; low-RAM `tome_swing` (clear the hero's E_MSG / E_HIT / E_TGT, `ld hl, atk_seq / call far3 / scf / ret`) enters bank-3 `atk_seq` (a label on `do_attack`'s existing
+`kind_seq_ptr` + `start_seq` tail, 0 B). Spells / daggers / arrows / Power Strike / Whirlwind keep their abl_seq (they never go through `tome_melee`).
+Free before -> after (release / kit / trace): bank 7 8 / -- / -- -> **1** / **1** / **65** (+7); low RAM (on main after DECOR2-SHIP, 30 / 32 / 32) -> **12 / 14 / 14** (-18: `tome_swing` 8 + review fix 10, E_MSG / E_HIT / E_TGT cleared so `do_impact` does not act on the last body blow's target; measured 22 / 24 / 24 -> 12 on the release build); bank 3 30 / 26 / 26 unchanged; B0_CODE2 and HOT_COPY unchanged.

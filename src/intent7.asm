@@ -214,7 +214,7 @@ ic_melee:
                 ld   l, 1
                 ret
 .door:          ld   c, TOME_REACH             ; P3: the Tome faced, adjacent: a melee hit
-                call tome_rel                  ; (tome7.asm, CF = 1), else
+                call tome_melee                ; (tome7.asm, CF = 1), else
                 ld   l, 1
                 ret  c
                 ld   hl, try_close             ; NEW-MON3 T1: bank 0 (nm3_b0.asm; was low RAM, CF out):
