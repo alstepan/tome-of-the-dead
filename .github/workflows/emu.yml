@@ -104,6 +104,20 @@ jobs:
       - name: Build release tape (DEBUG_KIT=0)
         run: tools/build.sh -DDEBUG_KIT=0
 
+      - name: ZRCP round-trip probe
+        run: |
+          python3 - <<'PY'
+          import sys, time
+          sys.path.insert(0, "tools")
+          from test_harness import Harness
+          with Harness() as h:
+              h.launch(("--emulatorspeed", "1000", "--vo", "null", "--ao", "null"))
+              t = time.monotonic()
+              for _ in range(200):
+                  h.z.cmd("get-version")
+              print(f"ZRCP round trip: {(time.monotonic() - t) / 200 * 1000:.2f} ms")
+          PY
+
       - name: Run suite ${{ matrix.suite }}
         env:
           WZ_LAUNCH_TIMEOUT: "30"      # cold shared runners start slower than the 10 s default
