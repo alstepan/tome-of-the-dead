@@ -8,8 +8,9 @@
 ; State: LF_KEYC / LF_KEYM in LVL_FLAGS = the keys HELD; LVL_KEYROOM / LVL_KEYROOM2 stay for the whole
 ; level (W21-FIX: the DECOR2 deriver's dg_iskey reads them, so a re-entered key room must rebuild the
 ; same decor after the pickup; "taken" = the floor entry gone); EG_LOCK cleared on unlock (key) or far-side bolt. All of it is level state, so a
-; new level / new game (level_gen) resets it. D0 (tutorial) / PROTO: no IT_KEY floor entry, so no
-; engine pickup (the tutorial keeps its own B-room key, tut_turn.asm tt_glob).
+; new level / new game (level_gen) resets it. D0 (tutorial, since TUT-KEY): the B-room key is an IT_KEY
+; floor entry of the level image (tools/tut0_level.py ITEMS, TUT0_KEY_FL), picked up by this same engine
+; path; tut_turn.asm adds only the flash (tt_kflash) and the beats. PROTO: no IT_KEY entry, no pickup.
 ;==============================================================================
 
 ;------------------------------------------------------------------------------

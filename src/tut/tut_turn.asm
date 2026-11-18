@@ -2136,8 +2136,8 @@ blob_icon:
 
 ;------------------------------------------------------------------------------
 ; tt_kflash — TUT-KEY-FLASH (user 2026-11-17: the key clearly visible, flashing once taken): at every D0 turn
-; end. Key still on B's floor (LVL_KEYROOM == the room and the item marker still on the key's cell: W21-FIX,
-; key_take keeps LVL_KEYROOM, so the marker is the "not taken" test once LF_KEYC is gone): FLASH (attr bit 7) on its 4
+; end. Key still on B's floor (W21-FIX: its own FLOOR_LIST entry TUT0_KEY_FL is in the current room and still
+; IT_KEY; key_take keeps LVL_KEYROOM, and a drop_put may reuse the freed entry / stamp the cell): FLASH (attr bit 7) on its 4
 ; cells + the key slot's ink in FI_INK (erase_rect / the sprite pass repaint from it, so a redraw keeps it).
 ; Key held (LF_KEYC): a queued panel key redraw is drawn first (item_depth, it paints without FLASH), then
 ; FLASH on the 2 panel key cells; key_door's unlock redraw (PD_DEPTH) blanks them as on D1+.
@@ -2145,7 +2145,6 @@ blob_icon:
 ;------------------------------------------------------------------------------
 TUT_KEY_COL     EQU 8                   ; the key's col (tools/tut0_level.py ITEMS)
 KF_ATTR0        EQU SCREEN_ATTR + (STOREY_AIR - 2) * 32 + TUT_KEY_COL
-KF_MAP0         EQU ROOM_MAP + (STOREY_AIR - 2) * 32 + TUT_KEY_COL    ; its upper-left map cell (a T_ITEM0.. marker)
 tt_kflash:
                 ld   a, (LVL_FLAGS)
                 and  LF_KEYC
@@ -2158,13 +2157,14 @@ tt_kflash:
                 inc  l
                 set  7, (hl)
                 ret
-.fl:            ld   a, (CUR_ROOM)
-                ld   hl, LVL_KEYROOM
-                cp   (hl)
-                ret  nz                        ; not the key room
-                ld   a, (KF_MAP0)              ; W21-FIX: taken (the id is kept now) = no item marker on
-                cp   T_ITEM0                   ; its cell (pp_take re-stamps it); 6 B, 20 T
-                ret  c
+.fl:            ld   a, (CUR_ROOM)             ; W21-FIX: the key's own entry (not LVL_KEYROOM: kept after
+                ld   hl, FLOOR_LIST + TUT0_KEY_FL * FL_STRIDE + FL_ROOM   ; key_take): its room here
+                cp   (hl)                      ; (FL_EMPTY once taken: never a room id)
+                ret  nz
+                ld   l, (FLOOR_LIST + TUT0_KEY_FL * FL_STRIDE + FL_ITEM) & $FF
+                ld   a, (hl)
+                cp   IT_KEY                    ; and still the key (drop_put reuses the first FL_EMPTY entry)
+                ret  nz                        ; same 14 B as the LVL_KEYROOM + marker test, ~+10 T
                 ld   hl, KF_ATTR0
                 set  7, (hl)
                 inc  l
@@ -2190,4 +2190,4 @@ tt_kflash:
                 ret
                 ASSERT (KF_ATTR0 & $FF) + 33 < $100 && (KF_ATTR0 >> 8) == ((KF_ATTR0 + 32) >> 8) && ICONS16_BYTES == 32
                 ASSERT (FI_INK & $FF) == 0 && (KEY_PAN_ATTR & $FF) + 1 < $100
-                ASSERT T_ITEM0 + 4 == TILE_IDS          ; ids >= T_ITEM0 are item markers only
+                ASSERT ((FLOOR_LIST + TUT0_KEY_FL * FL_STRIDE) >> 8) == ((FLOOR_LIST + TUT0_KEY_FL * FL_STRIDE + FL_ITEM) >> 8)

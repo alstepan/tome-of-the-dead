@@ -7319,7 +7319,7 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
 
 - **State (all level state: `level_gen` resets it, new level / new game):** `LVL_FLAGS` bit 6 `LF_KEYC` / bit 7 `LF_KEYM` =
   the key HELD (bit 1, the never-set `LF_KEY_TAKEN`, retired); "taken" = the IT_KEY floor entry freed (**W21-FIX 2026-11-18:** `LVL_KEYROOM` / `LVL_KEYROOM2` are no longer
-  := `ROOM_NONE` at pickup — DECOR2 `dg_iskey` reads them, so the key room re-derived a different decor after the pickup; -2 B low RAM; the D0 `tt_kflash` then tests "taken" by the item marker on the key cell, +6 B raw blob on top of TUT-TREASURE: 8,788 -> 8,794 B, tail 8, `BLOB_ORG` `$DDA4` -> `$DD9E`, D0 pool margin 292 -> 286); `EG_LOCK` cleared on unlock / bolt.
+  := `ROOM_NONE` at pickup — DECOR2 `dg_iskey` reads them, so the key room re-derived a different decor after the pickup; -2 B low RAM; the D0 `tt_kflash` then tests "taken" by the key's own FLOOR_LIST entry `TUT0_KEY_FL` (room == CUR_ROOM and FL_ITEM == IT_KEY; review: a marker test misfires on a later drop on that cell), +6 B raw blob on top of TUT-TREASURE: 8,788 -> 8,794 B, tail 8, `BLOB_ORG` `$DDA4` -> `$DD9E`, D0 pool margin 292 -> 286); `EG_LOCK` cleared on unlock / bolt.
   **`EG_NEARR` `$40`** (EDGE_TAB bit 6, was free): set by `level_gen` (`lgkey3.asm lk_edge`, +8 B; `tools/levelgen.py` same,
   bit-exact) when the lock's near (start-side) room is the right one; `levelcheck` K12 checks it.
 - **Code** (`src/lockl.asm`, low-RAM cold block, 283 B): `key_find` (KEY-POLISH: now `key_take`, from `floor_pickup`; was from `lair_hint`, every room entry incl. teleport;
