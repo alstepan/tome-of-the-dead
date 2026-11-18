@@ -170,8 +170,11 @@ also never FROZEN, so its ink can never collide with the `$45` tint.
   the KS_CLIMBREST statue fid; solid = the KS_IDLE fly cycle.
 - Perched it keeps eva 1 (no eva-0 code). `idle_phase` stops automatically (the rest pose is a STA|SYM
   single frame).
-- Known limits: a ghost in a doorway still refuses the hero's "close door" (room_bodies; closing a plank
-  on a statue that later wakes inside it would trap it). Two ghosts never block each other.
+- **Close door (key C):** a ghost is no "hostile within 2 cols" (it never refuses the close from there), but a
+  statue standing in the door cells still blocks the door (manager ruling: a woken Gargoyle must never sit
+  inside a plank). Two ghosts never block each other.
+- Known limit: the wake's overlap test sees LIVE_LIST bodies (the hero and active monsters), not PENDING ones
+  (a door arrival hidden on the statue's box): counting those costs ~30 B of bank 1 (28 free), left as is (reported).
 
 ### 4.2 Fire Imp ranged row (F-1) — RANGED-SPEC table row
 

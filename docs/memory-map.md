@@ -7866,3 +7866,14 @@ for a clear box, the statue draws behind any crossing body, door arrivals are so
   to the other bodies on it) that a crossing implies with any draw order. `gpass3` passes the 126k CAP only without the
   crossings: all four are reported measurements, not gated (escalated to the manager). `tests/world.py` W15's 2nd-frame HP item
   cap 5.5k -> 5.55k (5,485 -> 5,502 T, the panel code byte-identical: a contention-phase shift).
+
+**GARG-PASS review fixes (second commit on `feat/garg-pass`):** bank-0 `room_bodies` (try_close) skips an `EF_GHOST`
+body (bit 5 and not PENDING, so a PENDING | WALKIN follower still counts) when called for the hostile span (A =
+`EF_HOSTILE`), keeps counting it in the door cells (A = 0): **B0_CODE2 +13 B (release / kit / trace free 38 / 38 / 25 ->
+25 / 25 / 12)**. perch1: a 0-B ASSERT pins "horizontal overlap => box overlap" (heroes 6 rows, Gargoyle 4 at 9s + 1).
+The wake's PENDING-body overlap was not added (~30 B in bank 1, 28 free: reported, not built). **Partial statue repair
+(user-funded, ESCALATED):** prototyped as "the statue is background" (anim R_VIS 2 for a ghost, render's repair skips it,
+rl_ghost patches erase_rect into a low-RAM detour that re-composes the statue cells inside every restored rect): measured
+**erase_st 61 B + st_fix 233 B + 13 B (rl_ghost patch) + 3 B bank 2** = ~310 B of bank-2 / low-RAM code; the reclaims
+found (jump_pit -> R6 via seal_open -> bank 1: low RAM 11 -> 85 B) leave ~225 B short. Not committed.
+

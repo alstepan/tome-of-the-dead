@@ -388,10 +388,11 @@ try_close:
 ;------------------------------------------------------------------------------
 ; room_bodies — CF = 1 if an entity in slots 1..15 is ACTIVE, in CUR_ROOM,
 ; not DYING, has every flag of A (0 = any body; PENDING ones count), and its
-; box overlaps box C,B,D,E.  Keeps BC, DE.  Clobbers: A, HL, IX (= hero on
+; box overlaps box C,B,D,E. GARG-PASS: with A = EF_HOSTILE a perched Gargoyle (EF_GHOST) is skipped.  Keeps BC, DE.  Clobbers: A, HL, IX (= hero on
 ; return), TMP5.
 ;------------------------------------------------------------------------------
 room_bodies:
+                ASSERT EF_HOSTILE == 1 << 2
                 or   EF_ACTIVE
                 ld   (TMP5), a
                 ld   ix, P_ENTITIES
@@ -409,7 +410,13 @@ room_bodies:
                 jr   nz, .n
                 bit  EF_DYING_BIT, (ix+E_FLAGS)
                 jr   nz, .n
-                ld   a, (CUR_ROOM)
+                ld   a, (ix+E_FLAGS)           ; GARG-PASS review: a perched Gargoyle (EF_GHOST: bit 5 and not
+                and  EF_PENDING | EF_GHOST     ; PENDING; a PENDING | WALKIN follower still counts) is no hostile
+                cp   EF_GHOST                  ; near the door (the statue must not refuse the close), but it
+                jr   nz, .k                    ; still fills the door cells (A = 0: any body). H = the mask
+                bit  2, h                      ; (EF_HOSTILE) +13 B
+                jr   nz, .n
+.k:             ld   a, (CUR_ROOM)
                 cp   (ix+E_ROOM)
                 jr   nz, .n
                 call box_vs_ix                 ; keeps BC, DE

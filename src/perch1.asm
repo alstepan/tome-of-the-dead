@@ -14,6 +14,11 @@
 ; No damage reaches a ghost (box_free / find_target / pf_cands / jump_bodies / act_here skip it).
 ; Clobbers: all but IX.  A waiting turn ~0.9k T (far1 incl.); a wake + its line ~2.5k.
 ;------------------------------------------------------------------------------
+                ; GARG-PASS review: the gap math below assumes "horizontal overlap => box overlap" on one
+                ; storey (step 2 refused an overlap, so the hero-left gap never goes negative = ~254, "never
+                ; wakes"): the standing hero (rows 9s+8-h .. 9s+7) always meets the statue's rows 9s+1 ..
+                ; 9s+GP. Pinned here: both heroes 6 rows, the Gargoyle 4 at the flyer cruise row 9s + 1.
+                ASSERT BH_K_KNIGHT == BH_K_WIZARD && 1 + BH_K_GARGOYLE > STOREY_AIR - BH_K_KNIGHT && 1 < STOREY_AIR
 perch1:         bit  EF_GHOST_BIT, (ix+E_FLAGS)
                 jr   nz, .gh
                 set  RCD_AWAKE_BIT, (ix+E_RCD)  ; 1. a solid arrival: awake from its first turn

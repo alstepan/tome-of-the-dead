@@ -16,7 +16,8 @@ pit throws) on the real game (DEBUG_KIT=0 build, F3_GEN), Knight, generated D6 (
   G  GARG-PASS (user 2026-11-18): a monster (try_step) and the hero (try_horizontal) walk through a ghost (a solid
      one blocks / is bumped); the hero's find_target ignores it; the wake is delayed while the hero or a monster
      overlaps its box and happens on the first turn the box is clear; a dagger (proj_fire) flies through it and
-     hits the body behind (a solid one is the target); arrival_conflicts leaves it alone
+     hits the body behind (a solid one is the target); arrival_conflicts leaves it alone; G6 try_close's
+     room_bodies: a ghost is no hostile near the door but still fills the door cells
   R  re-perch on room re-entry (stub lp_transition, as do_exit): an awake Gargoyle left behind comes back
      perched (parked slot restored: RCD_SUMMON cleared), hp kept; a perched one is never a follow candidate,
      an awake one is (follow_select), and place_follower keeps it awake
@@ -462,6 +463,22 @@ def part_g(p, w):
         else:
             check("G4 control: a solid Gargoyle is a candidate in front of the Orc", [c for c in cands if c][:1] == [3] and 5 in cands,
                   (cands, tgt))
+    # G6 (review fix 1) try_close's room_bodies (bank 0): with A = EF_HOSTILE (the "hostile within 2 cols" span) a ghost
+    # is skipped, a solid Gargoyle counts; with A = 0 (the door cells) the ghost still fills them, and so does a
+    # PENDING | WALKIN follower (bit 5 set too: not a ghost)
+    def rbod(mask):
+        ingame(p, [0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, S["BANK_TEXT"], 0xCD] + w16(S["page_bank"]) +
+               [0x01, 0, 0, 0x11, 32, 18, 0x3E, mask, 0xCD] + w16(S["room_bodies"]) +
+               [0x9F, 0x32] + w16(RES) + [0xF1, 0xCD] + w16(S["restore_page"]))
+        return p.rb(RES) != 0
+    for fl, tag, want_h, want_any in ((PERCHED, "ghost", False, True), (solid, "solid", True, True),
+                                      (solid | S["EF_PENDING"] | S["EF_WALKIN"], "PENDING | WALKIN follower", True, True)):
+        w.clear()
+        w.rows()
+        w.hero(2)
+        w.put(3, KG, gx, gy, flags=fl, rcd=1 | (0 if fl == PERCHED else AWAKE))
+        got = (rbod(EF_HOSTILE), rbod(0))
+        check(f"G6 room_bodies with a {tag}: hostile span {want_h}, door cells {want_any}", got == (want_h, want_any), got)
     # G5 arrival_conflicts (the hero's arrival box on the statue) never makes it PENDING
     w.clear()
     w.rows()

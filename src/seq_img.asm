@@ -284,7 +284,7 @@ dk_death:       DEATHSEQ FID_dk_walk1, FID_small_corpse, FID_small_corpse, FID_d
 ksm_dk_e:
 ; Gargoyle (G-1, RCD_AWAKE): PERCHED = the KS_CLIMBREST fid (ga_perch = garg_perch, the statue: anim .cyc jumps to .crest
 ; for a perched Gargoyle; a flyer is never on a ladder, so .crest is free); WAKING = the KS_CLIMB slot as a one-shot
-; SEQUENCE wake -> alert (perch6; 4 ticks; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE for every flyer step);
+; SEQUENCE wake -> alert (perch1; 4 ticks; a flyer never reads KS_CLIMB: anim .move takes KS_MOVE for every flyer step);
 ; AWAKE at rest (hovering) = KS_IDLE = the flight cycle garg_fly 4 / garg_fly2 4 (GARG-FLY, user 2026-11-16: the wing
 ; cycle plays the whole time it is awake, moving or not; was the static garg_alert crouch); ATTACK = windup -> claw;
 ; HURT = garg_hurt; DEATH = garg_dead mid-air (the bat_dead shape). KS_IDLE = KS_MOVE share ga_fly.
