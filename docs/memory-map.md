@@ -7318,8 +7318,8 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
 ## LARGER-D T8 ledger (`feat/larger-d-t8`, 2026-11-16; larger_depths.md §2.1 rev 2 / rev 3, §6; user decisions in the task)
 
 - **State (all level state: `level_gen` resets it, new level / new game):** `LVL_FLAGS` bit 6 `LF_KEYC` / bit 7 `LF_KEYM` =
-  the key HELD (bit 1, the never-set `LF_KEY_TAKEN`, retired); "taken" = `LVL_KEYROOM` / `LVL_KEYROOM2` := `ROOM_NONE` at
-  pickup (runtime writes, after level_gen; levelgen_z80 compares at generation only); `EG_LOCK` cleared on unlock / bolt.
+  the key HELD (bit 1, the never-set `LF_KEY_TAKEN`, retired); "taken" = the IT_KEY floor entry freed (**W21-FIX 2026-11-18:** `LVL_KEYROOM` / `LVL_KEYROOM2` are no longer
+  := `ROOM_NONE` at pickup — DECOR2 `dg_iskey` reads them, so the key room re-derived a different decor after the pickup; -2 B low RAM); `EG_LOCK` cleared on unlock / bolt.
   **`EG_NEARR` `$40`** (EDGE_TAB bit 6, was free): set by `level_gen` (`lgkey3.asm lk_edge`, +8 B; `tools/levelgen.py` same,
   bit-exact) when the lock's near (start-side) room is the right one; `levelcheck` K12 checks it.
 - **Code** (`src/lockl.asm`, low-RAM cold block, 283 B): `key_find` (KEY-POLISH: now `key_take`, from `floor_pickup`; was from `lair_hint`, every room entry incl. teleport;
@@ -7365,7 +7365,7 @@ The 3 × 4 generator with the level-key lock / key selection, bit-exact with `to
   artist review pending; `fi_slot`'s IT_KEY -> 46 mapping needed no code; `icpk` 1,013 -> 1,027 B). Ink: `it_tab` /
   `ITEM_INK` `$45`; the colour-1 key room's key is `$43` via low-RAM `key_ink` (`fi_slot` -> reads `fi_add`'s FL_ROOM
   byte from its pushed DE; the two key rooms always differ). Pickup: `floor_pickup` (bank 7) -> low-RAM **`key_take`**
-  (ex `key_find`: held bit, key room := `ROOM_NONE`, the line, `PD_DEPTH`) then `pp_take` (FL_EMPTY, **SFX_PICKUP**,
+  (ex `key_find`: held bit, the line, `PD_DEPTH`; the key room id kept since W21-FIX) then `pp_take` (FL_EMPTY, **SFX_PICKUP**,
   re-stamp); either hero; never refused. `lair_hint` no longer grants keys. Never lost: no monster takes floor items,
   items never fall (pits are excluded by the footprint rule), `uq_fit` already skips `IT_KEY`; a key counts as one
   live entry for the progress-respawn weight (`trk_run`: 1 + 2 x entries), accepted.

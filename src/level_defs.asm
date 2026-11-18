@@ -468,7 +468,7 @@ LF_PROVOKED_BIT EQU 5               ; cleared when lp_post places the boss (ever
                                     ; one boss a level (the per-entity choice of the spec, engineer's call)
 LF_KEYC         EQU %01000000       ; LARGER-D T8: the cyan (colour 0) key is HELD (KEY-POLISH: picked up from
 LF_KEYM         EQU %10000000       ; its floor entry in LVL_KEYROOM / LVL_KEYROOM2, cleared when it unlocks its door).
-                                    ; Taken = LVL_KEYROOM(2) := ROOM_NONE at pickup. Per level (level_gen
+                                    ; Taken = the floor entry freed (W21-FIX: the room id stays). Per level (level_gen
                                     ; rewrites LVL_FLAGS). Panel / bag index = LVL_FLAGS rlca rlca & 3
 
 ; B3B-12 level seed (game.md §1 "Seed"): LVL_SEED = MASTER_SEED + depth * LVL_SEED_MUL
