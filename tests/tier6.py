@@ -438,9 +438,11 @@ def main():
                         seen.add(en[2])
                         foods += 1
             ty[nm] = (foods, sorted(seen))
-        ok = all(15 < f < 48 and set(t) <= {IT["F_CARROT"], IT["F_APPLE"], IT["F_PEAR"]} and len(t) >= 2
+        # BALANCE-PKG5: + drop0.asm drop_any, any food 8 % on every kill: ~120 x (1/4 + 0.08 - 1/4 x 0.08 overlap
+        # counted twice: two entries) ~ 40; Cheese / Meat can only come from drop_any
+        ok = all(20 < f < 62 and set(t) <= set(range(IT["F_CARROT"], IT["F_MEAT"] + 1)) and len(t) >= 2
                  for f, t in ty.values())
-        check("D1 tier rows drop a random Carrot/Apple/Pear ~1 in 4 (120 kills each)", ok, ty)
+        check("D1 tier rows drop a random Carrot/Apple/Pear ~1 in 4, + any food 8 % (120 kills each)", ok, ty)
 
         print(f"tier6: {len(fails)} failed" + (f": {fails}" if fails else ""), flush=True)
         return 1 if fails or h.failures else 0

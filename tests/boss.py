@@ -16,7 +16,7 @@ the hero walked into the lair through its door (real do_exit + lp_transition).
   F1  (user playtest bug) the boss next to the hero at the lair door: the hero leaves -> the boss
       stays in the lair (record), comes back with exact hp; BOSS_TRAP 0
   F2  Teleport (EX_TELE) with the boss adjacent: the boss stays in the lair record; BOSS_TRAP 0
-  S1  Ogre (D4): counter 2 -> it SLAMs from gap 2; a SLAM hit: hero HP lost in 1.5 x [1d10+2]
+  S1  Ogre (D4): counter 2 -> it SLAMs from gap 2; a SLAM hit: hero HP lost in 1.5 x [1d17+2] (PKG5 ramp x1.7)
       and STUNNED; counter 3 -> 1 next turn; at counter 0 a gap-2 hero is not attacked
   K1  the boss killed on the grate (hero standing ON the open grate when it dies): tiles 13 -> 26,
       LF_GRATE_OPEN, "A GATE GLEAMS" logged, the hero did not fall; DOWN at c descends
@@ -614,8 +614,9 @@ def slam(p, L, bs, c, wb, tag):
     if hit is None:
         check(f"{tag} S1 a SLAM hit in 12 tries", False, "")
         return
-    lo, hi = 3 + 3 // 2, 12 + 12 // 2 + 1       # 1d10+2 (depth scaling on hp only) x 1.5, rounding down; DEF may cut
-    check(f"{tag} S1 SLAM hit: hero lost {hit} (1.5 x [3..12] - DEF, min 1) and is STUNNED",
+    # BALANCE-PKG5: the D4 melee ramp x1.7 (dscl.asm): 1d10+1 -> 1d17+2 = [3..19], x 1.5 rounding down; DEF may cut
+    lo, hi = 3 + 3 // 2, 19 + 19 // 2 + 1
+    check(f"{tag} S1 SLAM hit: hero lost {hit} (1.5 x [3..19] - DEF, min 1) and is STUNNED",
           1 <= hit <= hi and p.rb(S["ST_FLAGS"]) & 3 == S["HOLD_STUNNED"], (hit, p.rb(S["ST_FLAGS"])))
     p.wb(S["ST_FLAGS"], 0)
     p.wb(S["ST_T1"], 0)

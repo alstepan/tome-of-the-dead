@@ -14,7 +14,7 @@ Invariants (checked every 25 ticks, in every scenario and the soak; "heavy" ones
   PLAYING never with the menu set (SELECT with the stale D0 set after a pause-QUIT is legal, in_tut undoes it at START);   I4 bank 4 BLOB_ORG.. == build/ovl/blob.bin while the
   offer is unspent (es_go = ts_choice);   I5 (heavy) mentor box == the current pose (V1) when stamped and in view, no
   mentor glyph outside it (V2);   I6 no FLASH on blank pointer cells (V3, tut0.Run.ptr_check, every turn);   I7 the hero
-  never dies in D0 (mercy), HP >= 1;   I8 TUT_RAM in range (TV_BEAT 0..15, TV_SPOT 0..7, TV_STAGE 0..5, TV_HOLD 0/1,
+  never dies in D0 (mercy), HP >= 1;   I8 TUT_RAM in range (TV_BEAT 0..16 (TUT-GEAR), TV_SPOT 0..7, TV_STAGE 0..5, TV_HOLD 0/1,
   TV_PTR $FF or a rect id);   I10 / I11 (TUT0-F4, tut0.Run.goal_check at every turn) the goal line == its model
   (row 20 cols 0-23: text, attrs, visibility), no FLASH in cols 24-31 during a hold;   I9 OVERRUN_COUNT (ticks > 2 frames) reported, not gated (room builds / holds count).
 
@@ -144,7 +144,7 @@ def invariants(c, heavy=False):
     # I8 TUT_RAM
     if d0 and gs == GS_PLAYING:
         beat, spot, stg, hold, ptr = (U.tv(p, n) for n in ("TV_BEAT", "TV_SPOT", "TV_STAGE", "TV_HOLD", "TV_PTR"))
-        if beat > 15 or spot > 7 or stg > 5 or hold > 1 or not (ptr == 0xFF or ptr < len(U.PTR_RECTS)):
+        if beat > U.B15 or spot > 7 or stg > 5 or hold > 1 or not (ptr == 0xFF or ptr < len(U.PTR_RECTS)):
             viol(c, "I8 TUT_RAM out of range", f"beat {beat} spot {spot} stage {stg} hold {hold} ptr {ptr:#x}")
     # I9
     ov = p.rw("OVERRUN_COUNT")
@@ -196,6 +196,9 @@ def pose_settle(p):
     return False
 
 
+GOB_W = 2                                                # the Goblin's body is 3 cells (KT_BW): the tween overhang is gx-1
+
+
 def mentor_check(c, again=True):
     p = c.p
     if not again and not i5_gate(p, False):
@@ -207,6 +210,9 @@ def mentor_check(c, again=True):
         return
     c0, r0 = box
     hx = p.ent(0)["X"]
+    g = U.goblin(p)                                      # TUT-GEAR (A12M): the awake Goblin chasing the hero past C1 is drawn
+    gx = g[1]["X"] if g else -99                         # over his box: only its sprite footprint is exempt (body cols gx..gx+2
+                                                         # cell-aligned, one more col either side mid-tween: gx-1..gx+GOB_W)
     ids = [p.rb(S["ROOM_MAP"] + 32 * (r0 + k // 3) + c0 + k % 3) for k in range(18)]
     gl = [bytes(p.z.read_memory(S["TILE_GLYPHS"] + 8 * i, 8)) for i in ids]
     c.mglyphs.update(g for g, i in zip(gl, ids) if i in U.MENTOR_IDS and any(g))
@@ -214,7 +220,7 @@ def mentor_check(c, again=True):
     bad = []                                             # its top line f0.. == a mentor glyph at (20, 11), the hero's head)
     for k in range(18):
         col, row = c0 + k % 3, r0 + k // 3
-        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5 or (col, row) in dn:   # the id-less cell / under the hero
+        if ids[k] not in U.MENTOR_IDS or hx - 2 <= col <= hx + 5 or gx - 1 <= col <= gx + GOB_W or (col, row) in dn:   # the id-less cell / under the hero / Goblin
             continue
         if G.cell_bytes(fr, col, row) != gl[k] or G.attr_at(fr, col, row) != p.rb(S["TILE_ATTRS"] + ids[k]):
             bad.append((col, row))
@@ -224,7 +230,7 @@ def mentor_check(c, again=True):
                 return mentor_check(c, False)
             STATS["i5_unsettled"] += 1
             return
-        viol(c, "I5 mentor box != pose (V1)", f"cells {bad[:3]} (in ANIM_LIST/drip cells: {[b for b in bad if b in U.anim_cells(p)]}) box {box} {U.st(p)}")
+        viol(c, "I5 mentor box != pose (V1)", f"cells {bad[:3]} (in ANIM_LIST/drip cells: {[b for b in bad if b in U.anim_cells(p)]}) box {box} goblin x {gx} {U.st(p)}")
     # V2: a mentor-only glyph anywhere outside the box (glyphs also used by ordinary tiles excluded)
     tiles = bytes(p.z.read_memory(S["TILE_GLYPHS"], 0x340))
     plain = {tiles[8 * t:8 * t + 8] for t in range(len(tiles) // 8) if t not in U.MENTOR_IDS}
@@ -561,7 +567,7 @@ def a5a_scroll_early(c):
         T(c, "WAIT")
     ok = to_C(c)
     ok = done(c) and ok
-    if 13 in c.run.beats:
+    if U.B13 in c.run.beats:
         print("  note: B13 was reached although the scroll was spent early", flush=True)
     print(f"  scroll early: used {used} beats {beats_str(c)}", flush=True)
     return ok

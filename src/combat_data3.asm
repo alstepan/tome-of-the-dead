@@ -54,7 +54,7 @@ kx_tab:
                 KXROW 0,0,RSP_I,0,RSP_I,RSP_I, IMM_UNDEAD, 9, DTY_PHYS, EFX_NONE, 0, 0, 0                  ; K_VBAT (3F-T9): the Vampire's row, a plain 1d2 bite (no drain / heal in bat form)
                 KXROW 0,0,RSP_R,0,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_PHYS, EFX_NONE, 0, 0, 1              ; K_SKELETON (DEF 1, §9.1 / D3-1)
                 KXROW 0,0,0,0,0,0, 0, KXP_GOBLIN, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_GOBLIN
-                KXROW RSP_R,0,RSP_R,RSP_R,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 4, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 4 -> CONFUSED 4 (no heal: §9.1)
+                KXROW RSP_R,0,RSP_R,RSP_R,RSP_I,RSP_I, IMM_UNDEAD, 6, DTY_DRAIN, EFX_CONFUSED, 8, 4, 0  ; K_GHOST: the 1d4 DRAIN touch, 1 in 8 -> CONFUSED 4 (no heal: §9.1; BALANCE-PKG5 §6 A: was 1 in 4 — confusion locks the walk-away escape)
                 KXROW 0,0,0,0,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                                  ; K_RAT
                 KXROW 0,0,0,RSP_W,0,0, 0, 2, DTY_PHYS, EFX_NONE, 0, 0, 0                              ; K_BAT
                 KXROW RSP_R,RSP_W,0,0,0,0, IMMF_SLEEP | IMMF_CONFUSE | IMMF_FEAR, 3, DTY_PHYS, EFX_NONE, 0, 0, 1 ; K_SLIME (DEF 1, D3-1)
@@ -146,14 +146,17 @@ ab_rank:
                 RANK 2, 6, 4, 1, 0, (4 << 4) | 4
                 RANK 4, 9, 8, 2, 0, (4 << 4) | 4
                 RANK 6, 10, 8, 4, 0, (2 << 4) | 4
-; Firebolt: 5 MP r8 1d8, burst 1d3 | 6 MP r8 1d8+2, burst 1d3 | 10 MP r10 1d10+4, burst 1d5 spares caster (BALANCE-PKG4: was 1d4 / 1d4 / 1d6)
-                RANK 5, 8, 8, 0, 0, 3
-                RANK 6, 8, 8, 2, 0, 3
-                RANK 10, 10, 10, 4, 0, 5 | RKE_SPARE
-; Frost Shard: 3 MP r10 1d6+1, 1 bounce, freeze 2 | 5 MP r10 1d8+2, 2 bounces, freeze 3 | 7 MP r12 1d8+4, freeze 4
+; Firebolt: 5 MP r8 1d8-1, burst 1d3 | 6 MP r8 1d8+1, burst 1d3 | 10 MP r10 1d10+3, burst 1d5 spares caster (BALANCE-PKG4: was 1d4 / 1d4 / 1d6;
+; BALANCE-PKG5 Mage tune: bonus -1 a rank, was 0 / 2 / 4 — E1 Mage above its band. r1's -1 is signed: pf_bonus wraps
+; (1 + $FF = 0) and deal_hit's "a 0 roll still hurts 1" floors it; the staff +1 / +2 adds on top)
+                RANK 5, 8, 8, -1, 0, 3
+                RANK 6, 8, 8, 1, 0, 3
+                RANK 10, 10, 10, 3, 0, 5 | RKE_SPARE
+; Frost Shard: 3 MP r10 1d6+1, 1 bounce, freeze 2 | 5 MP r10 1d8+1, 2 bounces, freeze 3 | 7 MP r12 1d8+3, freeze 4
+; (BALANCE-PKG5: r2 / r3 bonus -1, was +2 / +4)
                 RANK 3, 10, 6, 1, 1, 2
-                RANK 5, 10, 8, 2, 2, 3
-                RANK 7, 12, 8, 4, 2, 4
+                RANK 5, 10, 8, 1, 2, 3
+                RANK 7, 12, 8, 3, 2, 4
 ; Drain Life: 3 MP r6 1d6+2 | 5 MP r8 1d8+3 | 7 MP r8 1d8+6
                 RANK 3, 6, 6, 2, 0, 0
                 RANK 5, 8, 8, 3, 0, 0

@@ -140,12 +140,7 @@ KS_CMAX         EQU EDGES_H            ; <= 8 candidates (horizontal edges)
                 ret
     ENDM
 
-; kbit: 1 << r (word), r = 0..11
-kbit:           DUP  12, k
-                DW   1 << k
-                EDUP
-                ASSERT (kbit >> 8) == ((kbit + 23) >> 8)
-tstb:           KTSTB kbit
+; (kbit / tstb: one copy for both halves in low RAM, lgkeyl.asm; PKG5+FLY-CUT reclaim, were here and in lgkey0)
 pathm:          KPATHM kbit
 
 ; kexit: A = room. A = RD_EXITS & $0F, HL -> RD_EXITS. Clobbers A, HL

@@ -1,0 +1,2 @@
+{"_doc": "PACKAGE 5 v2: hunger 1 food per 8 turns + fixed book order (Mage Spark>Firebolt>Frost>Drain>Lightning, Warrior Power>Whirl). Use with --ld-pkg4; PICKUP 0.75 = human proxy via --set param.PICKUP=0.75.",
+ "param": {"FOOD_BURN": 8, "BOOK_ORDER": 1}}

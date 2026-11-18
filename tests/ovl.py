@@ -36,7 +36,8 @@ STUB = S["LOWRAM_END_3B"]                     # free low RAM (the other suites' 
 BLOB_BANK = 7                                # BANK_SHADOW: screen 2, dead at the menu
 BLOB_AT = 0xD000
 SCR2_END = 0xDAFF
-RES = STUB + 0xC0                             # result bytes
+RES = S["tut_stub_end"]                       # result bytes (17 B): the TUT0 stub room's free tail (.. sel_tab; DECOR2-SHIP: STUB + 200 hit ts_icon)
+assert S["sel_tab"] - RES >= 17
 
 
 def w(v):

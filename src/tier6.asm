@@ -423,6 +423,7 @@ drop_row:       ld   hl, drop_tab
                 ld   e, DROP_NEAR
                 jp   drop_put
 
+
 ; drop_tab (§8.11 rulings 2 + §9.6 rewards; 3F-T3: 12 rows x 4 B: kind, type, N, k = "k in
 ; N"): the base drops (k = 1) and the tier rows (the base numerator + 1 per tier above 1:
 ; Cheese 1/4 -> 2/4 -> 3/4, Arrows 1/2 -> 2/2). First match wins. NOT here: the tier rows

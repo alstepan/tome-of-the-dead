@@ -4,7 +4,7 @@ PROTO room A, every monster parked. Code: src/hunger0.asm (bank 0 since NEW-MON3
 from end_turn, hunger_add, item_food), the WEAK / HUNGRY hooks in hit_roll /
 deal_hit (combat3), h_jump (status7), xp_turn (MP_HOLD).
 
-  N   new game: FOOD 80 (FOOD_START), FED, timers 0, no STS_HWEAK
+  N   new game: FOOD 100 (FOOD_START, BALANCE-PKG5; was 80), FED, timers 0, no STS_HWEAK
   B   burn: -1 on every 6th turn exactly; x2 period with the Food / Scarab
       amulet worn; floor at 0 (never negative, no death)
   J   a jump turn costs FOOD_JUMP 2 extra; WEAK (hunger): no jump, no turn,
@@ -42,9 +42,10 @@ STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_LEFT = 1, 2, 4, 8
 HY = stand_y(1, 6)
 HX = 12
+FP = S["FOOD_PERIOD"]                      # BALANCE-PKG5: 8 (was 6)
 NOWHERE = 7
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+RES = S["tut_stub_end"]                # the TUT0 stub room's free tail (.. sel_tab; DECOR2-SHIP: STUB + 200 hit ts_icon)
 FOOD, TMR, HST = S["FOOD"], S["FOOD_TMR"], S["HSTAGE"]
 STF = S["ST_FLAGS"]
 HWEAK, WEAK = S["STS_HWEAK"], 1 << S["STS_WEAK_BIT"]
@@ -153,7 +154,7 @@ def run(h, p, check):
     # ======================= N: new game =========================================
     scene()
     n = (p.rb(FOOD), p.rb(TMR), p.rb(HST), p.rb("HP_RG"), p.rb("HW_TMR"), p.rb(STF) & HWEAK)
-    check("N1 new game: FOOD 80, FOOD_TMR 0, FED, HP_RG / HW_TMR 0, no STS_HWEAK", n == (80, 0, 0, 0, 0, 0), n)
+    check("N1 new game: FOOD 100, FOOD_TMR 0, FED, HP_RG / HW_TMR 0, no STS_HWEAK", n == (100, 0, 0, 0, 0, 0), n)   # BALANCE-PKG5
 
     # ======================= B: burn period, amulet, floor ========================
     setfood(60)
@@ -161,22 +162,22 @@ def run(h, p, check):
     for _ in range(13):
         p.turn("WAIT")
         got.append(p.rb(FOOD))
-    want = [60 - (i + 1) // 6 for i in range(13)]
-    check("B1 FOOD -1 on every 6th turn exactly (60 -> 58 in 13 turns)", got == want, (got, want))
+    want = [60 - (i + 1) // FP for i in range(13)]
+    check("B1 FOOD -1 on every 8th turn exactly (60 -> 59 in 13 turns; BALANCE-PKG5, was 6th)", got == want, (got, want))
     for amu in ("IT_C_PLENTY", "IT_C_SCARAB"):
         setfood(60)
         p.wb(S["WORN"] + 3 * S["WS_CHARM"], S[amu])
         got = []
-        for _ in range(12):
+        for _ in range(2 * FP):
             p.turn("WAIT")
             got.append(p.rb(FOOD))
-        check(f"B2 {amu} worn: period 12 (60 -> 59 on the 12th turn only)",
-              got == [60] * 11 + [59], got)
+        check(f"B2 {amu} worn: period 16 (60 -> 59 on the 16th turn only; BALANCE-PKG5, was 12)",
+              got == [60] * (2 * FP - 1) + [59], got)
     p.wb(S["WORN"] + 3 * S["WS_CHARM"], 0)
-    setfood(1, tmr=5, stage=WEAKS)
+    setfood(1, tmr=FP - 1, stage=WEAKS)
     p.turn("WAIT")
     a = p.rb(FOOD)
-    p.wb(TMR, 5)
+    p.wb(TMR, FP - 1)
     p.turn("WAIT")
     check("B3 floor: FOOD 1 -> 0 -> 0 (never negative), the hero alive",
           (a, p.rb(FOOD), p.rb("GAME_STATE"), p.ent(0)["HP"] > 0) == (0, 0, S["GS_PLAYING"], True),
@@ -211,7 +212,7 @@ def run(h, p, check):
     scene()
     seq = []
     for food, tag in ((50, "FED->OK"), (25, "OK->HUNGRY"), (10, "HUNGRY->WEAK")):
-        setfood(food, tmr=5)
+        setfood(food, tmr=FP - 1)
         lines.clear()
         p.turn("WAIT")
         p.turn("WAIT")
@@ -247,21 +248,21 @@ def run(h, p, check):
     # ======================= R: regen =============================================
     # HUNGRY: MP_RG advances on even TURN_COUNTER only, so the 1st gain lands on
     # turn 12 or 13 (parity), then every 12
-    for food, per, tag in ((80, 7, "FED"), (20, 14, "HUNGRY"), (5, None, "WEAK")):
+    for food, per, tag in ((80, 9, "FED"), (20, 18, "HUNGRY"), (5, None, "WEAK")):
         scene(K_WIZARD, mp=0, maxmp=12)
         setfood(food)
         got = []
-        for _ in range(30):
+        for _ in range(40):
             p.turn("WAIT")
             got.append(p.rb("MP"))
-        gains = [i + 1 for i in range(30) if got[i] != (got[i - 1] if i else 0)]
+        gains = [i + 1 for i in range(40) if got[i] != (got[i - 1] if i else 0)]
         if per is None:
             ok = gains == [] and p.rb("MP_RG") == 0
-        elif per == 7:
-            ok = gains == [7, 14, 21, 28]             # BALANCE-PKG4: Mage 7 turns (MP_PER 28 quarter-turns; was 5)
+        elif per == 9:
+            ok = gains == [9, 18, 27, 36]             # BALANCE-PKG5: Mage 9 turns (MP_PER 36 quarter-turns; 7 in PKG4, was 5)
         else:
-            ok = len(gains) == 2 and gains[1] - gains[0] in (12, 14, 16)   # HUNGRY: odd turns held, ~14
-        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (HUNGRY ~14)"),
+            ok = len(gains) == 2 and gains[1] - gains[0] in (16, 18, 20)   # HUNGRY: odd turns held, ~18
+        check(f"R1 Mage MP regen while {tag}: " + ("none, MP_RG frozen" if per is None else f"+1 per {per} turns (HUNGRY ~18)"),
               ok, (gains, got[-1], p.rb("MP_RG")))
     # LARGER-D T5 (larger_depths 3.1): FED regen = 1 + MAXHP div 40 per 16 turns (BALANCE-PKG4; 12 in package 3); DN_SLOT + DS_SNAP grows by the HP gained
     snap_a = S["DN_SLOT"] + S["DS_SNAP"]
@@ -369,8 +370,8 @@ def run(h, p, check):
             return ok, p.tstates
         ok = p.code([0x3E, a, 0x21] + w16(S[label]) + [0xCD] + w16(S["far7" if label in B7_LABELS else "far6"]))
         return ok, p.tstates
-    tt = {"plain": cost("hunger_turn"), "burn": cost("hunger_turn", tmr=5),
-          "burn + HUNGRY line": cost("hunger_turn", food=25, tmr=5, stage=OK),
+    tt = {"plain": cost("hunger_turn"), "burn": cost("hunger_turn", tmr=FP - 1),
+          "burn + HUNGRY line": cost("hunger_turn", food=25, tmr=FP - 1, stage=OK),
           "item_food HUNGRY": cost("item_food", food=20, stage=HUNGRY),
           "item_food WEAK": cost("item_food", food=5, stage=WEAKS)}
     print(f"[info] costs incl. far6 / far7 (T): {tt}", flush=True)

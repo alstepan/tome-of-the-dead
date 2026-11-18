@@ -43,6 +43,8 @@ def main():
         h.expect("I8 es_go+1 == ts_choice", es, S["ts_choice"])
         stub = open(os.path.join(BUILD_DIR, "ovl", "stub.bin"), "rb").read()
         h.expect("I8b stubs at check_paging == stub.bin", bytes(p.z.read_memory(S["check_paging"], len(stub))) == stub, True)
+        lri = open(os.path.join(BUILD_DIR, "ovl", "lri.bin"), "rb").read()
+        h.expect("I8b2 tele_lri at tape_tab == lri.bin (PKG5+FLY-CUT)", bytes(p.z.read_memory(S["lri_base"], len(lri))) == lri, True)
         blob = open(os.path.join(BUILD_DIR, "ovl", "blob.bin"), "rb").read()
         p.z.cmd("set-memory-zone 0")              # the 128K RAM, bank n at n * 16K
         try:

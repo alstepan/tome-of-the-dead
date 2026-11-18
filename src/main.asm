@@ -316,6 +316,7 @@ fdesc_end:
     ENDIF
                 ; LARGER-D T4: the level-key lock / key selection ksel (FARB0 from bank-3 attempt; bank 3 had no room)
                 INCLUDE "lgkey0.asm"
+                INCLUDE "drop0.asm"            ; BALANCE-PKG5: drop_any, the 8 % food drop (farb from bank-3 mon_drop)
                 ; ---- packed overlay streams: KEEP LAST (2-pass build: no code address may depend on a packed size;
                 ; append new code ABOVE this line) ----
 ovl_page_zx0:                                  ; 3E-T2 bag page (page_ovl.asm, PAGE_ORG; ITEM-INFO: from R6,
@@ -354,6 +355,11 @@ LOWRAM_CODE_LEN EQU lowram_code_end - lowram_code
                 ASSERT lowram_code_end == $8000
 LOWRAM_SPARE    EQU lowram_code - LOWRAM_FREE_END   ; F1: no descriptor reserve here any more (FDESC_GROW is in B0_CODE2)
                 ASSERT lowram_code >= LOWRAM_FREE_END
+                ; BALANCE-PKG5: the tests' ZRCP stub window = LOWRAM_END_3B .. gen_idles: the spare + the run-once power-on
+                ; code (start: tape entry; boot: .sna entry; neither is re-entered once boot reached enter_select). The
+                ; largest stub measured is 61 B (tests/world.py); keep TEST_STUB_MIN of room (memory-map "Low RAM").
+TEST_STUB_MIN   EQU 64
+                ASSERT gen_idles - LOWRAM_END_3B >= TEST_STUB_MIN
                 ; C+TUT0: in_tut finds the blob stream's trailer at this record's address + length
                 ASSERT {b tape_tab + TT_BOOT4_REC * TT_STRIDE} == BANK_BOOT4 && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 1} == BOOT4_ORG && {tape_tab + TT_BOOT4_REC * TT_STRIDE + 3} == BOOT4_TAPE_LEN
                 ASSERT GEN_SCRATCH + GEN_SCRATCH_LEN <= TILE_GLYPHS  ; the lowest buffer above the alias
@@ -1388,13 +1394,32 @@ ovl_raw_ft:
 ; INSTR overlay ({b}, instr_ovl.asm in_stub), which installs them at its common exit.
 ; BEFORE the overlay in source order (its {b} reads these bytes).
 ;------------------------------------------------------------------------------
-ovl_raw_stub:
-                DISP check_paging
+; PKG5+FLY-CUT reclaim: the LOW-RAM INSTALLED BLOCK = tele_lri.asm (tp_safe / tp_msk / tp_ok) DISP'd at
+; tape_tab (start's block list: tape path + in_tut only, dead after that), a zero pad, then the stubs at
+; check_paging, contiguous: in_tut copies the whole block (LRI_LEN B) to tape_tab with one LDIR, AFTER
+; it read tape_tab. 0 resident bytes; nothing in it is live before the INSTR overlay ran (boot).
+; tests: stub.bin = the stubs (as before), lri.bin = tape_tab .. check_paging (tests/game.py #50).
+ovl_raw_lri:
+                DISP tape_tab
+lri_base:
+                INCLUDE "tele_lri.asm"
+lri_end:
+                ASSERT lri_end <= check_paging
+    IF check_paging - lri_end > 0
+                DS   check_paging - lri_end, 0
+    ENDIF
 tut_stub:
+                ASSERT tut_stub == check_paging
                 INCLUDE "tut/tut_stub.asm"
 tut_stub_end:
                 ENT
+ovl_raw_stub    EQU ovl_raw_lri + (check_paging - tape_tab)
+LRI_LEN         EQU tut_stub_end - lri_base     ; the copy: lri + pad + stubs
+LRI_CODE_LEN    EQU lri_end - lri_base
+LRI_ROOM        EQU check_paging - tape_tab     ; tape_tab's 46 B
 TUT_STUB_LEN    EQU tut_stub_end - tut_stub
+                SAVEBIN "build/ovl/lri.bin", ovl_raw_lri, LRI_ROOM
+                DISPLAY "GAME low-RAM installed block (tele_lri.asm): ", /D, LRI_CODE_LEN, " B at ", /H, lri_base, " (room ", /D, LRI_ROOM, ", free ", /D, LRI_ROOM - LRI_CODE_LEN, ")"
 TUT_STUB_ROOM   EQU sel_tab - check_paging      ; check_paging + str_lock (sel_tab is live: kept)
                 ASSERT TUT_STUB_LEN <= TUT_STUB_ROOM && TUT_STUB_LEN <= 58
                 SAVEBIN "build/ovl/stub.bin", ovl_raw_stub, TUT_STUB_LEN   ; C+TUT0: game.py #50's reference (the

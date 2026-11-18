@@ -125,12 +125,14 @@ def main():
           and not any(flat["tut0_trap_list"][2:tn]) and not any(flat["tut0_trap_list"][tn + 1:]) and not flat["tut0_trap_list"][0] & D["TRF_KNOWN"])
     fn = blk[H["FLOOR_N"]]
     ents = [tuple(blk[OFF_FLOOR + 4 * i:OFF_FLOOR + 4 * i + 4]) for i in range(D["FLOOR_MAX"])]
-    check("M FLOOR_N 6 + the rest FL_EMPTY", fn == 6 == equs["TUT0_FLOOR_N"] and
+    check("M FLOOR_N 7 + the rest FL_EMPTY", fn == 7 == equs["TUT0_FLOOR_N"] and
           all(e == (D["FL_EMPTY"],) * 4 for e in ents[fn:]))
     want = [(A, 0, 24, "IT_BOOK"), (A, 1, 17, "IT_F_PEAR"), (B, 0, 19, "IT_P_CURE"),
             (C, 1, 4, "IT_S_SLEEP"), (C, 1, 9, "IT_P_HEAL"),
-            (B, 0, 8, "IT_KEY")]                                 # TUT-KEY: the cyan key on B's floor (key room B)
-    check("M floor entries (book, pear, cure, sleep, heal, the B key) qty 1",
+            (B, 0, 8, "IT_KEY"),                                 # TUT-KEY: the cyan key on B's floor (key room B)
+            (B, 0, 16, "IT_H_HELM")]                             # TUT-GEAR: the helmet (the blob swaps in the Hood for the Mage)
+    check("M floor entries (book, pear, cure, sleep, heal, the B key, the helmet) qty 1; TUT0_GEAR_FL = the helmet's index",
+          equs["TUT0_GEAR_FL"] == 6 and
           ents[:fn] == [(r | (D["FL_S1"] if s else 0), c, D[it], 1) for r, s, c, it in want], str(ents[:fn]))
     check("M Goblin: room C, x 22 (= the grate col), storey 1", (equs["TUT0_GOB_ROOM"], equs["TUT0_GOB_X"], equs["TUT0_GOB_S"]) ==
           (C, rd(blk, C, "RD_EXITCOL"), 1) and equs["TUT0_GOB_X"] == 22)

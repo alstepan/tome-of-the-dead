@@ -197,12 +197,12 @@ BANK_BLOB       EQU BANK_POOL1      ; 4
 BANK_BOOT4      EQU BANK_POOL1      ; 4 (= BANK_BLOB, ASSERTed)
 BOOT4_ORG       EQU BANK_WINDOW + $100
 INSTR_FT_ZX0    EQU BOOT4_ORG       ; the frame_tab stream, FIRST in BOOT4 (RECLAIM-D; ASSERTed)
-BLOB_ORG        EQU $DF01           ; TUT-KEY: $DF37 -> $DF01 (raw blob 8,385 -> 8,439 B + 8 B tail: tt_knag, tk_key, the B14 / B7
+BLOB_ORG        EQU $DDD0           ; TUT-KEY-FLASH: $DE20 -> $DDD0 (tt_kflash +80 B raw). TUT-GEAR: $DF01 -> $DE20 (raw 8,439 -> 8,664 B + 8 B tail: B9G, ledger "TUT-GEAR"). TUT-KEY: $DF37 -> $DF01 (raw blob 8,385 -> 8,439 B + 8 B tail: tt_knag, tk_key, the B14 / B7
                                     ; lines, the in-band owner mark; memory-map "TUT-KEY ledger"). MORROW-SPEAK: $E1B2 -> $DF37 (raw blob 7,750 -> 8,385 B + 8 B tail; the D0 pool top $D460 and
                                     ; boot4_end stay far below, ASSERTed). (UX1: tt_ptr's FARB0 ux_ptr +8 B, ITEM-INFO's dictionary -38 B: fits, unmoved); B0CODE: -2 (tut_d0's FARB0 new_game, +2 B blob); C+TUT0 (user: move the blob up into its spare space, $E1B4): raw blob 7,750 B + 8 B tail
                                     ; to $FFFF (was $E000, TUT0-F2 $E800). No alignment is assumed (ASSERTed by BLOB_LEN <= BLOB_RES
                                     ; and BLOB_TAIL >= 8). Frees 436 B below it for the pool (POOL_START / B0_FREE grow).
-BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 8,447: the raw image (no in-place delta since BOOT4)
+BLOB_RES        EQU $10000 - BLOB_ORG ; BLOB_ORG..$FFFF = 8,672: the raw image (no in-place delta since BOOT4)
                 ASSERT BLOB_ORG + BLOB_RES == $10000
 BLOB_CHOICE     EQU BLOB_ORG + 0    ; entry table (tut_blob.asm): A = menu hero kind -> C = hero
 BLOB_TURN       EQU BLOB_ORG + 3    ;   A = 1 before end_turn, 0 after
@@ -233,7 +233,7 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2367 + 33 + 340 + 16 + 32  ; NEW-MON3 T8: +32 (kind names, Frost Charm); 4b: +16 ("TOO WEAK TO JUMP"); both from B0_FREE_RES, POOL_START kept. ITEM-INFO + UX1: +340 (22 strings); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom
+TEXT_RES        EQU 2367 + 33 + 340 + 16 + 32 - 8  ; BALANCE-PKG5: -8 to B0_FREE_RES (the trace build's B0_CODE2 for drop0.asm; text headroom 23 -> 15, the kit's carve pad 15 -> 7). NEW-MON3 T8: +32 (kind names, Frost Charm); 4b: +16 ("TOO WEAK TO JUMP"); both from B0_FREE_RES, POOL_START kept. ITEM-INFO + UX1: +340 (22 strings); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom
 B0_CODE_RES     EQU 1064 + 10                  ; ITEM-INFO + UX1: +10 (dn_tick's 3-B call ux_tick + the pre-existing 1-B overrun + pad; from B0_FREE_RES); C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
                                                ; MON-DEFER) + dn_q2's DN-GATE test (13) + pad; the kit build (kit0.asm) fits
                                                ; with the 16-B text headroom (1 B free). POOL_START unchanged (B0_FREE_RES
@@ -274,7 +274,7 @@ DG2_RES         EQU 0
                 ASSERT DG2_RES <= 2080 && (DG2_RES & 1) == 0
 DG2_ON          EQU DECOR2                     ; test-observable (.sym): tests/room_model.py picks the model by it
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
-B0_FREE_RES     EQU 8408 - 16 - 32 + DG2_RES      ; 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
+B0_FREE_RES     EQU 8408 - 16 - 32 + 8 + DG2_RES  ; BALANCE-PKG5: +8 from TEXT_RES (POOL_START stays $EFBE). 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
                                                ; (3,200 B back to the pool; = $EFBE - B0_FREE_START $CEE6 after ITEM-INFO's -350). $F03E
                                                ; itself (X = 3,072) puts the bank-0 -> 4 straddle
                                                ; inside the hero session at 194 B waste (Mage 114): every level need +192 / +112, slack
@@ -462,6 +462,8 @@ ROOM_CUT        EQU $BA7A           ; AI-SEEK2: the room's walker cut col K (gam
                                     ;   else L2_MIDB b - 1, else $FF = none): seg0(x) = x > K
 PL_SEG          EQU $BA7B           ; AI-SEEK2: the hero's target segment, pl_seg3: $00 / $01 = storey-0 left / right
                                     ;   half, $80 = storey 1 (a mid-climb on an internal ladder = the end he is heading to)
+FLY_CUT         EQU $BA7C           ; FLY-CUT: the room's FLYER cut col = the L2 mid-block's b - 1 (= ROOM_CUT there), $FF = none
+                                    ;   (pits do not cut flyers); build_room_map, read by lowram fly_cut
 BLIT_CROWS      EQU $BA79           ; aligned blit: char rows left
 SEL_FRT_SAVE    EQU $BA80           ; 2 x FRT_STRIDE: boot FRT rows of the select idles ($BA80..$BA9F)
 MSG_Q           EQU $BA78           ; queued impact message: attacker slot + 1 (0 = none)

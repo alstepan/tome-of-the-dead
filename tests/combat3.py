@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from game_lib import Harness, Proto, S, EMU_ARGS, K_KNIGHT, K_WIZARD, K_GHOST, K_RAT, K_BAT, K_SLIME, K_SKELETON  # noqa: E402
 
 STUB = S["LOWRAM_END_3B"]
-RES = STUB + 200
+RES = S["tut_stub_end"]                # the TUT0 stub room's free tail (.. sel_tab; DECOR2-SHIP: STUB + 200 hit ts_icon)
 STRIDE = S["P_ENT_STRIDE"]
 EF_ACTIVE, EF_PLAYER, EF_HOSTILE, EF_DYING = 1, 2, 4, 16
 EF_RESPAWN = S["EF_RESPAWN"]
@@ -63,7 +63,7 @@ class T(Proto):
     def code(self, body, limit=20000000):
         code = bytes([0xF3, 0x31] + w16(S["WORKSTORE_TOP"]) + body + [0x00, 0x18, 0xFE])
         end = STUB + len(code) - 3
-        assert STUB + len(code) <= RES
+        assert STUB + len(code) <= S["gen_idles"]      # BALANCE-PKG5 review: the stub window, as game.py / lp.py
         self.wmem(STUB, code)
         self.z.cmd("set-breakpoint 3 PC=%d" % end)
         self.extra_probes = {end}

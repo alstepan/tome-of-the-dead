@@ -27,10 +27,12 @@
 ; dmg_roll — RECLAIM-B: the shared melee / ability damage roll (do_attack,
 ; rank3 abil_hit). In : IX = attacker.  Out: A = 1d(KT_DIE) + KT_BONUS (signed: the
 ; hero's weapon m, gear6 hero_recalc), F from that add (Z / S for the max(1, ..)
-; clamp), C = N, D = the bonus.  Keeps E.  Clobbers: A, B, C, D, HL, F.
+; clamp), C = N, D = the bonus (a monster's: x the depth scale).  Keeps E for the hero
+; (rank3 abil_hit); a monster's E is lost (dsc_roll).  Clobbers: A, B, C, D, HL, F.
 ; One rng_mod (the RNG order is unchanged). The bonus is read first so the die
 ; column is reached from the same HL (KT_DIE / KT_BONUS share page 0):
-; 105 T + rng_mod (+1 T vs the two inline KFIELDs it replaces).
+; 105 T + rng_mod (+1 T vs the two inline KFIELDs it replaces); BALANCE-PKG5: +30 T
+; for the hero, + dsc_roll for a monster (N / B scaled by depth: balance_v2 §8).
 ;------------------------------------------------------------------------------
 dmg_roll:
                 KFIELD KT_BONUS
@@ -39,6 +41,8 @@ dmg_roll:
                 sub  KT_BONUS - KT_DIE         ; L = kind + KT_DIE (no borrow: kind < 32)
                 ld   l, a
                 ld   c, (hl)
+                bit  EF_PLAYER_BIT, (ix+E_FLAGS)  ; BALANCE-PKG5: a monster's N / B x the depth
+                call z, dsc_roll               ; scale (low RAM dscl.asm; clobbers E: do_attack keeps its byte in B)
                 call rng_mod                   ; 0..N-1 (keeps C, DE)
                 inc  a
                 add  a, d
@@ -74,13 +78,14 @@ do_attack:
                 ld   h, kx_tab >> 8
                 ld   c, (hl)
                 inc  l
-                ld   e, (hl)
+                ld   b, (hl)                   ; (B: dmg_roll loses a monster's E, BALANCE-PKG5 dsc_roll)
                 push bc
-                call dmg_roll                  ; damage: 1dN + bonus (keeps E)
+                call dmg_roll                  ; damage: 1dN + bonus (x the depth scale: a monster)
                 jr   z, .one                   ; 3F-T6: max(1, 1dN + bonus) (a worn weapon at m < 0)
                 jp   p, .pos
 .one:           ld   a, 1
 .pos:           pop  bc
+                ld   e, b                      ; C / E = the kind's melee pair
                 call atk_mod                   ; 3F-T8: golden + 1; the Ogre's SLAM x 1.5 + STUN
                 ld   b, a
                 ld   a, (TMP2)
@@ -511,6 +516,7 @@ rs_self:        ld   c, DTY_DARK | DH_NODEF
 ; dx_to_player — D = sign(player.x - x) (0 if equal; Z iff D = 0 on return).  Clobbers: A
 dx_to_player:
                 ld   a, (P_ENTITIES + E_X)
+dx_to_a:                                       ; FLY-CUT: D = sign(A - x) toward col A (Z: there)
                 ld   d, 0
                 cp   (ix+E_X)
                 ret  z
@@ -609,7 +615,13 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 ld   h, 0
                 call ai_rhook
                 ret  c
-                ld   a, (PL_STOREY)
+                ; FLY-CUT (game.md §9.2): the hero in the other storey-0 half of a mid-block room -> fly round
+                ; it through the ladder shafts (lowram fly_cut: seek_col's pick). No mid-block: +64 T a turn (measured)
+                call fly_cut                   ; (HOT_COPY head + lowram fly_cut2)
+                jr   c, .rules
+                jp   z, step_dy                ; at the shaft: straight down / up through its hole (E)
+                jr   .dy                       ; D = dx toward the shaft col
+.rules:         ld   a, (PL_STOREY)
                 ld   hl, TMP4
                 cp   (hl)
                 jr   nz, .wander
@@ -646,11 +658,15 @@ ai_flyer:                                      ; BC / DE = the box (ai_monster's
                 MUL_STOREY b
                 inc  a                         ; 9s+1: the cruising row
                 ld   e, 0
-                cp   (ix+E_Y)
+                sub  (ix+E_Y)
                 jr   z, .try
-                ld   e, 1
-                jr   nc, .try
                 ld   e, $FF
+                jr   c, .try                   ; below the cruising row: up
+                ld   e, 1
+                dec  a
+                jr   z, .try                   ; y = 9s (the band top)
+                ld   d, 0                      ; FLY-CUT: y < 9s, the body still in the floor row after a
+                                               ; shaft descent: straight down until it is in its band
                 jr   .try
 .wander:
                 KFIELD KT_FLAGS

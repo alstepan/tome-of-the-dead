@@ -102,7 +102,7 @@ info_whirl      "WHIRLWIND       MP4 RNG1    BOTH SIDES"
 info_daggers    "THROW DAGGER    MP0 RNG6    1D4+2"
 info_bow        "BOW             MP0 RNG14   1D6+1"
 info_spark      "SPARK           MP2 RNG6    SHOCK 1D4+1"
-info_firebolt   "FIREBOLT        MP5 RNG8    1D8 BURST"
+info_firebolt   "FIREBOLT        MP5 RNG8    1D8-1 BURST"
 info_frost      "FROST SHARD     MP3 RNG10   FREEZE BOUNCE1"
 info_drain      "DRAIN LIFE      MP3 RNG6    HEALS YOU"
 info_lightning  "LIGHTNING       MP5 RNG16   PIERCE BOUNCE1"
@@ -190,10 +190,10 @@ THE 3C MENUS
 # max 15 chars + gap, so POWER STRIKE III is POWER STRK III) -------------------
 info_spark2     "SPARK II        MP4 RNG9    SHOCK 1D8+2"
 info_spark3     "SPARK III       MP6 RNG10   1D8+4 CONFUSE"
-info_firebolt2  "FIREBOLT II     MP6 RNG8    1D8+2 BURST"
-info_firebolt3  "FIREBOLT III    MP10 RNG10  1D10+4 SAFE"
-info_frost2     "FROST SHARD II  MP5 RNG10   1D8+2 FRZ3 B2"
-info_frost3     "FROST SHARD III MP7 RNG12   1D8+4 FREEZE4"
+info_firebolt2  "FIREBOLT II     MP6 RNG8    1D8+1 BURST"
+info_firebolt3  "FIREBOLT III    MP10 RNG10  1D10+3 SAFE"
+info_frost2     "FROST SHARD II  MP5 RNG10   1D8+1 FRZ3 B2"
+info_frost3     "FROST SHARD III MP7 RNG12   1D8+3 FREEZE4"
 info_drain2     "DRAIN LIFE II   MP5 RNG8    1D8+3 HEALS"
 info_drain3     "DRAIN LIFE III  MP7 RNG8    1D8+6 HEALS"
 info_lightning2 "LIGHTNING II    MP8 RNG16   1D8+7 PIERCE"
@@ -324,11 +324,11 @@ hint_book       "READ IT IN THE BAG"
 mn_tut          "NEW? START > TUTORIAL"
 # ITEM-INFO §3 (ux0.asm ie_line, the bag page's row 19): effect phrases, then the two gate phrases;
 # ie_* <= 40 chars (textpack IE_MAX); KEEP THIS ORDER (ie_map indexes TX_IE_CURE + k); the digits
-# 6 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
+# 9 / 8 / +3 / +1 / +2 are kept in step with SCR_FEAR_T / SCR_SLEEP_T / the Enchant cap / the staff
 # bonuses by tests/itemtab.py
 ie_cure         "CURES POISON WEAK CONFUSED FEAR"
 ie_teleport     "SENDS YOU TO ANOTHER ROOM"
-ie_fear         "ROOM'S MONSTERS FLEE 6 TURNS"
+ie_fear         "ROOM'S MONSTERS FLEE 9 TURNS"
 ie_sleep        "ROOM'S MONSTERS SLEEP 8 TURNS"
 ie_enchant      "A RANDOM WORN ITEM +1, UP TO +3"
 ie_book         "READ: A NEW SKILL OR A RANK"

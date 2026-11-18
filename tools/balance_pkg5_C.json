@@ -1,0 +1,2 @@
+{"_doc": "PACKAGE 5 option C (balance_v2.md sec 6): D3 food 4-5, one extra guaranteed Heal on D3, golden Vampire Lord drain-bite heals half. Use with --ld-pkg4 (+ A, B).",
+ "param": {"FOOD_N_D": {"3": [4, 5]}, "HEAL_EXTRA_D": {"3": 1}, "GOLD_DRAIN_DIV": 2}}

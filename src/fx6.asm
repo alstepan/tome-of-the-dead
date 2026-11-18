@@ -308,7 +308,7 @@ fx_eat:
 ;  Enchant   ench_any (gear6.asm): "ENCHANTED: <name>" / "NOTHING HAPPENS"
 ;  book      fx_book (game.md §5 reading rules)
 ;------------------------------------------------------------------------------
-SCR_FEAR_T      EQU 6               ; game.md §8: Fear "flee 6 turns"
+SCR_FEAR_T      EQU 9               ; game.md §8: Fear "flee 9 turns" (BALANCE-PKG5 C4, was 6: time to cross a room to an exit)
 SCR_SLEEP_T     EQU 8               ; game.md §8: Sleep "ASLEEP 8 turns"
 fx_read:
                 ld   a, b
@@ -585,6 +585,11 @@ it_amt:         add  a, a
 ;  - the room: uniform (gameplay RNG) among the present rooms != CUR_ROOM,
 ;    != LVL_SANCTUM, != LVL_LAIR while its boss lives (stand-in until 3F:
 ;    LF_UNIQUE = the boss's kill was seen); none (PROTO) -> CUR_ROOM;
+;    BALANCE-PKG5 C1 (balance_v2 §7c, the "safe landing"): pass 1 takes only
+;    the SAFE rooms of those, LP record header == LR_VISITED exactly (entered
+;    before, 0 banked residents: no lazy spawn on arrival, no body to land
+;    by); none (or none with a legal spot) -> pass 2 = the old rule (tp_msk 0).
+;    Trickle / progress respawns still refill a safe room later (no stealth);
 ;  - the spot: the room's LP_CMAP (far3 lp_cmap: ladders / shafts / exits +
 ;    their end boxes with the 1-col margin, the pit + caps + landing, the
 ;    blocks, the horizontal arrival boxes) + its unspent trap cols (tp_room):
@@ -608,6 +613,7 @@ TELE_W          EQU 3               ; both heroes' KT_BW (kind_tab)
 TELE_MID        EQU 14              ; Q6 fallback: the nearest legal col to 14 on storey 1
 TELE_XN         EQU LP_XMAX - TELE_W + 1 - LP_XMIN + 1   ; 26 cols: 2..27
 TELE_XHI        EQU LP_XMAX - TELE_W + 1                 ; 27
+TP_SAFE         EQU LR_VISITED | LR_CNT_MASK             ; C1 pass-1 mask: VISITED set and count 0
 tele_pick:
                 ld   hl, CAND_LIST
                 ld   b, P_MAX_ENT
@@ -616,6 +622,8 @@ tele_pick:
                 djnz .cl
                 xor  a
                 ld   (FOLLOW_N), a
+                ld   a, TP_SAFE                ; C1: pass 1 = the safe rooms only
+.all:           ld   (tp_msk), a
                 ; --- the eligible rooms -> fx_cand (<= 8) ---
                 ld   hl, ROOM_DESC + RD_FLAGS
                 ld   de, fx_cand
@@ -634,7 +642,9 @@ tele_pick:
                 ld   a, (LVL_FLAGS)
                 and  LF_UNIQUE
                 jr   z, .rn                    ; the lair while its boss lives
-.ok:            ld   a, b
+.ok:            call tp_safe              ; C1 (low RAM tele_lri.asm): NZ = pass 1 and not safe
+                jr   nz, .rn                   ; (FRESH, or residents left)
+                ld   a, b
                 ld   (de), a
                 inc  e
                 inc  c
@@ -674,7 +684,11 @@ tele_pick:
                 ld   (hl), a
                 ld   hl, tp_n
                 jr   .pick
-.cur:           ld   a, (CUR_ROOM)             ; none (PROTO, or every room full): here
+.cur:           ld   hl, tp_msk                ; C1: no safe room with a spot: pass 2,
+                xor  a                         ; the old rule (every eligible room)
+                cp   (hl)
+                jp   nz, .all                  ; (A = 0 = the pass-2 mask)
+                ld   a, (CUR_ROOM)             ; none (PROTO, or every room full): here
                 call tp_room
                 jr   z, .got
                 ld   hl, P_ENTITIES + E_X      ; not even here: where he stands
@@ -781,23 +795,7 @@ tp_room:
                 ASSERT TELE_XHI == LP_XMIN + TELE_XN - 1 && TELE_MID - (TELE_XHI - TELE_MID) < LP_XMIN
 
 
-; tp_ok — D = storey, E = col: Z = LP_CMAP clear under cols E .. E+2.
-; Keeps BC, DE.  Clobbers: A, HL.   ~90 T
-tp_ok:          ld   hl, LP_CMAP
-                inc  d
-                dec  d
-                jr   z, .s
-                ld   l, (LP_CMAP + LP_CMW) & $FF
-.s:             ld   a, l
-                add  a, e
-                ld   l, a
-                ld   a, (hl)
-                inc  l
-                or   (hl)
-                inc  l
-                or   (hl)
-                ret
-                ASSERT TELE_W == 3 && (LP_CMAP >> 8) == ((LP_CMAP + 2 * LP_CMW - 1) >> 8)
+; (tp_ok: BALANCE-PKG5 moved it to low RAM for R6 room: C1; tele_lri.asm.)
 
 ; variables (written in play; r6.asm rules)
 fx_slot:        DB   0                         ; the bag slot being used

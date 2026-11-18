@@ -74,17 +74,12 @@ boot:
                 ld   iy, IY_SYSVAR             ; the tape path's ROM IM1 needs it (conventions)
                 ld   a, BANK_POOL0
                 call page_bank                 ; a valid shadow for farb's restore
-                ld   hl, boot6_init            ; IM 2 (EI below, once the shadow is
-                ld   c, BANK_BOOT6             ; valid) + the power-on state
-                call farb
-                ei
-                call build_bitrev
-                ld   hl, boot6_tiles           ; the common set, ornament, the panel hot
-                ld   c, BANK_BOOT6             ; code and the FONT6 planes (B3B-8 /
-                call farb                      ; B3B-11; were bank 7 init_tiles / panel_boot)
-                ld   hl, boot6_wait            ; the loading picture + title tune until a key,
-                ld   c, BANK_BOOT6             ; (INSTR-BUILD overlay): before the boot
-                call farb                      ; pool, which overwrites its bank-4 BOOT4 streams
+                ld   hl, boot6_init            ; one farb (PKG5+FLY-CUT reclaim, was 3 + EI / build_bitrev
+                ld   c, BANK_BOOT6             ; here): IM 2 + the power-on state, EI (the shadow is valid),
+                call farb                      ; BITREV_TAB, boot6_tiles (common set, ornament, the panel hot
+                                               ; code, FONT6 planes), boot6_wait (the loading picture + title
+                                               ; tune until a key, INSTR-BUILD overlay): all before the boot
+                                               ; pool, which overwrites the boot block + its bank-4 BOOT4 streams
                 ; 3F-T1: the boot pool is the two select idles only; the hero
                 ; (start_game) and each level's monster kinds (level_enter)
                 ; are generated above them later
@@ -106,7 +101,9 @@ gen_idles:
                 jp   gen_frame
 
 ; tape_tab — start's blocks: bank, address, length (main.asm TAPE_BLOCKS, the
-; one list the SAVETAPs expand too)
+; one list the SAVETAPs expand too). Dead once instr_ovl in_tut read it at boot:
+; PKG5+FLY-CUT reclaim, the boot-installed tele_lri.asm lives here then (main.asm
+; "LOW-RAM INSTALLED BLOCK"; tests must not use it as scratch)
 TT_STRIDE       EQU 5
 tape_tab:       TAPE_BLOCKS 0                  ; main.asm: the same list the SAVETAPs use
                 DB   $FF                       ; end (no bank is $FF: TAPE_BLK ASSERTs < 8)
@@ -1353,7 +1350,7 @@ climb_blocked:
                 pop  af
                 inc  a
                 cp   P_MAX_ENT
-                jp   c, .l                     ; (out of jr range since B19)
+                jr   c, .l                     ; (FLY-CUT: back in jr range, -1 B)
                 xor  a
                 ld   (ACT_SLOT), a             ; (the hero's turn: 0, try_player_turn)
                 call build_live                ; PENDING ones stop colliding
@@ -1893,19 +1890,9 @@ present_full:
                 dec  a
                 ld   (PRES_RMIN), a            ; $FF: no marked row
                 ld   a, P7FFD_SCREEN7
-                jp   set_screen
+                jr   set_screen
 
-;==============================================================================
-; init_kbd_mirror — all released.  Clobbers: A, B, HL
-;==============================================================================
-init_kbd_mirror:
-                ld   hl, KBD_MATRIX
-                ld   b, KBD_MATRIX_LEN
-                ld   a, KBD_RELEASED
-.r:             ld   (hl), a
-                inc  hl
-                djnz .r
-                ret
+; (init_kbd_mirror: inlined in boot6_init, PKG5+FLY-CUT reclaim; boot only)
 
 ;==============================================================================
 ; BOOT-TIME GENERATOR (prototype §5.1/§5.2). Per frame: get the unshifted
@@ -2001,18 +1988,7 @@ alloc:
                 or   a                         ; CF = 0
                 ret
 
-; build_bitrev — BITREV_TAB[i] = i with bit order reversed.  Boot, ~20k T
-build_bitrev:
-                ld   hl, BITREV_TAB
-.next:          ld   a, l
-                ld   bc, 8 << 8
-.bit:           rra
-                rl   c
-                djnz .bit
-                ld   (hl), c
-                inc  l
-                jr   nz, .next
-                ret
+; (build_bitrev: boot6_init, PKG5+FLY-CUT reclaim; boot only)
 
 ; copy_virt_keep (= copy_virt3, the B3B-11b name its bank-3 callers use) —
 ; copy_virt for code running from a paged bank (far3 / far1 targets: panel_boot
@@ -2286,7 +2262,7 @@ gen_frame:
                 ld   a, (hl)
                 ld   (GEN_OFF), a
                 ld   a, 2
-                jp   gen_facing
+                jr   gen_facing
 
 ; gen_facing — A = variant base (0 right / 2 left). Uses GEN_* state.
 gen_facing:
@@ -2299,7 +2275,7 @@ gen_facing:
                 ld   hl, GEN_VAR
                 inc  (hl)
                 ld   a, 4
-                jp   gen_variant
+                jr   gen_variant
 .stat:
     IF PHASE_SHIFT
                 ld   a, (GEN_FLAGS)            ; FF_PH4 (= 4): drawn at px & 4 = 4,
@@ -2310,11 +2286,11 @@ gen_facing:
                 ld   a, (GEN_OFF)
     ENDIF
                 and  7                         ; anchor implies the one shift
-                jp   z, gen_variant            ; shift 0 -> variant base
+                jr   z, gen_variant            ; shift 0 -> variant base
                 ld   hl, GEN_VAR
                 inc  (hl)                      ; shift 4 -> base + 1
                 ld   a, 4
-                jp   gen_variant
+                jr   gen_variant
 
 ; gen_variant — emit GEN_BASE shifted by A (0/4) into the pool as variant
 ; GEN_VAR of GEN_FID. Clobbers: all but IX.
@@ -2516,7 +2492,7 @@ mul8:
 ; zx0_frame — DE = VIRTUAL address of the frame's packed block (FD_BLK), BC =
 ; the frame's address in GEN_SCRATCH (FD_FRM). Unpacks the block into
 ; GEN_SCRATCH unless it is already there (GEN_ZBLK = one-block cache: blocks
-; hold 1-4 consecutive fids of one kind, so gen_kind unpacks each block
+; hold 1-8 consecutive fids of one kind (zx0_sources.py MAX_FRAMES), so gen_kind unpacks each block
 ; exactly once). The tool guarantees no packed block straddles virtual $C000,
 ; so the whole stream is in one bank's $C000 window. Virtual map: $4000..$7FFF
 ; = SRC6 (bank 6 at +SRC6_VDELTA; SRC6 spike) and, from $6000, SRC0 (bank 0 at +SRC0_VDELTA, NEW-MON3 T7),
@@ -2659,6 +2635,8 @@ page_run:
                                                ; room entry; B0_CODE2 had no room after T4; low RAM: a plain jp from bank 7)
                 INCLUDE "lgkeyl.asm"           ; LARGER-D T5: kins / kload (T4 lgkey0.asm; B0_CODE2 room)
                 INCLUDE "lockl.asm"            ; LARGER-D T8: the level-key runtime (pickup, unlock, bolt, plates; panel: R6 key6.asm)
+                INCLUDE "dscl.asm"             ; BALANCE-PKG5: dsc_roll, the monster melee depth ramp (from bank-3 dmg_roll)
+                INCLUDE "flyl.asm"             ; FLY-CUT: fly_cut, a flyer's detour round a mid-block (bank-3 ai_flyer)
 
 ;------------------------------------------------------------------------------
 ; vb_far — NEW-MON3 T9 A-1: write the staged list at TX_DEC (DW addr, DB value; DW 0 end) with

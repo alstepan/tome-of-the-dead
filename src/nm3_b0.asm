@@ -115,14 +115,17 @@ nm3_apply:      push bc
 ;------------------------------------------------------------------------------
 lp_dtab:        DB   K_RAT, K_BAT, K_SLIME, K_GOBLIN, K_RAT, K_BAT, K_SLIME, K_GOBLIN,          K_BOSS_D1 | LEK_GOLD, 20
                 DB   K_GOBLIN, K_SPIDER, K_BAT, K_RAT, K_GOBLIN, K_SPIDER, K_BAT, K_RAT,         K_BOSS_D2 | LEK_GOLD, 21
-                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT, K_GOBLIN, K_GHOST, K_VAMPIRE, K_GHOST,    K_BOSS_D3 | LEK_GOLD, 21
-                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER, K_ALIAS, K_ORC, K_ARCHER, K_RAT,          K_BOSS_D4, 23      ; K_ALIAS = Fire Imp (A)
-                DB   K_MUMMY, K_SPIDER, K_SKELETON, K_ARCHER, K_GARGOYLE, K_ALIAS, K_MUMMY, K_ARCHER,  K_BOSS_D5 | LEK_GOLD, 24   ; = Frost Wraith (B)
-                DB   K_VAMPIRE, K_GARGOYLE, K_ALIAS, K_GHOST, K_NECRO, K_ORC, K_VAMPIRE, K_ORC,  K_BOSS_D6 | LEK_GOLD, 23   ; = Fire Imp (A)
-                DB   K_ORC, K_GHOST, K_NECRO, K_ALIAS, K_MUMMY, K_SPIDER, K_NECRO, K_NECRO,      K_BOSS_D7, 23      ; = Frost Wraith (B)
-                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_ORC, K_ALIAS, K_NECRO, K_NECRO,  K_BOSS_D8, 18      ; = Frost Wraith (B)
+                DB   K_SKELETON, K_VAMPIRE, K_GHOST, K_BAT, K_GOBLIN, K_GOBLIN, K_VAMPIRE, K_GHOST,   K_BOSS_D3 | LEK_GOLD, 21   ; PKG5 §6 A: Ghost 3 -> 2, Goblin 1 -> 2
+                DB   K_ORC, K_RAT, K_SPIDER, K_ARCHER, K_ALIAS, K_ORC, K_ARCHER, K_RAT,          K_BOSS_D4, 25      ; K_ALIAS = Fire Imp (A); PKG5 M1: 23 -> 25
+                DB   K_MUMMY, K_SPIDER, K_SKELETON, K_ARCHER, K_GARGOYLE, K_ALIAS, K_MUMMY, K_ARCHER,  K_BOSS_D5 | LEK_GOLD, 24   ; = Frost Wraith (B); PKG5 M1 asks 26: kept at LP_N_MAX (lpop3.asm)
+                DB   K_VAMPIRE, K_GARGOYLE, K_ALIAS, K_GHOST, K_NECRO, K_ORC, K_VAMPIRE, K_ORC,  K_BOSS_D6 | LEK_GOLD, 25   ; = Fire Imp (A); PKG5 M1: 23 -> 25
+                DB   K_ORC, K_GHOST, K_NECRO, K_ALIAS, K_MUMMY, K_SPIDER, K_NECRO, K_NECRO,      K_BOSS_D7, 25      ; = Frost Wraith (B); PKG5 M1: 23 -> 25
+                DB   K_NECRO, K_SKELETON, K_GHOST, K_VAMPIRE, K_ORC, K_ALIAS, K_NECRO, K_NECRO,  K_BOSS_D8, 18      ; = Frost Wraith (B) (PKG5 M1: 18 = the sim value already)
 LP_DROW         EQU 10
                 ASSERT $ - lp_dtab == LEVELS * LP_DROW
+                DUP LEVELS, d                  ; BALANCE-PKG5 review: every row's count <= LP_N_MAX (lpop3.asm)
+                ASSERT {b lp_dtab + d * LP_DROW + LP_DROW - 1} <= LP_N_MAX
+                EDUP
 
 ;------------------------------------------------------------------------------
 ; lp_post (boss0.asm, was R6 boss6.asm): FARB0 from bank-3 lp_enter, once per lair unit.

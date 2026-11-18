@@ -242,6 +242,7 @@ def w16(v):
 def run_code(p, code, limit=4000000):
     """Run raw Z80 at STUB_ORG under DI up to its end (jr $). -> (ok, T)."""
     code = bytes(code) + b"\x18\xfe"
+    assert len(code) <= 61, "run_code stub %d B > 61 B (ASSERT LOWRAM_SPARE >= 61 in main.asm)" % len(code)
     end = STUB_ORG + len(code) - 2
     p.z.cmd("write-memory %d %s" % (STUB_ORG, " ".join(str(b) for b in code)))
     p.z.cmd("set-breakpoint 3 PC=%d" % end)

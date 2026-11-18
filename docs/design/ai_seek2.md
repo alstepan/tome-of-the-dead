@@ -243,7 +243,7 @@ R5 cost ≈ 10 B more and fix F3 / keep F7. Bank 3 ends with more free space tha
   the nearest shaft is busy)? **No** for now: AI-L1 queue handles it; ≈ 15 B if wanted.
 - **Q3** Flyers vs a mid-room block (solid in storey-0 rows 0..7): not checked here. **Keep
   the flyer rules**; the engineer reports if a flyer can be pinned at a block face, then a
-  flyer fix is a separate item.
+  flyer fix is a separate item. **Resolved by FLY-CUT (2026-11-17):** flyers were pinned; they now detour through the shafts (game.md §9.2 "FLY-CUT").
 - **Q4** Non-climbers when the hero climbs away: **patrol** (R2, consistent with
   "gone"). Alternative "wait at the foot" costs a raw-storey special case (≈ 6 B).
 - **Q5** Placement: **bank 2** for `seek_col` if it has ≥ 80 B free, else R6 via far6.

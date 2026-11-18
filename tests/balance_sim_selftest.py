@@ -35,7 +35,7 @@ def test_tables(D):
         stem = {"Whirl": "Whirl"}.get(name, name)
         for r, row in enumerate(rows):
             got = D.rank[stem][r]
-            check("rank %s %d" % (name, r + 1), [got[k] for k in ("mp", "range", "die", "bonus", "bounces", "effect")] == list(row), str(got))
+            check("rank %s %d" % (name, r + 1), [got[k] & 0xFF for k in ("mp", "range", "die", "bonus", "bounces", "effect")] == list(row), str(got))
     check("xpn", D.xpn == C.XP_NEXT, str(D.xpn))
     check("ogre row", D.k[D.id("OGRE")]["hp"] == 36 and D.k[D.id("OGRE")]["res"][B.PHYS] == 0 and D.k[D.id("OGRE")]["res"][B.SHOCK] == 4)
     check("vampire fire N (package 4)", D.k[D.id("VAMPIRE")]["res"][B.FIRE] == 0)
@@ -163,8 +163,8 @@ def test_damage_pipeline(D):
         m.h.mp = 30
         m.cast("Firebolt", 1, D.rank["Firebolt"][0], [vamp], vamp)
         seen.add(500 - vamp.hp)
-    # Firebolt R1 1d8+0, +2 staff, neutral: d+2 = 3..10
-    check("firebolt N staff range", min(seen) == 3 and max(seen) == 10, str(sorted(seen)))
+    # Firebolt R1 1d8-1 (package 5; was 1d8+0), +2 staff, neutral: d+1 = 2..9
+    check("firebolt N staff range", min(seen) == 2 and max(seen) == 9, str(sorted(seen)))
     ghost = B.Mon(D, D.id("GHOST"), 1)         # SHOCK R (package 4; was X): half damage, no reflect
     ghost.hp = ghost.maxhp = 50
     ghost.x = 3
@@ -358,9 +358,183 @@ def test_bal_knobs(D):
     check("met counted", r["met"] > 10 * 5)
 
 
+def test_pkg5(D0):
+    """Package 5 knobs (balance_v2.md sec 6): defaults = package 4; option A/B/C override files take effect."""
+    import json
+    jl = lambda n: json.load(open(os.path.join(REPO, "tools", "balance_pkg5_%s.json" % n)))
+    P0 = B.PARAMS
+    check("pkg5 defaults", P0["TRK_MIN_DEPTH"] == 1 and P0["FOOD_N_D"] is None and P0["HEAL_EXTRA_D"] is None and P0["GOLD_DRAIN_DIV"] == 1)
+    base = B.ld_preset(True)
+    D4 = B.Data(base)
+    ghost = lambda D: D.k[D.kid["GHOST"]]
+    # BALANCE-PKG5 built: the asm kx_tab the sim reads already carries option A's Ghost 1 in 8
+    check("pkg5 asm ghost confuse 1 in 8", ghost(D4)["efx"] == 5 and ghost(D4)["ech"] == 8, str((ghost(D4)["efx"], ghost(D4)["ech"])))
+    DA = B.Data(B.merge(base, jl("A")))
+    cnt = lambda D, d, n: D.lp[d].count(D.kid[n])
+    check("A ghost confuse 1 in 8", ghost(DA)["ech"] == 8)
+    check("A D3 mix", (cnt(D4, 3, "GHOST"), cnt(D4, 3, "GOBLIN"), cnt(DA, 3, "GHOST"), cnt(DA, 3, "GOBLIN")) == (3, 1, 2, 2))   # (lists: the json preset, not the asm)
+    check("A D4 count", D4.params["MON_COUNT"][3] == 23 and DA.params["MON_COUNT"][3] == 24 and DA.params["MON_COUNT"][2] == 21)
+    check("A keeps other depths", all(DA.lp[d] == D4.lp[d] for d in (1, 2, 4, 5, 6, 7, 8)))
+    DB = B.Data(B.merge(base, jl("B")))
+    for D, want in ((D4, True), (DB, False)):
+        g = new_game(D, "W", 5)
+        g.depth = 3
+        g.visited_cleared = 1
+        g.resp_count = 0
+        g.in_boss_dead = False
+        g.respawns_pending = []
+        g.P = dict(g.P, TRICKLE_P=1.0)
+        g.trickle(0, 4800)
+        check("B trickle at D3 " + str(want), bool(g.respawns_pending) == want)
+        g.depth, g.resp_count, g.respawns_pending = 4, 0, []
+        g.trickle(0, 4800)
+        check("B trickle at D4", bool(g.respawns_pending))
+    DC = B.Data(B.merge(base, jl("C")))
+    def floor(D, d):
+        g = new_game(D, "W", 7)
+        g.level_items(d)
+        return g.floor
+    for sd in range(20):
+        g = new_game(DC, "W", sd)
+        g.level_items(3)
+        check("C D3 food 4-5", 4 <= len(g.floor["food"]) <= 5)
+        g.level_items(2)
+        check("C D2 food unchanged", 3 <= len(g.floor["food"]) <= 5)
+    pots = lambda D: sum(floor(D, 3)["pots"].count("heal") for _ in range(1))
+    g4, gc = new_game(D4, "W", 7), new_game(DC, "W", 7)
+    g4.level_items(3)
+    gc.level_items(3)
+    check("C D3 extra heal", gc.floor["pots"].count("heal") >= g4.floor["pots"].count("heal") + 1 - 3 and len(gc.floor["pots"]) == len(g4.floor["pots"]) + 1,
+          str((g4.floor["pots"], gc.floor["pots"])))
+    # golden drain-bite: the Vampire Lord heals dm // 2 (base Vampire full)
+    for D, div in ((D4, 1), (DC, 2)):
+        g = new_game(D, "W", 3)
+        g.depth = 3
+        g.h.hp = g.h.maxhp
+        for gold, want in ((True, 6 // div), (False, 6)):
+            m = B.Mon(D, D.kid["VAMPIRE"], 3, gold=gold)
+            m.hp = 1
+            m.maxhp = 100
+            m.x = 1
+            g.rr = lambda: 0.0
+            g.hit_hero_chance = lambda atk: 1.0
+            D.k[D.kid["VAMPIRE"]].update(die=1, bonus=5, efx=0)
+            g.h.df = 0
+            g.h.res = [0] * 6
+            g.dmg_hero = lambda dm, *a, **k: None
+            g.hero_res = lambda ty, dm: 6
+            g.mon_melee(m, 1)
+            check("drain heal gold=%s div=%d" % (gold, div), m.hp - 1 == want, str(m.hp - 1))
+
+
+def test_pkg5v2(D0):
+    """Package 5 v2 knobs: PICKUP, BOOK_ORDER, FOOD_BURN (hunger); defaults = package 4."""
+    check("v2 defaults", B.PARAMS["PICKUP"] == 1.0 and B.PARAMS["BOOK_ORDER"] == 0 and B.PARAMS["FOOD_BURN"] == 6)
+    D = B.Data({"param": {"PICKUP": 0.0}})
+    g = new_game(D, "W", 4)
+    g.build_level(1)
+    n0 = len(g.floor["pots"]) + len(g.floor["food"])
+    g.pick_some(1.0)
+    check("PICKUP 0 takes nothing", len(g.floor["pots"]) + len(g.floor["food"]) == n0 and n0 > 0)
+    Do = B.Data({"param": {"BOOK_ORDER": 1}})
+    g = new_game(Do, "M", 4)
+    g.depth = 3
+    for _ in range(3):
+        g.read_book()
+    check("BOOK_ORDER mage D3: Spark, Firebolt, Frost", [g.h.ranks[a] for a in B.ABIL[:5]] == [1, 1, 1, 0, 0], str(g.h.ranks))
+    g.depth = 5
+    for _ in range(2):
+        g.read_book()
+    check("BOOK_ORDER D5: Drain, Lightning", [g.h.ranks[a] for a in B.ABIL[:2]] == [1, 1] and g.h.ranks[B.ABIL[3]] == 1 and g.h.ranks[B.ABIL[4]] == 1)
+    g.read_book()
+    check("BOOK_ORDER falls back to rank-up/tome", sum(g.h.ranks[a] for a in B.ABIL[:5]) == 6 or getattr(g.h, "power", 0) == 1)
+    g = new_game(Do, "W", 4)
+    g.depth = 2
+    g.h.ranks["Power"] = 1
+    g.read_book()
+    check("BOOK_ORDER W before D3: no Whirl", g.h.ranks["Whirl"] == 0)
+    g.depth = 3
+    g.read_book()
+    check("BOOK_ORDER W D3: Whirl", g.h.ranks["Whirl"] == 1)
+    Db = B.Data({"param": {"FOOD_BURN": 8}})
+    g = new_game(Db, "W", 4)
+    f0 = g.h.food
+    g.t = 0
+    g.adv(96)
+    check("FOOD_BURN 8: 12 food per 96 turns", f0 - g.h.food == 12, str(f0 - g.h.food))
+
+
+def test_pkg5v3(D0):
+    """Package 5 v2 (balance_v2.md sec 7) knobs: defaults = package 4; scroll weights / guarantee, Fear turns, respawn cap, Firebolt-first, avoid_pro, stats."""
+    P0 = B.PARAMS
+    check("v3 defaults", P0["TELE_AMBUSH"] == 0.0 and P0["SCR_W"] is None and P0["SCR_GUAR_D2"] == 0 and P0["FEAR_SCR_T"] == 6
+          and P0["RESPAWN_MAX_D4"] is None and P0["MAGE_FB_FIRST"] == 0)
+    D = B.Data({"param": {"SCR_W": [8, 0, 0, 0], "SCR_N": [2, 2]}})
+    g = new_game(D, "W", 3)
+    g.build_level(1)
+    check("SCR_W all Teleport", g.floor["scr"] == ["tele", "tele"], str(g.floor["scr"]))
+    D = B.Data({"param": {"SCR_W": [0, 0, 0, 8], "SCR_N": [2, 2], "SCR_GUAR_D2": 1}})
+    g = new_game(D, "W", 3)
+    g.build_level(2)
+    check("SCR_GUAR_D2 forces a Teleport", "tele" in g.floor["scr"] and len(g.floor["scr"]) == 2, str(g.floor["scr"]))
+    g.build_level(3)
+    check("SCR_GUAR_D2 only D2", "tele" not in g.floor["scr"])
+    D = B.Data({"param": {"RESPAWN_MAX_D4": 8}})
+    g = new_game(D, "W", 3)
+    g.depth = 3
+    c3 = g.rmax()
+    g.depth = 4
+    check("RESPAWN_MAX_D4", c3 == 6 and g.rmax() == 8)
+    D = B.Data({"param": {"MAGE_FB_FIRST": 1}})
+    g = new_game(D, "M", 3)
+    g.depth = 1
+    g.read_book()
+    g.depth = 2
+    g.read_book()
+    check("MAGE_FB_FIRST: Spark then Firebolt", g.h.ranks["Spark"] == 1 and g.h.ranks["Firebolt"] == 1, str(g.h.ranks))
+    pol = B.POLICIES["expert+charm_food+rest_fed-no_rest_full-no_jump_p+avoid_pro"]
+    check("avoid_pro flag", pol.get("avoid_pro") == 1 and not pol.get("avoid") and pol.get("rest_fed") == 1 and pol["jump_p"] == 0.0, str(pol))
+    r = B.run_batch(B.Data(B.ld_preset(True)), "M", "average", 12, "v3", 0)
+    check("stats present", r["n"] == 12 and len(r["food3"]) > 0 and 0 <= r["hungry5"] <= 12 and "xs" in r)
+
+
+def test_pkg5v4(D0):
+    """Package 5 v3 knobs: per-depth monster HP / damage scales (round half up), boss exemption, defaults off."""
+    P0 = B.PARAMS
+    check("v4 defaults", P0["MON_HP_SCALE_D"] is None and P0["MON_DMG_SCALE_D"] is None and P0["MON_ATK_D"] is None and P0["MON_SCALE_NO_BOSS"] == 0)
+    sc = [1.0, 1.0, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]
+    D = B.Data({"param": {"MON_HP_SCALE_D": sc, "MON_DMG_SCALE_D": sc, "MON_ATK_D": [0, 0, 1, 1, 1, 1, 1, 1]}})
+    k = D.kid["ORC"]
+    m1, m4 = B.Mon(D0, k, 4), B.Mon(D, k, 4)
+    check("HP scale D4 round half up", m4.maxhp == int((m1.maxhp) * 1.5 + 0.5), str((m1.maxhp, m4.maxhp)))
+    check("atk +1, dsc 1.5", m4.atk == m1.atk + 1 and m4.dsc == 1.5 and B.Mon(D, k, 2).maxhp == B.Mon(D0, k, 2).maxhp and B.Mon(D, k, 2).dsc == 1.0)
+    Db = B.Data({"param": {"MON_HP_SCALE_D": sc, "MON_DMG_SCALE_D": sc, "MON_SCALE_NO_BOSS": 1}})
+    og = D.kid["OGRE"]
+    check("boss exempt", B.Mon(Db, og, 4).maxhp == B.Mon(D0, og, 4).maxhp and B.Mon(Db, og, 4).dsc == 1.0 and B.Mon(Db, k, 4).dsc == 1.5)
+
+
+def test_pkg5final(D0):
+    """Package 5 final: DROP_ALL_P (a kill drops one random food, tagged), eat_pop splits eaten food floor / drop."""
+    check("drop default off", B.PARAMS["DROP_ALL_P"] is None)
+    D = B.Data({"param": {"DROP_ALL_P": [1.0] * 8}})
+    g = new_game(D, "W", 5)
+    g.depth = 3
+    n0 = len(g.h.bagfood)
+    m = B.Mon(D, D.kid["SKELETON"], 3)
+    g.kill(m)
+    check("drop food on kill", len(g.h.bagfood) == n0 + 1 and isinstance(g.h.bagfood[-1], B.DropFood), str(g.h.bagfood))
+    mr = B.Mon(D, D.kid["SKELETON"], 3, resp=True)
+    g.kill(mr)
+    check("no drop from a respawn", len(g.h.bagfood) == n0 + 1)
+    g.h.bagfood = [B.DropFood(20), 10]
+    g.eat_pop()
+    g.eat_pop()
+    check("eat_pop split", g.xc.get("eat_drop") == 10 or g.xc.get("eat_floor") == 10, str(g.xc))
+
+
 def main():
     D = B.Data()
-    for t in (test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
+    for t in (test_pkg5final, test_pkg5v4, test_pkg5v3, test_pkg5v2, test_pkg5, test_bal_knobs, test_nm3, test_features, test_tables, test_determinism, test_warrior_goblin, test_mage_spark, test_damage_pipeline, test_policy_sanity):
         t(D)
     test_monotone()
     if FAILS:
