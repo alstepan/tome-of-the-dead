@@ -1205,8 +1205,12 @@ the level curve. Levels are the stat floor; books are the toolkit.
 **Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER` (16), on L6
 `YOU FEEL NIMBLE` (15). Death/win screens show `LEVEL n`.
 
-**Display.** Panel cell **(31, 19)** (free; the key icon is at (30, 19)): the level digit
-`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). The **BAG icon's info line** shows
+**Display.** Panel cell **(31, 19)**: the level digit
+`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). **XP-BAR (user 2026-11-18):** cell **(30, 19)** (under the
+depth readout, beside the digit) holds an 8-px XP progress bar, attr `$46`: fill = `floor(8 * (XP - T(L-1)) / (T(L) - T(L-1)))`
+px from the left (`T` = `XP_NEXT`, `T(0)` = 0; full at L9), in the FOOD bar's style (frame lines 1 / 6, fill lines 2..5, no side
+caps: the width is exact). Queued with the depth item (`PD_DEPTH`: set on every XP gain / level-up and by `panel_init`),
+never drawn in an input tick; D0 shows it too (harmless). 0 new glyphs; `src/sv_r2.asm` `xp_bar` (R2, boot-installed). The **BAG icon's info line** shows
 the numbers: `BAG 12/20  LV 5  XP 412/500` (≤ 42; at L9 `XP 1234`). The inventory page
 header shows the same. 0 new glyphs.
 

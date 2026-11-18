@@ -12,7 +12,7 @@
 | `$4000-$57FF`| Screen bitmap (bank 5)                      | 6144 bytes                    |
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
-| `$5C00-$5CDA`| ROM system variables (**RECLAIM-SV, user 2026-11-18: data + boot-installed code**) | **R1 `$5C00-$5C6F` = `SEQ2`** (sequence cache region 2, 112 B, runtime); `$5C70-$5C77` free (8 B); **`$5C78-$5C7A` = `SYS_FRAMES` (LIVE, the ISR bumps it)**; **R2 `$5C7B-$5CDA` = boot-installed code hole (96 B, empty)** — "RECLAIM-SV ledger" |
+| `$5C00-$5CDA`| ROM system variables (**RECLAIM-SV, user 2026-11-18: data + boot-installed code**) | **R1 `$5C00-$5C6F` = `SEQ2`** (sequence cache region 2, 112 B, runtime); `$5C70-$5C77` free (8 B); **`$5C78-$5C7A` = `SYS_FRAMES` (LIVE, the ISR bumps it)**; **R2 `$5C7B-$5CDA` = boot-installed code hole (96 B: XP-BAR `depth_tail` + `xp_bar`, 1 B free)** — "RECLAIM-SV ledger" |
 | `$5CDB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; **UX1 (ITEM-INFO + UX-POLISH): 95 B = + `UX_RAM` 6 B `$5D59-$5D5E`** (`NEW_MASK`, `LAST_PICK`, `MPF_T`, `UX_FL`; "ITEM-INFO + UX-POLISH ledger"); runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
@@ -7893,7 +7893,7 @@ the IM 2 ISR does not save or use IY).
 | `$5C00-$5C6F` | **R1 `SEQ2`** (`seq2_bytes` EQU, 112 B) | runtime-only: in no tape block, not in the `.sna`; `sq_reset` sets `SQ_TOP2`, `sq_load` fills it (blocks after `ksm_r2`). The ROM IM1 ISR scribbles KSTATE here before `boot`'s `DI` only. ASSERT `SEQ2 + SEQ2_LEN <= SYS_FRAMES` (defs.asm) |
 | `$5C70-$5C77` | free (8 B) | |
 | `$5C78-$5C7A` | `SYS_FRAMES` | **LIVE**: never overlap (ASSERTs in defs.asm / main.asm) |
-| `$5C7B-$5CDA` | **R2 install hole (96 B)**, empty | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
+| `$5C7B-$5CDA` | **R2 install hole (96 B)**: `depth_tail` + `xp_bar` (XP-BAR, 95 B, **1 B free**) | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
 | `$5CDB..` | `DN_KEY` / `DN_A` / `ITEM_RAM` .. (D3-11 / 3E-T3, unchanged) | `tests/items3e.py` canaries start at `SV_R2_END` now |
 
 ### Reclaims (behaviour identical; goldens unchanged)
@@ -7931,10 +7931,21 @@ Cost: bank 1 +7 B (free 11 -> **4**); low RAM / bank 2 / R6 / R2 / R4 / R5 0 B. 
 |---|---|
 | low-RAM cold block (`lowram_code - LOWRAM_FREE_END`) | **197** (was 11) |
 | R1 sysvar spare `$5C70..$5C77` | 8 |
-| R2 `$5C7B..$5CDA` | 96 |
+| R2 `$5C7B..$5CDA` | 96 -> **1** (XP-BAR, 95 B) |
 | R4 print area | 68 |
 | R5 ISR stack slack | 48 (ISR margin 0) |
-| bank 1 UI | 4 (11 before GARG-WAKE; was 28) |
+| bank 1 UI | 4 (11 before GARG-WAKE; was 28; XP-BAR costs 0 here) |
 | R6 | 3 (was 70) |
 | bank 2 | 6 (+3 B `kind_tab` ALIGN pad; free to FRT 3), unchanged |
 | BOOT4 (`BLOB_ORG - boot4_end`) | 544 (unchanged: empty blocks) |
+
+## XP-BAR ledger (`feat/xp-bar-r2`, 2026-11-18; user: show XP progress always; `tests/xpbar.py`; first built on `feat/xp-bar`, re-homed into R2)
+An 8-px XP progress bar in the free panel cell (30, 19) (`XPB_COL` / `XPB_ROW`, level_defs.asm; the old single key-icon cell, black since the keys moved to row 21), attr `ATTR_LVL` $46 (the level digit's gold:
+the bar IS the level's progress; `pi_rects` merges it with the digit into one 2-cell rect, -4 B). Drawn by `xp_bar` (**sv_r2.asm, the R2 sysvar hole**, boot-installed by `in_tut`): fill = floor(8 * (XP - T(LVL-1)) / (T(LVL) - T(LVL-1))) px, `xpn_tab` (bank 2)
+deltas all <= 253 (byte span, <= 8 subtractions of `8 * d`; ASSERTed in xp2.asm), L9 full, a transient XP >= T(LVL) clamps at 8. Frame lines 1 / 6 + fill lines 2..5 (the FOOD bar's style, no caps: exact width). Reuse of `bars_draw` rejected (4-cell, 2 caps, a divide).
+Trigger/path: no new dirty bit (all 8 PD_* are taken): `xp_level` (bank 7) sets `PD_DEPTH` whenever `XP_UP` is consumed (every kill / boss XP delta / level-up), `panel_init7` already sets it; `item_depth` (HOT_COPY) now ends
+`jp depth_tail` (was `ld hl, key_pan / jp far6`); `depth_tail` (R2) = `far6 key_pan` then falls into `xp_bar`. `item_depth` marks rows 18..19 (the bar) and the key rect with E = 2 (row 22 cols 24..28 marked too: a copy of equal cells; HOT_COPY has no byte for a second `ld e`).
+**Install guard:** `depth_tail` / `xp_bar` run only from `item_depth` (the panel-queue drain), first reached by `panel_init` in `level_enter` after the menu; `in_tut` runs from `boot` before `enter_select` (the .sna test boot enters at `boot` too), so the block is always installed first. `tests/game.py` #50 / `tests/instr.py` I8b3 verify the bytes.
+Cost: item_depth total ~5.7k T (was ~2.3k + key_pan ~1.0k); only in a panel-drain tick, never an input tick. Writers of the cell: only `xp_bar` (grep: no key / KEY_PAN / D0 pointer rect touches (30, 19); `tut_rects` has none on row 19 cols 30..; `tt_kflash` -> `item_depth` just redraws it).
+Free before -> after (release): R2 96 -> **1** (95: depth_tail 6 + xp_bar 89); BOOT4 544 -> **449** (the packed block, +95 B raw, boot only); bank 7 1 -> **0** (xp_level +5, data7 -4); HOT_COPY 3 -> 3 (item_depth -3 B, spare as before the `ld e`/`jp` churn: 541 of 544); cold block 197, R4 68, R5 48, bank 1 4, R6 3, bank 2 6 unchanged.
+Goldens re-hashed (panel gained the empty XP bar frame): `game_start` / `game_start_wizard` panel (tests/game.py), `w15_panel_mage` (world.py), `tut0_d0_arrival` (tut0.py).

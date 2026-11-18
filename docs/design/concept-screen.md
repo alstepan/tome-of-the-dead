@@ -445,7 +445,7 @@ The panel is the always-visible *use* surface. Gear management happens only on t
 |---|---|---|
 | (0–29, 18–19) | **10 icon slots 24×16**; slot *i* (0-based) at cols `3i … 3i+2`, rows 18–19 | per state below |
 | (30–31, 18) | **depth** `D1`–`D8` (6×8 font; 2 chars = 12 px) | `$47` |
-| (30, 19) | **key icon** 8×8 (only while carrying the level key) | `$46` |
+| (30, 19) | **XP bar** 8 px (XP-BAR, user 2026-11-18; was the single key icon, which moved to row 21 on 2026-11-16): fill = progress from the current level's XP threshold to the next level's, 0..8 px, round down, full at L9; frame lines 1 / 6 + fill lines 2..5 like the FOOD bar, no side caps | `$46` (the level digit's) |
 | (0–31, 20) | **info line** for the selected icon: name, MP cost, range, bounces/notes, ammo (≤ 42 chars, §5.1) | name `$47` (chars 0–15) · numbers `$46` (from char 16) · notes `$45` (from char 28) |
 | (0, 21) heart · (1–4, 21) **HP bar 32 px** · (5–6, 21) HP number (≤ 2 digits) | | `$42` |
 | (7, 21) drop · (8–11, 21) **MP bar 32 px** · (12–13, 21) MP number (≤ 2 digits) | | `$45` |

@@ -769,4 +769,6 @@ INFO_NOTE_COL   EQU 21              ; char 28 = 168 px
 ATTR_INFO_NAME  EQU $47
 ATTR_INFO_NUM   EQU $46
 ATTR_INFO_NOTE  EQU $45
-ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1)
+ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1) + XP-BAR the XP bar cell (30, 19)
+XPB_COL         EQU DEPTH_COL       ; XP-BAR (user 2026-11-18): 8-px XP progress bar, cell (30, 19), sv_r2.asm xp_bar
+XPB_ROW         EQU ICON_ROW + 1
