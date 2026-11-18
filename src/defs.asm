@@ -1108,6 +1108,11 @@ SEQB_LEN        EQU 160             ; REGION 1, SEQ_BYTES (bank 2, code_end .. F
                                     ; RAM, SEQ2_LEN, sq0.asm). T9: the hero's block moved to SEQH_BYTES, D8 needs 256.
                                     ; 3F-T13bc: 256 -> 288; D3-11 review: back to 256
 SEQ2_LEN        EQU 112             ; REGION 2 (lowram.asm seq2_bytes): >= the level's region-2 blocks (ASSERTed per depth)
+; RECLAIM-SV R1 (user ruling 2026-11-18: the ROM system variables $5C00..$5CDA hold data / boot-installed code;
+; after boot nothing reads them but SYS_FRAMES; memory-map "RECLAIM-SV ledger"): region 2 lives at the bottom of them.
+SEQ2            EQU $5C00           ; runtime-only (tape / .sna never write it; sq_reset sets the pointer, sq_load fills it)
+seq2_bytes      EQU SEQ2
+                ASSERT SEQ2 + SEQ2_LEN <= SYS_FRAMES   ; SYS_FRAMES $5C78..$5C7A is LIVE (the ISR bumps it): never overlap
 ; master block (the unpacked image at SQ_IMG): KSM_LEN (sequence bytes n),
 ; KSM_IMP (= KS_IMPACT), KSM_OFF + 8 offsets (KS_IDLE..KS_DEATH order) from
 ; KSM_SEQ, then the n sequence bytes (position-independent: no pointer inside)

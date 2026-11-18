@@ -2135,11 +2135,11 @@ gen_list:
 ; NEW-MON3 T10b: the 3F-T2 sequence cache loader (sq_reset / sq_load / sq_fill / ksm_ptr) moved to
 ; bank-0 B0_CODE2 src/sq0.asm (FARB0 from R6 pool6.asm): -~190 B low RAM for the 10 new frame descriptors.
 ;------------------------------------------------------------------------------
-; seq2_bytes — NEW-MON3 T10b sequence cache REGION 2 (runtime bytes; zeros on tape): the level's
-; blocks that lie after seq_img.asm ksm_r2 (the NEW-MON3 kinds), copied by sq0.asm sq_load. Read by
-; anim like seq_bytes (low RAM is always mapped; contended, a few reads a body a tick).
+; seq2_bytes — NEW-MON3 T10b sequence cache REGION 2 (runtime bytes): since RECLAIM-SV R1 it is an
+; EQU in the ROM system-variable area (defs.asm SEQ2 = $5C00, SEQ2_LEN B, runtime-only, never on tape):
+; the level's blocks after seq_img.asm ksm_r2, copied by sq0.asm sq_load, read by anim like seq_bytes.
+; -112 B of this cold block (zeros on the tape).
 ;------------------------------------------------------------------------------
-seq2_bytes:     DS   SEQ2_LEN, 0
 ;------------------------------------------------------------------------------
 ; dg_vars — the decor deriver's state (bank-0 decor_gen.asm; SIZE T3: B0_CODE2 may hold no
 ; runtime-written bytes). Runtime bytes, zeros on tape; live only inside one decor_b0 call
