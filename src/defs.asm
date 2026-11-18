@@ -233,7 +233,7 @@ TEXT_ADDR       EQU BANK_WINDOW     ; text_base (ASSERTed in main.asm)
 ; 45 + 29 B costs 0 slack (1,264 kept), but 45 + 30..250 B costs one 240-B variant
 ; (slack 1,024) and 45 + 260 B 880. M1 (user 2026-11-01) took the 240-B step: total reserve 2,624 B
 ; (cliff measured: B0_CODE_RES 206 -> slack 1,024, 207 -> 384, with TEXT_RES 2,418).
-TEXT_RES        EQU 2367 + 33 + 340 + 16 + 32 - 8  ; BALANCE-PKG5: -8 to B0_FREE_RES (the trace build's B0_CODE2 for drop0.asm; text headroom 23 -> 15, the kit's carve pad 15 -> 7). NEW-MON3 T8: +32 (kind names, Frost Charm); 4b: +16 ("TOO WEAK TO JUMP"); both from B0_FREE_RES, POOL_START kept. ITEM-INFO + UX1: +340 (22 strings); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom
+TEXT_RES        EQU 2367 + 33 + 340 + 16 + 32 - 8 + 8  ; GARG-CHAIN: +8 ("THE STATUES STIR!" +13 B of text; from B0_FREE_RES, POOL_START kept; the trace build's text + code had 7 B). BALANCE-PKG5: -8 to B0_FREE_RES (the trace build's B0_CODE2 for drop0.asm; text headroom 23 -> 15, the kit's carve pad 15 -> 7). NEW-MON3 T8: +32 (kind names, Frost Charm); 4b: +16 ("TOO WEAK TO JUMP"); both from B0_FREE_RES, POOL_START kept. ITEM-INFO + UX1: +340 (22 strings); RECLAIM-B T1: DP-parsed text 2372 B + 28 B headroom
 B0_CODE_RES     EQU 1064 + 10                  ; ITEM-INFO + UX1: +10 (dn_tick's 3-B call ux_tick + the pre-existing 1-B overrun + pad; from B0_FREE_RES); C2 (2026-11-10): +150 = mus_pick0 (135, from bank-7 mus7.asm: funds
                                                ; MON-DEFER) + dn_q2's DN-GATE test (13) + pad; the kit build (kit0.asm) fits
                                                ; with the 16-B text headroom (1 B free). POOL_START unchanged (B0_FREE_RES
@@ -274,7 +274,7 @@ DG2_RES         EQU 0
                 ASSERT DG2_RES <= 2080 && (DG2_RES & 1) == 0
 DG2_ON          EQU DECOR2                     ; test-observable (.sym): tests/room_model.py picks the model by it
 B0_FREE_START   EQU TEXT_ADDR + TEXT_RES + B0_CODE_RES + B0_KIT_RES  ; $CEE6 (ITEM-INFO; $CD88 B0CODE; $CCF2 = POOL_START before C-T8)
-B0_FREE_RES     EQU 8408 - 16 - 32 + 8 + DG2_RES  ; BALANCE-PKG5: +8 from TEXT_RES (POOL_START stays $EFBE). 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
+B0_FREE_RES     EQU 8408 - 16 - 32 + 8 - 8 + DG2_RES  ; GARG-CHAIN: -8 to TEXT_RES. BALANCE-PKG5: +8 from TEXT_RES (POOL_START stays $EFBE). 4b: -16, NEW-MON3 T8: -32 (to TEXT_RES; POOL_START stays $EFBE). NEW-MON3 T1 (new_monsters.md §12, X = 3,072 asked): POOL_START $FC3E -> $EFBE
                                                ; (3,200 B back to the pool; = $EFBE - B0_FREE_START $CEE6 after ITEM-INFO's -350). $F03E
                                                ; itself (X = 3,072) puts the bank-0 -> 4 straddle
                                                ; inside the hero session at 194 B waste (Mage 114): every level need +192 / +112, slack

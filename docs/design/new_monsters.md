@@ -233,10 +233,10 @@ Scope: the **current room only** (its active slots). Floor-wide was rejected: it
   `pend_hit.go`) statues are skipped in `perch1` before the chain gate, retried every pass.
 - **New log line `THE STATUES STIR!`** (`TX_STIR`, `src/strings.txt`) printed once when the chain arms, ONLY if another perched Gargoyle
   (active, `EF_GHOST`, same room, same storey) exists; each chained wake reuses `THE GARGOYLE WAKES UP.`.
-- **Clears** on a room exit / teleport (`lp_transition`) and on a new level (`level_reset`); ROOM-MEM re-entry re-perches as today.
+- **Clears** on a room exit / teleport / new level (low-RAM `vis_room_sync`, the tail of `vis_reset`); ROOM-MEM re-entry re-perches as today.
 - **Sim** (`chore/sim-gchain` a9ef6e5): balance delta within noise, no tuning.
 - **Cost as built:** low RAM `src/garg_l.asm` (`stir_gate` 43 B + `stir_arm` 71 B = 114 B; the joiner scan is most of it), bank 1 +1 B,
-  bank 3 +11 B (pl_seg3 4, level_reset 3, lp_transition 4), text +13 B, 2 B RAM (`GARG_STIR` / `GARG_SPENT` = `DG_PLAN`, spare).
+  bank 3 +4 B (pl_seg3), `vis_room_sync` +4 B, text +13 B, 2 B RAM (`GARG_STIR` / `GARG_SPENT` = `DG_PLAN`, spare).
   Tests: `tests/nm3b.py` GC1..GC6 + R1.
 
 ### 4.2 Fire Imp ranged row (F-1) — RANGED-SPEC table row

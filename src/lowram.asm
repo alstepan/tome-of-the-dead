@@ -1699,6 +1699,9 @@ vis_reset:
                 ld   l, a
                 djnz .z
 vis_room_sync:
+                xor  a
+                ld   (GARG_STIR), a            ; GARG-CHAIN: a room exit / teleport / level change ends the chain (every Gargoyle
+                                               ; re-perches; only do_exit .in and vis_reset call this; +4 B, was 7 B in bank 3)
                 ld   ix, P_ENTITIES
                 ld   hl, SLOTREC + R_VIS
                 ld   de, P_ENT_STRIDE

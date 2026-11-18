@@ -569,10 +569,10 @@ def part_gc(p, w):
     p.wb("GARG_STIR", 1)                                 # armed on storey 0
     ingame(p, pas)
     check("GC5 chain armed on storey 0: a storey-1 statue (hero far) stays perched", not awake(3), w.e(3, "POT"))
-    # GC6 cleared by level_reset
+    # GC6 cleared by vis_reset (a level change / new game; its tail is vis_room_sync)
     p.wb("GARG_STIR", 2)
-    ingame(p, bank3([0xCD] + w16(S["level_reset"])))
-    check("GC6 level_reset clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
+    ingame(p, [0xCD] + w16(S["vis_reset"]))
+    check("GC6 vis_reset clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
     w.clear()
 
 
@@ -636,7 +636,8 @@ def part_r(p, w):
     w.p.wmem(S["P_ENTITIES"] + 5 * STRIDE + EF["MAXHP"], [14])
     p.wb("GARG_STIR", 2)
     xfer(Y)
-    check("R1 a room exit (lp_transition) clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
+    ingame(p, [0xCD] + w16(S["vis_room_sync"]))         # do_exit .in's call (also vis_reset's tail: a level change)
+    check("R1 a room exit (do_exit's vis_room_sync) clears GARG_STIR", p.rb("GARG_STIR") == 0, p.rb("GARG_STIR"))
     check(f"R1 leave room {X} -> {Y}: the awake Gargoyle parked (E_ROOM = X | LPK_PARK)",
           w.e(5, "ROOM") == X | PARK and w.e(5, "KIND") == KG, (w.e(5, "ROOM"), w.e(5, "KIND")))
     xfer(X, hx=1)
