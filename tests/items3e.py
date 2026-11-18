@@ -28,7 +28,8 @@ KIT = bool(S.get("KIT_DEBUG", 0))
 CANARY = 0xA5
 # runtime-only reserve (memory-map; 3F-T7: RG_RAM after MK_RAM; 3F-T9: BOSS_TRAP + the spawn queue SPQ_RAM fill
 # RG_RAM_END..$5FFF, new_game zeroes SPQ_K)
-LOW_RES = [(0x5CC0, 0x5E00)] + ([(S["SPQ_RAM_END"], 0x6000)] if S["SPQ_RAM_END"] < 0x6000 else [])
+# RECLAIM-SV: $5C00..$5CDA is the ROM sysvar area, now R1 seq2 + the R2 install hole (SV_R2_END = $5CDB = DN_KEY): not canaried
+LOW_RES = [(S["SV_R2_END"], 0x5E00)] + ([(S["SPQ_RAM_END"], 0x6000)] if S["SPQ_RAM_END"] < 0x6000 else [])
 
 
 
@@ -78,7 +79,7 @@ def layout(check):
 
     def clear(a0, a1):
         return hi <= a0 or lo >= a1
-    busy = [("LOG_TXT", s["LOG_TXT"], s["LOG_TXT"] + 256), ("sysvars+CHANS", 0x5C00, 0x5CCB),
+    busy = [("LOG_TXT", s["LOG_TXT"], s["LOG_TXT"] + 256), ("sysvars: R1 seq2 + R2 hole + SYS_FRAMES", 0x5C00, s["SV_R2_END"]),
             ("PF_RAM", s["PF_RAM"], s["PF_RAM"] + s["PF_RAM_LEN"]), ("MK_RAM", s["MK_RAM"], s["MK_RAM_END"]),
             ("page band", s["PAGE_ORG"], s["PAGE_LIMIT"]),
             ("GEN_SCRATCH", s["GEN_SCRATCH"], s["GEN_SCRATCH"] + s["GEN_SCRATCH_LEN"]),

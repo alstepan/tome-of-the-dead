@@ -1761,6 +1761,11 @@ clear_screen:
                 ret
 
 ;==============================================================================
+; RECLAIM-SV R4: print_char / print_str run only before in_tut: check_paging's paging-lock message (tape
+; path) and the boot overlay's "PRESS ANY KEY" (instr_ovl.asm in_flow, which runs BEFORE in_tut). Dead
+; after that: in_tut may install code over print_char .. print_str_end (main.asm "RECLAIM-SV INSTALL
+; BLOCKS", sv_r4.asm). Nothing may call them after boot (tests never do).
+;==============================================================================
 ; TEXT (ROM charset, 48K ROM paged): the select screen and the paging-lock
 ; message only (both drawn on the displayed bank-5 screen, no present). Play
 ; text is the 6x8 panel font (print6, panel.asm; B3B-11).
@@ -1810,6 +1815,7 @@ print_str:
                 pop  hl
                 inc  hl
                 jr   print_str
+print_str_end:                                 ; RECLAIM-SV R4: print_char .. here is an install target (defs.asm SV_R4)
 
 ;==============================================================================
 ; A7 display switching (cold; bank 5 low RAM is always mapped, so bank-2 and

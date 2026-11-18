@@ -180,6 +180,16 @@
   `resolve_monsters` and asserts bank 3 is paged afterwards (it crashes with
   the restore removed).
 
+## ROM system-variable area (RECLAIM-SV, user 2026-11-18)
+
+- `$5C00..$5CDA` (the ROM system variables, CHANS and the dead BASIC line) may hold DATA and BOOT-INSTALLED CODE:
+  after `boot` nothing calls the ROM (only `start`'s `ROM_LD_BYTES`; `ISR_ROM_CHAIN` is dropped; `ROM_CHARSET` is read as
+  data) and nothing reads a system variable but **`SYS_FRAMES` `$5C78..$5C7A` (LIVE: the ISR bumps it; never overlap it,
+  ASSERT)**. `IY` = `$5C3A` is never dereferenced. Runtime-only data (R1 `SEQ2` `$5C00`) is in no tape block and not
+  written before the game starts; installed code (R2 `$5C7B..$5CDA`, also R4 the dead print code, R5 the ISR stack slack)
+  is copied by the boot overlay's `in_tut` and must not run before it. Map and ledger: `docs/memory-map.md` "RECLAIM-SV
+  ledger"; tests never use the area as scratch (`tests/items3e.py`).
+
 ## Monster phase timing (C2 MON-DEFER, user 2026-11-10)
 
 - An ordinary turn's `resolve_monsters` runs on the tick AFTER the input tick (`TP_MONQ` -> `act_pend`); an

@@ -12,8 +12,8 @@
 | `$4000-$57FF`| Screen bitmap (bank 5)                      | 6144 bytes                    |
 | `$5800-$5AFF`| Screen attributes (bank 5)                  | 768 bytes, the clash grid     |
 | `$5B00-$5BFF`| Printer buffer → **`LOG_TXT`** (B3B-11)     | log message ring, 4 × 64 B (runtime only, after boot) |
-| `$5C00-$5CBF`| System variables                            |                               |
-| `$5CCB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; **UX1 (ITEM-INFO + UX-POLISH): 95 B = + `UX_RAM` 6 B `$5D59-$5D5E`** (`NEW_MASK`, `LAST_PICK`, `MPF_T`, `UX_FL`; "ITEM-INFO + UX-POLISH ledger"); runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
+| `$5C00-$5CDA`| ROM system variables (**RECLAIM-SV, user 2026-11-18: data + boot-installed code**) | **R1 `$5C00-$5C6F` = `SEQ2`** (sequence cache region 2, 112 B, runtime); `$5C70-$5C77` free (8 B); **`$5C78-$5C7A` = `SYS_FRAMES` (LIVE, the ISR bumps it)**; **R2 `$5C7B-$5CDA` = boot-installed code hole (96 B, empty)** — "RECLAIM-SV ledger" |
+| `$5CDB-$7FFF`| Free RAM (after BASIC reclaim)              | program + working storage; **D3-6b: `$5E00-$5EFF` = `PF_RAM`** (proj_fire scratch, runtime only — "3D contracts"); **D3-8d: `$5F00-$5F8B` = `MK_RAM`**; **3F-T7: `$5F8C-$5FF3` = `RG_RAM`** (ranged scratch + shot queue, runtime only — "3F-T7") (status-mark cell map + glyph / attr copy, runtime only — "Status marks (D3-8d)"); **3E-T3: `$5D00-$5D55` = `ITEM_RAM`** (bag, worn, hunger, quick slots; 81 B since the 3E simplification, **M0: 86 B = + `ST1_CNT` 5 B, the STATS1 S1 reserve** **STATS2: 89 B = + `ST2_CNT` 3 B `$5D56-$5D58`**; **UX1 (ITEM-INFO + UX-POLISH): 95 B = + `UX_RAM` 6 B `$5D59-$5D5E`** (`NEW_MASK`, `LAST_PICK`, `MPF_T`, `UX_FL`; "ITEM-INFO + UX-POLISH ledger"); runtime only — "3E contracts"); **D3-11: `$5CDB-$5CEA` = `DN_KEY` (the spawn queue, review), `$5CEB-$5CF6` = `DN_A` (the flying numbers' pass state + scratch, 12 B), `$5D60-$5DFF` = `DN_LIVE` (3 x 32 B live records) + `DN_SLOT` (16 x 4 B per slot)**, runtime only ("D3-11 ledger") |
 | `$8000-$BFFF`| Program origin region                       | `ORG $8000` for now           |
 | `$C000-$FFFF`| Paged bank window                           | bank selected by $7FFD bits0-2|
 
@@ -7877,3 +7877,58 @@ rl_ghost patches erase_rect into a low-RAM detour that re-composes the statue ce
 **erase_st 61 B + st_fix 233 B + 13 B (rl_ghost patch) + 3 B bank 2** = ~310 B of bank-2 / low-RAM code; the reclaims
 found (jump_pit -> R6 via seal_open -> bank 1: low RAM 11 -> 85 B) leave ~225 B short. Not committed.
 
+## RECLAIM-SV ledger (`feat/reclaim-sv`, 2026-11-18; on `feat/garg-pass` `0538257`; architect survey 2026-11-18; pure layout, NO behaviour change)
+
+Funds the GARG-PASS lean statue redraw (~190 B low RAM / bank 2), a ~30 B PENDING-aware wake helper and XP-BAR
+(`xp_bar` 89 B + stub). **User ruling 2026-11-18: the ROM system-variable area `$5C00..$5CDA` may hold DATA and
+BOOT-INSTALLED CODE.** Verified: after `boot` nothing calls the ROM (`start`'s `ROM_LD_BYTES` runs before the first
+byte of the area is used; `ISR_ROM_CHAIN` is dropped + ASSERTed; `ROM_CHARSET` is read as data), nothing reads the system
+variables but `SYS_FRAMES`, and `IY = $5C3A` is never dereferenced (`decor_gen` pushes / sets its own IY and restores it;
+the IM 2 ISR does not save or use IY).
+
+### Sysvar map `$5C00..$5CDA`
+
+| Range | Use | Notes |
+|---|---|---|
+| `$5C00-$5C6F` | **R1 `SEQ2`** (`seq2_bytes` EQU, 112 B) | runtime-only: in no tape block, not in the `.sna`; `sq_reset` sets `SQ_TOP2`, `sq_load` fills it (blocks after `ksm_r2`). The ROM IM1 ISR scribbles KSTATE here before `boot`'s `DI` only. ASSERT `SEQ2 + SEQ2_LEN <= SYS_FRAMES` (defs.asm) |
+| `$5C70-$5C77` | free (8 B) | |
+| `$5C78-$5C7A` | `SYS_FRAMES` | **LIVE**: never overlap (ASSERTs in defs.asm / main.asm) |
+| `$5C7B-$5CDA` | **R2 install hole (96 B)**, empty | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
+| `$5CDB..` | `DN_KEY` / `DN_A` / `ITEM_RAM` .. (D3-11 / 3E-T3, unchanged) | `tests/items3e.py` canaries start at `SV_R2_END` now |
+
+### Reclaims (behaviour identical; goldens unchanged)
+
+| Step | Move | Frees |
+|---|---|---|
+| R1 | `seq2_bytes` (112 B `DS`, lowram.asm) -> EQU `SEQ2` `$5C00` | **-112 B** low-RAM cold block (spare 11 -> 123) |
+| R3 | `jump_pit` (low RAM) -> R6 `jump6.asm` `jump_pit6` (`far6` from `try_jump`, +~0.1k T per jump attempt: turn-level); `seal_open` R6 `tome6.asm` -> bank 1 `tome1.asm` (`far1` from `boss7.asm` `grate_open.seal`) | **-74 B** low RAM (spare 123 -> 197); R6 free 70 -> **3**; bank 1 free 28 -> **11** |
+| R2 | sysvar hole `$5C7B..$5CDA` as an install target | 96 B |
+| R4 | dead-after-`in_flow` print code `print_char .. print_str_end` (`$78E3`, 68 B) as an install target | 68 B |
+| R5 | ISR stack slack `$BE00..$BE2F` (bank 2; the ISR keeps `ISR_STK_NEED` 16 of its 64 B, `ISR_STK = $BE40`) | 48 B |
+
+### Install blocks (R2 / R4 / R5; the `tele_lri` pattern)
+
+`main.asm` "RECLAIM-SV INSTALL BLOCKS" DISPs `src/sv_r2.asm` / `sv_r4.asm` / `sv_r5.asm` (empty today) at their regions;
+`instr_ovl.asm` `in_tut` LDIRs a **non-empty** block into place (`IF SV_Rn_LEN > 0`: nothing assembled for an empty one, so
+today **0 B of BOOT4**; a block costs its bytes packed + ~9 B of code; `-DSV_TEST=1` = 4-byte patterns: +24 B packed for
+the three, used to test the wiring). `SAVEBIN build/ovl/sv<n>.bin` (non-empty only) is the tests' reference
+(`game_lib.sv_blocks`): `tests/instr.py` I8b3 / I8b4 and `tests/game.py` #50 (a real tape boot) verify the installed bytes.
+**Guard: code in R2 / R4 / R5 must never run before `in_tut`** (it is in no tape block and not in the `.sna` before the
+overlay; nothing in boot -> `in_flow` -> `in_tut` references it; R4 is also the print code `in_flow`'s "PRESS ANY KEY" uses,
+which is why `in_tut` — after `in_flow` — installs it). R5: ASSERT `SV_R5_END <= ISR_STK - ISR_STK_NEED` (margin 0 B: a
+deeper ISR / `AY_PLAY` needs the constant raised and the region shrunk) and `ISR_SAVE_ALT == 0` (isr_alt sits at
+`STACK_BOTTOM`) unless the block is empty. R4 is not an EQU (a low-RAM label EQU differs between assembler passes).
+
+### Free bytes after RECLAIM-SV (release build)
+
+| Region | Free |
+|---|---|
+| low-RAM cold block (`lowram_code - LOWRAM_FREE_END`) | **197** (was 11) |
+| R1 sysvar spare `$5C70..$5C77` | 8 |
+| R2 `$5C7B..$5CDA` | 96 |
+| R4 print area | 68 |
+| R5 ISR stack slack | 48 (ISR margin 0) |
+| bank 1 UI | 11 (was 28) |
+| R6 | 3 (was 70) |
+| bank 2 | 6 (+3 B `kind_tab` ALIGN pad; free to FRT 3), unchanged |
+| BOOT4 (`BLOB_ORG - boot4_end`) | 544 (unchanged: empty blocks) |
