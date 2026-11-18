@@ -1,5 +1,5 @@
 {
- "_doc": "FOOD-7 = PACKAGE 5 FINAL with FOOD_BURN 7 (balance_v2.md sec 8): F1 hunger 1/7 (FOOD-7) + A + C1-C4 + M1 + damage ramp + food (floor 3-4, drops 8 %, start 100) + Mage tune. Use: --ld-pkg4 --overrides tools/balance_food7.json --set param.PICKUP=0.75",
+ "_doc": "FOOD-7 = PACKAGE 5 FINAL with FOOD_BURN 7 and FOOD_N 2-3 (floor food) (balance_v2.md sec 8): F1 hunger 1/7 (FOOD-7) + A + C1-C4 + M1 + damage ramp + food (floor 3-4, drops 8 %, start 100) + Mage tune. Use: --ld-pkg4 --overrides tools/balance_food7.json --set param.PICKUP=0.75",
  "param": {
   "FOOD_BURN": 7,
   "TELE_AMBUSH": 0.05,
@@ -78,8 +78,8 @@
    3.0
   ],
   "FOOD_N": [
-   3,
-   4
+   2,
+   3
   ],
   "DROP_ALL_P": [
    0.08,
