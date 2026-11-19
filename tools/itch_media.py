@@ -559,7 +559,7 @@ def make_stage(p, hero):
 
 
 @contextlib.contextmanager
-def session(hero_name, seed, audio=None, fast=True):
+def session(hero_name, seed, audio=None, fast=True, tut=False):
     """Emulator at the main menu (cold boot passed, seed fixed).  fast: tick-exact at max speed (no usable
     audio); not fast: emulator speed 100 + --aofile (raw sound: 15600 Hz, mono, unsigned 8-bit, written
     only while the emulated machine runs, 312 bytes per 50 Hz frame)."""
@@ -576,6 +576,7 @@ def session(hero_name, seed, audio=None, fast=True):
         p.mon = Mon(p)
         p.proto_start = 0
         p.snd_mode = None                         # music + SFX on (the boot default)
+        p.tut_default_off = not tut               # tut: the real menu path (START, then 1 = TUTORIAL) stays live
         p.load()
         p.wait_state(pt.GS_SELECT)
         p.wb("seed_fixed", 1)
