@@ -1429,7 +1429,7 @@ TUT_STUB_ROOM   EQU sel_tab - check_paging      ; check_paging + str_lock (sel_t
 ;------------------------------------------------------------------------------
 ; RECLAIM-SV INSTALL BLOCKS (R2 sysvar hole, R4 dead print code, R5 ISR stack slack): three more
 ; boot-installed regions in the tele_lri pattern. Each block's source (sv_r2 / sv_r4 / sv_r5.asm) is DISP'd
-; at its region; in_tut LDIRs a non-empty one into place (today R2 = XP-BAR xp_bar, R4 = ICON-FLASH ic_learn / ic_mark / gh_pend; R5 empty: no code, no LDIR; an empty block costs 0 packed bytes).
+; at its region; in_tut LDIRs a non-empty one into place (today R2 = XP-BAR2 xp_bar + xpb_draw, R4 = ICON-FLASH ic_learn / ic_mark / gh_pend, R5 = XP-BAR2 xpb_div + fbar_gap; an empty block: no code, no LDIR, costs 0 packed bytes).
 ; BEFORE the overlay in source order (its {b} reads these bytes). The regions are in no tape block and not in
 ; the .sna before in_tut (SV_R2 / SV_R5 zeros, SV_R4 the print code, dead after in_flow): code there must not run
 ; before in_tut (guard: boot -> in_flow -> in_tut references none of them; ASSERTed below that the regions

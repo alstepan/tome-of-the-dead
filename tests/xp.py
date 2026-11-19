@@ -7,7 +7,7 @@ item_mp + the poll (xp2.asm / icons.asm); the rank info line item_info (D3-9a).
 
   L   a kill through deal_hit -> XP += KXP; level-up exactly at the threshold
       (XP 37 + Goblin 3 = 40 -> L2; 36 + 3 = 39 stays L1); a respawned Goblin
-      (EF_RESPAWN) gives 1; LVL_SH (panel digit at (31, 19)) follows
+      (EF_RESPAWN) gives 1; LVL_SH (panel digit at (24, 21)) follows
   G   gains: Warrior max/cur HP +6 (BALANCE-PKG4; was +5), MP +1; Mage HP +2 (was +3), MP +2;
       "YOU REACH LEVEL 2!"
   S   steps: XP 919 -> 922 at L1 = 7 levels at once: gains x 7, atk +2 (L4, L8),

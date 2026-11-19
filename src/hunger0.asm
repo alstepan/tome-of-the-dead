@@ -9,7 +9,7 @@
 
 ;------------------------------------------------------------------------------
 ; item_food — the panel FOOD item (FARB0 from panel_more, a tick's 1st frame
-; only): the bar (fill FOOD / FOOD_MAX, cols 15..18), the stage word (bank-0
+; only): the bar (fill FOOD / FOOD_MAX, cols 15..18, 31 px since XP-BAR2: a 1-px gap before the word), the stage word (bank-0
 ; hg_fed / hg_ok / hg_hungry / hg_weak, padded to HG_CHARS so a shorter word
 ; overwrites a longer one; cols 19..23) and the stage attr over both
 ; (hg_attr; game.md §7 table), marked for the present.
@@ -17,15 +17,17 @@
 ; writes are contended)
 ;------------------------------------------------------------------------------
 HG_CHARS        EQU 6
+FOOD_BAR_D      EQU 103             ; XP-BAR2: the 31-px FOOD bar's divisor (round(100 * 32 / 31); FOOD_MAX = 100)
+                ASSERT FOOD_MAX == 100
 FOOD_WORD_BMP   EQU ((SCREEN_BITMAP >> 8) | (STAT_ROW & $18)) << 8 | ((STAT_ROW & 7) << 5) | HUNGER_COL
 FOOD_BAR_ADDR   EQU ((SCREEN_BITMAP >> 8) | (STAT_ROW & $18)) << 8 | ((STAT_ROW & 7) << 5) | FOOD_BAR_COL
 item_food:
                 ld   hl, PANEL_DIRTY
                 res  PD_FOOD_BIT, (hl)
                 ld   a, (FOOD)
-                ld   d, FOOD_MAX
+                ld   d, FOOD_BAR_D             ; XP-BAR2 gap: fill = round(FOOD * 32 / 103) ~ FOOD * 31 / 100 (<= 31 px)
                 ld   hl, FOOD_BAR_ADDR
-                call bars_draw
+                call fbar_gap                  ; XP-BAR2: bars_draw + the 1-px gap before the word (R5 sv_r5.asm)
                 ld   a, (HSTAGE)
                 add  a, TX_HG_FED
                 call tx_dec                    ; HL = TX_DEC (bank 5; hands bank 0 back)

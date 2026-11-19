@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""XP-BAR (user 2026-11-18): the 8-px XP progress bar in panel cell (30, 19) (src/sv_r2.asm xp_bar: R2, boot-installed; drawn by
-item_depth's tail depth_tail; PD_DEPTH set by xp_level on every XP gain / level-up and by panel_init).
+"""XP-BAR2 (user 2026-11-19; XP-BAR 2026-11-18 was 8 px at (30, 19)): the 23-px XP progress bar on row 21, cols 25..27
+(src/sv_r2.asm xp_bar + R5 sv_r5.asm xpb_draw, boot-installed; drawn by item_depth's tail depth_tail; PD_DEPTH set by
+xp_level on every XP gain / level-up and by panel_init), the level digit at (24, 21), "Dn" at (28-29, 21), the two panel
+keys at (30-31, 18 / 19), and the >= 1-px gaps between the row-21 bars and their neighbours (FOOD bar 31 px: R5 fbar_gap).
 Release build (-DDEBUG_KIT=0), PROTO room A, monsters parked.
 
-  X1  new game: XP 0 -> fill 0 (frame lines 1 / 6 = $FF, fill lines 2..5 = 0, lines 0 / 7 blank), attr $46
-  X2  XP 22 of L1's 44 -> 4 px; XP 43 -> 7 px  (floor(8 * XP / 44))
-  X3  XP 77 (level-up to 2 by xp_turn) -> LVL 2, fill floor(8 * (77 - 44) / 66) = 4 px  (after the level-up)
-  X4  XP 1265 (several levels at once) -> LVL 9, full bar (8 px)
-  X5  panel_init (a new level) keeps the bar; (30, 19) attr stays $46, the level digit cell (31, 19) is not touched
-  C   cost of item_depth (incl. depth_tail -> far6 key_pan) and of xp_bar alone
+  X1  new game: XP 0 -> fill 0 (frame lines 1 / 6 = FF FF FE, fill lines 2..5 = 0, lines 0 / 7 blank), attrs $46
+  X2  XP 22 of L1's 44 -> 11 px; XP 43 -> 22 px  (floor(23 * XP / 44))
+  X3  XP 77 (level-up to 2 by xp_turn) -> LVL 2, fill floor(23 * 33 / 66) = 11 px; XP 110 -> L3, empty
+  X4  XP 1265 (several levels at once) -> LVL 9, full bar (23 px, bit 0 of col 27 clear)
+  X5  the level digit (24, 21) is a glyph, attr $46; "Dn" (28-29, 21) attr $47; the retired (30, 19) cell is blank
+  K1  both keys held: cyan glyph at (30-31, 18) attr $45, magenta at (30-31, 19) attr $43; none held: blank, attr $47
+  G1  gaps on row 21 (FOOD full, word HUNGRY = the longest): FOOD bar col 18 bit 0 clear (cap at bit 1), word end ->
+      level digit, digit -> bar (col 25 bit 7), bar -> "D" (col 27 bit 0); writes build/xpbar_row21.png (the crop)
+  G2  FLASH set on (24..29, 21) (a tutorial BARS pointer) survives the digit / bar / Dn redraws (none writes an attr)
+  C   cost of item_depth (incl. depth_tail -> far6 key_pan + xp_bar + xpb_draw) at a 22-px fill and at L9
 Run: ZRCP_PORT=<port> python3 tests/xpbar.py
 """
 import sys
@@ -18,22 +24,31 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 import game_lib  # noqa: E402
-from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, stand_y, attr_at, cell_bytes  # noqa: E402
+from game_lib import Harness, S, EMU_ARGS, K_KNIGHT, stand_y, attr_at, cell_bytes, BUILD_DIR  # noqa: E402
 from proj3 import T, w16  # noqa: E402
 
 KIT = bool(S.get("KIT_DEBUG", 0))
-COL, ROW = S["XPB_COL"], S["XPB_ROW"]
+COL, ROW = S["XPB_COL"], S["STAT_ROW"]
+NC = S["XPB_CELLS"]
+PX = S["XPB_PX"]
 XPN = [44, 110, 220, 374, 550, 770, 1012, 1265]
 EF_ACTIVE, EF_PLAYER = 1, 2
-STUB = S["LOWRAM_END_3B"]
 NOWHERE = 7
+LF_KEYC, LF_KEYM = 0x40, 0x80
+PD_DEPTH, PD_FOOD = 0x80, 0x04
+HS_HUNGRY = 2
 
 
 def fill_for(xp, lvl):
     if lvl >= 9:
-        return 8
+        return PX
     prev = XPN[lvl - 2] if lvl > 1 else 0
-    return min(8, 8 * (xp - prev) // (XPN[lvl - 1] - prev))
+    return min(PX, PX * (xp - prev) // (XPN[lvl - 1] - prev))
+
+
+def mask(fill):
+    m = ((1 << fill) - 1) << (NC * 8 - fill)
+    return [(m >> (8 * (NC - 1 - i))) & 0xFF for i in range(NC)]
 
 
 def main():
@@ -68,12 +83,15 @@ def run(h, p, check):
     p.tick(3)
 
     def bar():
+        """(fill px, shape ok, attrs of the 3 cells)"""
         f = p.frame()
-        b = cell_bytes(f, COL, ROW)
-        fill = bin(b[2]).count("1")
-        ok = (b[1] == 0xFF and b[6] == 0xFF and b[0] == 0 and b[7] == 0 and len(set(b[2:6])) == 1
-              and b[2] == (0xFF00 >> fill) & 0xFF)
-        return fill, ok, attr_at(f, COL, ROW), cell_bytes(f, COL + 1, ROW)
+        cells = [cell_bytes(f, COL + i, ROW) for i in range(NC)]
+        line = [[c[ln] for c in cells] for ln in range(8)]
+        fill = sum(bin(b).count("1") for b in line[2])
+        frame = [0xFF] * (NC - 1) + [0xFE]
+        ok = (line[0] == [0] * NC and line[7] == [0] * NC and line[1] == frame and line[6] == frame
+              and line[2] == line[3] == line[4] == line[5] == mask(fill))
+        return fill, ok, tuple(attr_at(f, COL + i, ROW) for i in range(NC))
 
     def lvl():
         return p.rb("LVL")
@@ -84,34 +102,104 @@ def run(h, p, check):
         p.turn("WAIT")
         p.tick(6)
 
+    gold = (0x46,) * NC
     f0 = bar()
-    check("X1 new game: XP 0 -> empty bar (frame only), attr $46", f0[:3] == (0, True, 0x46), f0)
+    check("X1 new game: XP 0 -> empty 23-px frame (FF FF FE), attrs $46", f0 == (0, True, gold), f0)
     gain(22)
     b = bar()
-    check("X2a XP 22 of 44 -> 4 px", (lvl(), b[0], b[1], b[2]) == (1, 4, True, 0x46), (lvl(), b))
+    check("X2a XP 22 of 44 -> 11 px", (lvl(),) + b == (1, 11, True, gold), (lvl(), b))
     gain(43)
     b = bar()
-    check("X2b XP 43 of 44 -> 7 px", (lvl(), b[0], b[1]) == (1, 7, True), (lvl(), b))
+    check("X2b XP 43 of 44 -> 22 px", (lvl(), b[0], b[1]) == (1, 22, True), (lvl(), b))
     gain(77)
     b = bar()
-    check("X3 XP 77: level 2, fill floor(8 * 33 / 66) = 4 px", (lvl(), b[0], b[1]) == (2, fill_for(77, 2), True), (lvl(), b))
+    check("X3 XP 77: level 2, fill floor(23 * 33 / 66) = 11 px", (lvl(), b[0], b[1]) == (2, fill_for(77, 2), True), (lvl(), b))
     gain(110)
     b = bar()
     check("X3b XP 110 = the L3 threshold exactly: level 3, empty bar", (lvl(), b[0], b[1]) == (3, 0, True), (lvl(), b))
     gain(1265)
     b = bar()
-    check("X4 XP 1265: level 9 (several at once), full 8 px", (lvl(), b[0], b[1]) == (9, 8, True), (lvl(), b))
-    lv = cell_bytes(p.frame(), S["LVL_COL"], ROW)
-    check("X5 the level digit cell (31, 19) is a '9' glyph, attr $46, not the bar",
-          any(lv) and attr_at(p.frame(), S["LVL_COL"], ROW) == 0x46 and lv != cell_bytes(p.frame(), COL, ROW), lv.hex())
-    # costs
+    check("X4 XP 1265: level 9 (several at once), full 23 px", (lvl(), b[0], b[1]) == (9, PX, True), (lvl(), b))
+    fr = p.frame()
+    lv = cell_bytes(fr, S["LVL_COL"], ROW)
+    dn = [cell_bytes(fr, S["DEPTH_COL"] + i, ROW) for i in range(2)]
+    check("X5 level digit (24, 21) a glyph attr $46; Dn (28-29, 21) attr $47; (30, 19) blank",
+          any(lv) and attr_at(fr, S["LVL_COL"], ROW) == 0x46 and all(any(c) for c in dn)
+          and attr_at(fr, S["DEPTH_COL"], ROW) == attr_at(fr, S["DEPTH_COL"] + 1, ROW) == 0x47
+          and not any(cell_bytes(fr, 30, 19)), (lv.hex(), [c.hex() for c in dn], attr_at(fr, S["DEPTH_COL"], ROW)))
+
+    # K1: the panel keys beside the BAG slot
+    def keys():
+        fr = p.frame()
+        return [(attr_at(fr, S["KEY_PAN_COL"] + c, S["KEY_PAN_ROW"] + r), any(cell_bytes(fr, S["KEY_PAN_COL"] + c, S["KEY_PAN_ROW"] + r)))
+                for r in range(2) for c in range(2)]
+    fl = p.rb("LVL_FLAGS")
+    p.wb("LVL_FLAGS", fl | LF_KEYC | LF_KEYM)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | PD_DEPTH)
+    p.tick(3)
+    k = keys()
+    check("K1a both keys held: cyan (30-31, 18) $45, magenta (30-31, 19) $43",
+          k == [(0x45, True), (0x45, True), (0x43, True), (0x43, True)], k)
+    p.wb("LVL_FLAGS", fl & ~(LF_KEYC | LF_KEYM) & 0xFF)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | PD_DEPTH)
+    p.tick(3)
+    k = keys()
+    check("K1b no key: 4 blank cells, attr $47", k == [(0x47, False)] * 4, k)
+
+    # G1: gaps, FOOD full + the longest word (HUNGRY), HP / MP full, XP full (L9)
+    p.wb("FOOD", 100)
+    p.wb("HSTAGE", HS_HUNGRY)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | PD_FOOD | PD_DEPTH)
+    p.tick(4)
+    fr = p.frame()
+
+    def colbits(col, bit):
+        return any(b & (1 << bit) for b in cell_bytes(fr, col, ROW))
+    fb = cell_bytes(fr, S["FOOD_BAR_COL"] + 3, ROW)
+    word_last = max((c * 8 + 7 - bit for c in range(S["HUNGER_COL"], S["LVL_COL"]) for bit in range(8) if colbits(c, bit)), default=-1)
+    dig = [8 * S["LVL_COL"] + 7 - bit for bit in range(8) if colbits(S["LVL_COL"], bit)]
+    g = {"food_b0": colbits(S["FOOD_BAR_COL"] + 3, 0), "food_cap_b1": all(x & 2 for x in fb[1:7]),
+         "word_b7": colbits(S["HUNGER_COL"], 7), "word_end_x": word_last, "digit_x": (min(dig), max(dig)) if dig else None,
+         "bar_b7": colbits(COL, 7), "bar_end_b0": colbits(COL + NC - 1, 0), "d_b7": colbits(S["DEPTH_COL"], 7)}
+    ok = (not g["food_b0"] and g["food_cap_b1"] and g["word_b7"] and dig and word_last < min(dig) - 1
+          and max(dig) < 8 * COL - 1 and g["bar_b7"] and not g["bar_end_b0"])
+    check("G1 row 21 gaps: FOOD bar 31 px (bit 0 clear, cap bit 1) / word -> digit / digit -> XP bar / XP bar -> D", ok, g)
+    try:
+        from PIL import Image
+        full = Path(BUILD_DIR) / "xpbar_screen.png"
+        game_lib.frame_png(fr, str(full), scale=4)
+        img = Image.open(full)
+        crop = img.crop((0, ROW * 8 * 4, 256 * 4, (ROW + 1) * 8 * 4))
+        crop.save(Path(BUILD_DIR) / "xpbar_row21.png")
+        print(f"[info] row-21 crop: {Path(BUILD_DIR) / 'xpbar_row21.png'}", flush=True)
+    except ImportError:
+        print("[info] no Pillow: no PNG", flush=True)
+
+    # G2: a tutorial BARS pointer's FLASH (bit 7, tt_ptr) on cols 24..29 survives the level digit / bar / Dn redraws
+    base = S["SCREEN_ATTR"] + ROW * 32
+    for c in range(S["LVL_COL"], S["DEPTH_COL"] + 2):
+        p.wb(base + c, p.rb(base + c) | 0x80)
+    p.wb("LVL_SH", 0xFF)                       # the level digit redraws (icon_poll: LVL != LVL_SH)
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | PD_DEPTH)
+    p.tick(4)
+    fl = [p.rb(base + c) for c in range(S["LVL_COL"], S["DEPTH_COL"] + 2)]
+    check("G2 FLASH on (24..29, 21) survives the digit / XP bar / Dn redraws", all(a & 0x80 for a in fl) and p.rb("LVL_SH") == lvl()
+          and not p.rb("PANEL_DIRTY") & PD_DEPTH, [hex(a) for a in fl])
+    for c in range(S["LVL_COL"], S["DEPTH_COL"] + 2):
+        p.wb(base + c, p.rb(base + c) & 0x7F)
+    t_l9 = cost(p)
+    p.wb("LVL", 1)                             # the worst divide: 22 px (no turn: the costs run code directly)
+    p.wmem(S["XP"], [43, 0])
+    t_mid = cost(p)
+    print(f"[info] item_depth (depth_tail -> far6 key_pan + xp_bar + xpb_draw + 2 pmark_rect): 22-px fill {t_mid} T, L9 {t_l9} T",
+          flush=True)
+    check("C1 item_depth <= 7k T (worst fill)", 0 < t_mid <= 7000 and 0 < t_l9 <= 7000, (t_mid, t_l9))
+
+
+def cost(p):
     p.z.cmd("set-breakpoint 5")
     ok = p.code([0x21] + w16(S["PANEL_DIRTY"]) + [0xCD] + w16(S["item_depth"]))
-    t_all = p.tstates
-    ok2 = p.code([0xCD] + w16(S["xp_bar"]))
-    t_xp = p.tstates
-    print(f"[info] item_depth (incl. depth_tail -> far6 key_pan + xp_bar + 2 pmark_rect) {t_all} T; xp_bar {t_xp} T", flush=True)
-    check("C1 item_depth <= 9k T, xp_bar <= 1.5k T", ok and ok2 and t_all <= 9000 and t_xp <= 1500, (t_all, t_xp))
+    return p.tstates if ok else -1
 
 
 if __name__ == "__main__":

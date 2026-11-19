@@ -685,7 +685,7 @@ def w15(p, check):
     check("W15 start: log attrs row 22 $07 / row 23 $47 (cols 0-23)",
           [attr_at(fr, c, 22) for c in range(24)] + [attr_at(fr, c, 23) for c in range(24)]
           == [S["ATTR_LOG_OLD"]] * 24 + [S["ATTR_LOG_NEW"]] * 24, "")
-    check("W15 start: depth D1 at (30, 18)", log_row(fr, 18, 30, 2) == text6("D1", 0, 2), "")
+    check("W15 start: depth D1 at (28, 21)", log_row(fr, 21, 28, 2) == text6("D1", 0, 2), "")
     check("W15 start: HP bar + number == hero HP", hp_ok(fr), p.ent(0)["HP"])
     check("W15 start: queue empty, nothing dirty, nothing dropped",
           (p.rb("LOG_QN"), p.rb("PANEL_DIRTY"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (0, 0, 0), "")
@@ -1580,7 +1580,7 @@ def w22_23(p, check, which):
 
 def w15_icons(p, check):
     """C3-3: icon bar states (concept-screen §5), cursor attr move, info line
-    text per icon (row 20, 42 chars, game.md §3.4), level digit (31, 19)."""
+    text per icon (row 20, 42 chars, game.md §3.4), level digit (24, 21)."""
     TXT = dict(STRINGS)
     p.boot(K_KNIGHT)
     p.isolate()
@@ -1622,8 +1622,8 @@ def w15_icons(p, check):
           grey and normal, (a[4], a[6], a[8], a[3], a[9]))
     check("W15i quick potion: glyph ATTR_POTION, count '1' (ATTR_HUD)",
           pot == (S["ATTR_POTION"], S["ATTR_HUD"], True), pot)
-    check("W15i level digit '1' at (31, 19), attr $46",
-          log_row(fr, 19, 31, 1) == text6("1", 0, 1) and fr[6144 + 19 * 32 + 31] == 0x46, "")
+    check("W15i level digit '1' at (24, 21), attr $46",
+          log_row(fr, 21, 24, 1) == text6("1", 0, 1) and fr[6144 + 21 * 32 + 24] == 0x46, "")
     check("W15i info line = the sword's line (row 20), field attrs $47 / $46 / $45",
           info(fr) == text6(TXT["info_sword"], 0, 32) and
           [fr[6144 + 20 * 32 + c] for c in (0, 11, 12, 20, 21, 31)] == [0x47, 0x47, 0x46, 0x46, 0x45, 0x45],
@@ -1654,7 +1654,7 @@ def w15_icons(p, check):
     fr = settle_panel()
     check("W15i Bag line follows LVL / XP; level digit follows LVL",
           info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/374")), 0, 32)
-          and log_row(fr, 19, 31, 1) == text6("4", 0, 1), "")
+          and log_row(fr, 21, 24, 1) == text6("4", 0, 1), "")
     check("W15i displayed == composed", fr == p.composed_frame(), "")
 
 
@@ -3080,7 +3080,7 @@ def w16_level(p, check):
               "(property check on the engine's maps)", bad == [], bad[:4])
         p.settle(2)
         fr = p.frame()
-        check(f"W16 {tag}: panel depth D{d} at (30, 18)", log_row(fr, 18, 30, 2) == text6("D%d" % d, 0, 2), "")
+        check(f"W16 {tag}: panel depth D{d} at (28, 21)", log_row(fr, 21, 28, 2) == text6("D%d" % d, 0, 2), "")
         stale = [s_ for s_ in range(16) if p.ent(s_)["DVIS"] & 1 and
                  (p.ent(s_)["ROOM"] != p.rb("CUR_ROOM") or not p.ent(s_)["FLAGS"] & EF_ACTIVE)]
         check(f"W16 {tag}: no stale sprite (B7: every drawn slot is in CUR_ROOM)", stale == [], stale)

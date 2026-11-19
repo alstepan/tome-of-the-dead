@@ -7,7 +7,8 @@
 ;------------------------------------------------------------------------------
 ; bars_draw — 32-px bar (concept: frame rows 1 / 6, end caps, fill rows 2..5)
 ; at HL = bitmap line 0 of its first cell; fill = round(A * 32 / D), D >= 1
-; (D = 0 draws an empty bar). Clobbers: A, BC, DE, HL.   ~1.4k T
+; (D = 0 draws an empty bar). Out: HL = line 0 of the cell after the bar (item_food
+; relies on it: XP-BAR2). Clobbers: A, BC, DE, HL.   ~1.4k T
 ;------------------------------------------------------------------------------
 bars_draw:
                 push hl

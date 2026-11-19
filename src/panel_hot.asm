@@ -300,7 +300,7 @@ log_drop:       push hl
 ; item — any, incl. a whole log message (scroll + line, <= ~21k T) — and
 ; re-checks: items keep coming until the queue is empty or the 2nd frame has
 ; begun, so it ends below ~92k T. A tick already in its 2nd frame draws ONE
-; small item (HP / ICONS / DEPTH, <= ~5.5k T: item_depth is ~5.4k since XP-BAR): the render-bound heavy ticks
+; small item (HP / ICONS / DEPTH, <= ~5.5k T: item_depth, XP-BAR2, is measured by xpbar.py C1): the render-bound heavy ticks
 ; reach ~116k T before the panel (budget.py), a log item there could pass the
 ; 126k T cap; the log waits for a 1st-frame tick (in a fight: the turn's last,
 ; light ANIM ticks — budget.py reports the latency).
@@ -361,9 +361,10 @@ item_hp_far:
                 jp   farb
 
 ;------------------------------------------------------------------------------
-; item_depth — "Dn" at (30, 18) + XP-BAR the XP bar (30, 19) (sv_r2.asm xp_bar, via depth_tail) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0", SMC below) + LARGER-D T8
-; KEY-PANEL the two 16x8 key icons (24-25 / 27-28, 21) (key_pan: cyan / magenta while held, else blank).
-; HL = PANEL_DIRTY.  ~2.3k T
+; item_depth — XP-BAR2 (user 2026-11-19): "Dn" at (28, 21) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0",
+; SMC below), then depth_tail (sv_r2.asm, R2): far6 key_pan = the two 16x8 key icons (30-31, rows 18 / 19:
+; cyan / magenta while held, else blank) and xp_bar = the 23-px XP bar (25..27, 21). Marks both rects here.
+; HL = PANEL_DIRTY.  ~4.4k T (tests/xpbar.py C1 measures the whole chain)
 ;------------------------------------------------------------------------------
 item_depth:
                 res  PD_DEPTH_BIT, (hl)
@@ -381,21 +382,21 @@ item_depth:
                 inc  l
                 ld   (hl), 0
                 ld   l, P_NUMBUF & $FF
-                ld   b, ICON_ROW
+                ld   b, STAT_ROW
                 ld   e, DEPTH_COL * 8
                 call print6
                 ASSERT ((DEPTH_COL * 8) & 7) == 0 && DEPTH_COL * 8 + 6 * 2 <= 256     ; print6 x rule
-                ld   bc, (ICON_ROW << 8) | DEPTH_COL   ; KEY-PANEL: the "Dn" cells and the key icons
-                ld   de, (2 << 8) | 2          ; are marked here (R6 has no room); the marks only
-                call pmark_rect                ; matter at the next present, after key_pan draws
-                                               ; (XP-BAR: 2 rows: + the XP bar (30, 19) that key_pan's tail draws)
-                ld   bc, (STAT_ROW << 8) | KEY_PAN_COL
-                ld   d, KEY_PAN_W              ; E = 2 kept: row 22 (the log, cols 24..28) is marked too: a harmless
+                ld   bc, (KEY_PAN_ROW << 8) | KEY_PAN_COL  ; the key icons (2 x 2 cells) and the bar + "Dn"
+                ld   de, (2 << 8) | 2          ; are marked here (R6 / R2 have no room); the marks only
+                call pmark_rect                ; matter at the next present, after depth_tail draws
+                ld   bc, (STAT_ROW << 8) | XPB_COL
+                ld   d, XPB_CELLS + 2          ; E = 2 kept: row 22 (gear cells 25..29) is marked too: a harmless
                                                ; copy of already-equal cells (HOT_COPY has no byte for a 2nd `ld e`)
+                ASSERT XPB_COL + XPB_CELLS + 2 == ST_ICON_COL
                 call pmark_rect
                 ld   a, (LVL_FLAGS)            ; KEY-PANEL: key_pan's input (far6 passes A)
-                jp   depth_tail                ; LARGER-D T8 / KEY-PANEL (R6 key6.asm key_pan) + XP-BAR: R2 sv_r2.asm (boot-installed
-                                               ; by in_tut; item_depth only runs after the menu): far6 key_pan, then the XP bar
+                jp   depth_tail                ; R2 sv_r2.asm (boot-installed by in_tut; item_depth only runs after the
+                                               ; menu): far6 key_pan (R6 key6.asm), then the XP bar
 
 ;------------------------------------------------------------------------------
 ; dn_mbit — DNUM-SPRITE-FIX (bank-2 dnum2.asm dn_cel; here: HOT_COPY's spare,

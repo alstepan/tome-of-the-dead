@@ -25,7 +25,7 @@
 | 1    | PROTO: sprite sources (virtual $8000-$BFFF), ZX0-packed since A5: 6,947 of 16,384 B (A6); + `vdata` (D3-TX: the text block moved to bank 0; **3E-T1: its boot-only part moved to the bank-6 boot block**); **C3-0: `ui1_code` (3C UI code, via `far1`)** after it; **3E-T1: then the packed overlay streams `ovl_blobs`** (**R6: moved to the R6 region**; bank 1 now ends at `bank1_end`, 1,300 B free) | PROTO |
 | 2    | (also $8000 fixed)                | system   |
 | 3    | PROTO: sprite sources tail (virtual $C000-; empty since A5) + **cold code** (select, transition scrolls, follower selection; new game → bank 0 (newgame0.asm, B0CODE; was bank 7 since MEM-SND); **`$F048-$FFFF` AY player slot** (A8; **D3-11: 4,024 B from `$F048`, 4,023 B used, 1 B free; bank-3 cold code +8 B**; **RECLAIM-C (a): 4,032 B from `$F040`, 4,023 B used `$F040..$FFF6`, 9 B free; bank-3 cold code +48 B**; **M0 (L3): 4,080 B from `$F010`, 4,023 B used `$F010..$FFC6`, 57 B free; bank-3 cold code `$C000..$EFC7`, 72 B free**; **MEM-RECLAIM w3: 4,144 B from `$EFD0` (was `$EFA0`), 121 B free**; **3E lever (c): 4,192 B** from `$EFA0` (+512 B to bank-3 cold code); MEM-SND: 4,704 B from `$EDA0`, was 4 KB at `$F000` since D3-0 (user 2026-10-06), 7 KB from `$E400` before; called by the IM 2 ISR) | PROTO |
-| 4    | PROTO: pre-shift sprite pool; **TUT0-T1: `BLOB_ORG` `$DD9A..$FFFF` (`BLOB_RES` 8,806; TUT-ICONFLASH, was `$DD9E` W21-FIX, was `$DDA4` TUT-TREASURE, `$DDD0`; TUT-KEY-FLASH, `$DE20`; TUT-GEAR, was `$DF01` TUT-KEY, `$DF37` MORROW-SPEAK, `$E1B2` / `$E1B4` C+TUT0, `$E000` TUT0-F2, `$E800` / 6,144) = the D0 tutorial blob from boot until the D1+ pool overwrites it** (unpacked once per power-on by the INSTR overlay; "TUT0-T1"); build-time only: the `tap_loader` + overlay raw scratch `$C000..` (never loaded) | PROTO    |
+| 4    | PROTO: pre-shift sprite pool; **TUT0-T1: `BLOB_ORG` `$DD98..$FFFF` (`BLOB_RES` 8,808; XP-BAR2, was `$DD9A` TUT-ICONFLASH, was `$DD9E` W21-FIX, was `$DDA4` TUT-TREASURE, `$DDD0`; TUT-KEY-FLASH, `$DE20`; TUT-GEAR, was `$DF01` TUT-KEY, `$DF37` MORROW-SPEAK, `$E1B2` / `$E1B4` C+TUT0, `$E000` TUT0-F2, `$E800` / 6,144) = the D0 tutorial blob from boot until the D1+ pool overwrites it** (unpacked once per power-on by the INSTR overlay; "TUT0-T1"); build-time only: the `tap_loader` + overlay raw scratch `$C000..` (never loaded) | PROTO    |
 | 5    | normal screen (also $4000 fixed); low RAM `$6000-$7FFF` buffers + **cold code** (boot, generator) + frame descriptors (A6) | system   |
 | 6    | PROTO: pre-shift sprite pool `$C000..POOL6_END` (**SRC6 spike: ends at `POOL6_END` = `SRC6_ADDR` `$E400`**; R6: was `R6_ADDR` `$E500`); **3E-T1: until the hero start, `BOOT6_ADDR..SRC6_ADDR` = the boot block** (boot-only code + data, own tape block, dead after boot — "Boot block"; R6 / SRC6: moved down from the top); **SRC6 spike (2026-10-27): `SRC6_ADDR..R6_ADDR` = the permanent bank-6 sprite-source region** (`SRC6_LEN` = `SRC6_PAGES` × 256, default 256 B; ZX0 blocks read by `zx0_frame`; on the boot block's tape block — "SRC6 region"); **R6 (2026-10-21): `R6_ADDR..$FFFF` = the permanent R6 region** (6,912 B: resident code via `far6` + packed overlay streams, own tape block — "R6 region") | PROTO    |
 | 7    | **displayed screen during play** (screen 2, `$C000-$DAFF`, A7 double buffer) + **8 level tilesets** `$FA40-$FF07` (M0: `TSET_BASE` `$FA40`, then the high bank-7 code `b7h_code..b7h_end` to `$FFFF`; MEM-RECLAIM w2a: deduplicated, 1,224 B, was `$FAA0-$FF67`; was 8 × 320 B at `$DB00-$DFFF` / `$FAA0-$FF9F`) + **D3-S2: bank-7 cold code** `$DB00-$F7FF` (`far7`; was the bitmap shadow + (w2a) tileset slots 0–3) + the attr shadow `$F800-$FA3F` | system / PROTO |
@@ -7893,7 +7893,7 @@ the IM 2 ISR does not save or use IY).
 | `$5C00-$5C6F` | **R1 `SEQ2`** (`seq2_bytes` EQU, 112 B) | runtime-only: in no tape block, not in the `.sna`; `sq_reset` sets `SQ_TOP2`, `sq_load` fills it (blocks after `ksm_r2`). The ROM IM1 ISR scribbles KSTATE here before `boot`'s `DI` only. ASSERT `SEQ2 + SEQ2_LEN <= SYS_FRAMES` (defs.asm) |
 | `$5C70-$5C77` | free (8 B) | |
 | `$5C78-$5C7A` | `SYS_FRAMES` | **LIVE**: never overlap (ASSERTs in defs.asm / main.asm) |
-| `$5C7B-$5CDA` | **R2 install hole (96 B)**: `depth_tail` + `xp_bar` (XP-BAR, 95 B, **1 B free**) | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
+| `$5C7B-$5CDA` | **R2 install hole (96 B)**: `depth_tail` + `xp_bar` + `xpb_draw` (XP-BAR2, 86 B, **10 B free**; XP-BAR was 95 B) | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
 | `$5CDB..` | `DN_KEY` / `DN_A` / `ITEM_RAM` .. (D3-11 / 3E-T3, unchanged) | `tests/items3e.py` canaries start at `SV_R2_END` now |
 
 ### Reclaims (behaviour identical; goldens unchanged)
@@ -7908,7 +7908,7 @@ the IM 2 ISR does not save or use IY).
 
 ### Install blocks (R2 / R4 / R5; the `tele_lri` pattern)
 
-`main.asm` "RECLAIM-SV INSTALL BLOCKS" DISPs `src/sv_r2.asm` / `sv_r4.asm` / `sv_r5.asm` (empty today) at their regions;
+`main.asm` "RECLAIM-SV INSTALL BLOCKS" DISPs `src/sv_r2.asm` / `sv_r4.asm` / `sv_r5.asm` (XP-BAR2: R5 holds `xpb_div` + `fbar_gap`) at their regions;
 `instr_ovl.asm` `in_tut` LDIRs a **non-empty** block into place (`IF SV_Rn_LEN > 0`: nothing assembled for an empty one, so
 today **0 B of BOOT4**; a block costs its bytes packed + ~9 B of code; `-DSV_TEST=1` = 4-byte patterns: +24 B packed for
 the three, used to test the wiring). `SAVEBIN build/ovl/sv<n>.bin` (non-empty only) is the tests' reference
@@ -7964,3 +7964,32 @@ A book that learns a NEW ability (abil_learn's L = 1) FLASHes the slot's 6 attr 
 - **Free after both (release):** cold block **2** (197 -> 83 GARG-CHAIN -> 2: ic_fl 77 + vis_room_sync 4), R4 68 -> **23**, R2 1, R5 48, bank 1 **2**, bank 3 **10** (level_reset +3 for ICON_FL), bank 2 6 -> **3** (the 3 B kind_tab ALIGN pad is gone: icon_poll +3), R6 3, text headroom 10, HOT_COPY 3.
 - **Review fixes:** `end_scr0 .card` zeroes `ICON_FL` (`nm3_b0.asm`, +4 B B0_CODE2, free 14; the card's `panel_tick` polls `icon_poll`; iconflash F7 death + win). R4 also holds `gh_pend` 6 B (perch1's PENDING test only when `PEND_N != 0`, ~1.1k T saved per perched Gargoyle per monster pass): R4 free 17, bank 1 free 2.
 
+## XP-BAR2 ledger (`feat/xp-bar2`, 2026-11-19; user-approved mock `xp_F2_gap1px`; `tests/xpbar.py` X1..X5 / K1 / G1 / C1)
+Row 21 after the FOOD word (cols 19-23): **col 24 the level digit** (`LVL_COL`, was (31, 19)), **cols 25-27 a 23-px XP bar**
+(`XPB_COL` / `XPB_CELLS` / `XPB_PX`, was 8 px at (30, 19); `XPB_ROW` retired), **cols 28-29 "Dn"** (`DEPTH_COL` 28, row
+`STAT_ROW`, was (30, 18)), cols 30-31 the status icons. The two 16x8 panel keys moved to **(30-31, 18) cyan / (30-31, 19)
+magenta** (`KEY_PAN_COL` 30, `KEY_PAN_ROW` = `ICON_ROW`; `KEY_PAN_COLM` / `KEY_PAN_W` retired), beside the BAG slot. All in
+level_defs.asm (ASSERTed contiguous: `HUNGER_COL + 5 <= LVL_COL`, `LVL_COL + 1 == XPB_COL`, `XPB_COL + 3 == DEPTH_COL`,
+`DEPTH_COL + 2 == ST_ICON_COL`).
+- **Attrs:** `pi_rects` (data7.asm) stamps `ATTR_LVL` $46 over (24..27, 21), one 4-cell rect (same 4 B as XP-BAR's (30-31, 19));
+  "Dn" keeps the panel clear's `ATTR_HUD`; the key cells take their own attr (key_pan) as before. No redraw of cols 24..29 writes
+  an attr (print6 / xp_bar never do), so the tutorial BARS pointer (`tut_rects` (21, 0, 30, 1), unchanged) keeps its FLASH there.
+- **XP bar:** fill = floor(23 * d / span) (d = XP - T(LVL-1) < span <= 253; full at L9 or d >= span), frame lines 1 / 6 =
+  `FF FF FE`, fill lines 2..5, bit 0 of col 27 never set (1-px gap before "D"). Code split over two install regions:
+  R2 `xp_bar` (head: table reads, range checks; `.full`) + `xpb_draw` (30 B, the 3 cells); **R5 `xpb_div`** (23 * d, then one
+  subtraction a px shifting a 1 into the B:C:A mask; bank 2 = uncontended, ~56 T a px vs ~90 in R2). `tt_kflash` follows
+  `KEY_PAN_ATTR` (ASSERT unchanged, holds at $5A5E).
+- **Row-21 gaps (user 2026-11-19, same task):** the FOOD bar ends at 31 px: item_food `call fbar_gap` (**R5**, was `call
+  bars_draw`) = bars_draw then bit 0 of col 18 lines 1..6 cleared + the right cap at bit 1; fill divisor `FOOD_BAR_D` 103
+  (round(FOOD * 32 / 103) ~ FOOD * 31 / 100, <= 31 px; hunger0.asm). Option (b) (word 1 px right) is impossible: print6 needs a
+  byte-aligned x. Word -> digit (>= 5 px) and digit -> XP bar (3 px: FONT6 glyphs use bits 7..3) needed nothing. In R5, not
+  B0_CODE2, because the trace build's bank 0 has 2 B free (the 11 B inline version overflowed it by 9).
+- **item_depth** (HOT_COPY, same size): prints "Dn" at (28, 21); marks (30..31, 18..19) and (25..29, 21..22).
+  Cost (xpbar.py C1, release): **L9 5.39k T (was 5.43k), worst fill (22 px) 6.89k T (was 6.25k at 7 of 8 px)**.
+- **Text:** TL_L17 `BELOW YOU: LIFE, MANA, FOOD, XP` (31 chars): raw blob 8,798 -> 8,800 B, **`BLOB_ORG` `$DD9A` -> `$DD98`**
+  (tail 8); D0 pool margin 282 -> **280 B**.
+- **Free after (release):** R2 1 -> **10**, R5 48 -> **6** (xpb_div 27 + fbar_gap 15), R4 17, R6 6, B0_CODE2 14 (trace 2),
+  bank 2 3, HOT_COPY 3, bank 1 2, bank 3 10, cold block 2, all unchanged; BOOT4 free below `BLOB_ORG` 383 -> **339** (the
+  R5 block + its LDIR, boot only).
+- Goldens re-hashed (panel only): `game_start` / `game_start_wizard` (game.py), `w15_panel_mage` (world.py), `tut0_d0_arrival`
+  (tut0.py).

@@ -2140,7 +2140,7 @@ blob_icon:
 ; IT_KEY; key_take keeps LVL_KEYROOM, and a drop_put may reuse the freed entry / stamp the cell): FLASH (attr bit 7) on its 4
 ; cells + the key slot's ink in FI_INK (erase_rect / the sprite pass repaint from it, so a redraw keeps it).
 ; Key held (LF_KEYC): a queued panel key redraw is drawn first (item_depth, it paints without FLASH), then
-; FLASH on the 2 panel key cells; key_door's unlock redraw (PD_DEPTH) blanks them as on D1+.
+; FLASH on the 2 cyan panel key cells (KEY_PAN_ATTR = (30-31, 18) since XP-BAR2); key_door's unlock redraw (PD_DEPTH) blanks them as on D1+.
 ; Clobbers: A, BC, DE, HL.   ~0.2k idle; ~3.5k the one turn a draw is pending
 ;------------------------------------------------------------------------------
 TUT_KEY_COL     EQU 8                   ; the key's col (tools/tut0_level.py ITEMS)

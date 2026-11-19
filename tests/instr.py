@@ -46,7 +46,7 @@ def main():
         lri = open(os.path.join(BUILD_DIR, "ovl", "lri.bin"), "rb").read()
         h.expect("I8b2 tele_lri at tape_tab == lri.bin (PKG5+FLY-CUT)", bytes(p.z.read_memory(S["lri_base"], len(lri))) == lri, True)
         # RECLAIM-SV: R2 (sysvar hole) / R4 (print code) / R5 (ISR stack slack) install blocks == build/ovl/sv<n>.bin
-        # (R2 = XP-BAR, R4 = ICON-FLASH, R5 empty: an empty block is then just the static layout; -DSV_TEST=1 builds a 4-byte pattern in each, no longer fitting R2)
+        # (R2 = XP-BAR2 xp_bar + xpb_draw, R4 = ICON-FLASH, R5 = XP-BAR2 xpb_div + fbar_gap; -DSV_TEST=1 builds a 4-byte pattern in each, no longer fitting R2)
         svb = sv_blocks()
         bad = [n for n, a, b in svb if bytes(p.z.read_memory(a, len(b))) != b]
         h.expect("I8b3 RECLAIM-SV install blocks %s installed == sv<n>.bin (bad %s)" % ([n for n, a, b in svb], bad), len(bad), 0)
