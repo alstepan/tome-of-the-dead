@@ -16,10 +16,14 @@ the real Spectrum palette (FLASH shown non-inverted).  Output: docs/release/itch
                                                      # build first (tools/build.sh -DDEBUG_KIT=0), no other ZEsarUX running
                                                      # (~5 min); records music + the 5 scenes, then assembles video/trailer.mp4
 
-The v1.2 trailer (TRAILER-V12) = loading screen, title, 5 scenes of the real game (a staged start, then real time:
-tut = Brother Morrow's opening + the climb down; garg = perched Gargoyle statue, an Orc walking through it, the wake,
-the fight; imp = Fire Imp (D6) then Frost Wraith / Ice Shade (D7) with their shots; key = level key pickup + the
-locked door; xp = a Warrior fight filling the XP bar row 21 to a level-up), the cover.  Scenes: sc_* below.
+The v1.2 trailer (TRAILER-V12, ~76 s) = loading screen, title, then clips of the real game (a staged start, then real
+time) in this order: tut (W) Brother Morrow's opening + the climb down; garg (M) a Gargoyle perched high on the wall
+(y = 9s + 1), an Orc walking through it, the hero walks up, THE GARGOYLE WAKES UP, the fight; imp (W) Fire Imp (D6)
+and wraith (M) Ice Shade (D7), their shots; the old-favourites montage vamp (W) skel (M) ogre (W, OGRE LORD D4 lair)
+ghost (M) dlord (W, DEATHLORD D7 lair); key (M) level key + locked door; xp (W) the XP bar to a level-up; the cover.
+A capture is one session ("mW" / "mM" hold the montage cuts of one hero); TR_CLIPS = (capture, mark, seconds).
+Staged monsters follow the generator's rules: flyers + the Gargoyle on the cruise row 9s + 1, nobody inside the
+1-col margin of a ladder / shaft (legal_x), lair bosses spawned by the real lair entry.  Scenes: sc_* below.
 
 Recording needs the release build (tools/build.sh -DDEBUG_KIT=0), ZEsarUX and a free ZRCP port
 (ZRCP_PORT, never 10000).  The run is tick-exact (the playthrough bot of tests/pt_bot.py drives the
@@ -177,7 +181,8 @@ def check_audio(frames, audio_path, span, quiet_ok=False):
     tail = raw[-need:].astype(np.float32)
     sd = float(tail.std())
     print(f"audio check: {got} B vs {need} B expected, ratio {ratio:.4f}, file {len(raw)} B, std {sd:.2f}")
-    if abs(ratio - 1) > 0.02:
+    if abs(ratio - 1) > (0.03 if quiet_ok else 0.02):     # scenes: 3 % (each level generation under DI adds a little sound-clock skew;
+        #                                                        the sound is end-anchored, so the skew is at most ~0.6 s at a capture's start)
         sys.exit(f"AUDIO CHECK FAILED: ratio {ratio:.4f} (emulator not real time?)")
     if sd < 1.0 or len(np.unique(tail[::97])) < 4:
         if not quiet_ok:                                # an SFX-only scene can be (nearly) silent: the music carries it
@@ -879,12 +884,14 @@ def cmd_shots():
 # ------------------------------------------------------------------ trailer (v1.2, TRAILER-V12)
 # Five scenes, each its own session (boot, menu, SFX-only through key 5, a staged start): everything on screen is the
 # real game running; the memory pokes only stage a start (a depth, the hero's kit, which monsters stand where) and are
-# hidden by a black cut, never a speed-up or an edited frame.  The clip of a scene starts exactly at its "<scene>" mark
+# hidden by a black cut, never a speed-up or an edited frame.  The clip starts exactly at its (capture, mark)
 # and lasts its TR_CLIPS seconds.  (scene, mark, seconds)
-TR_CLIPS = [("tut", "tut", 9.5), ("garg", "garg", 13.0), ("imp", "imp", 11.0), ("key", "key", 10.0), ("xp", "xp", 9.5)]
+TR_CLIPS = [("tut", "tut", 8.0), ("garg", "garg", 12.8), ("imp", "imp", 7.0), ("wraith", "wraith", 7.0),
+            ("mW", "vamp", 2.5), ("mM", "skel", 2.5), ("mW", "ogre", 4.0), ("mM", "ghost", 2.5), ("mW", "dlord", 3.0),
+            ("key", "key", 8.5), ("xp", "xp", 9.0)]
 TR_AT_MARK = tuple(m for _, m, _ in TR_CLIPS)
 TR_CAPS = {}                          # captions (from s, to s, text) by mark; none in v1.2
-TR_MUSIC_S = 72                       # menu capture length (the trailer needs ~60 s of it)
+TR_MUSIC_S = 100                      # menu capture length (the trailer needs ~60 s of it)
 
 EF_ACTIVE, EF_HOSTILE, EF_LEFT = 1, 4, 8
 
@@ -899,7 +906,7 @@ def clear_room_mons(p):
     p.z.cmd("write-memory %d %s" % (S["P_ENTITIES"], " ".join(str(b) for b in mem)))
     for nm in ("ST_FLAGS", "ST_T1", "ST_T2", "ST_X"):
         p.z.cmd("write-memory %d %s" % (S[nm], " ".join(["0"] * 16)))
-    for nm in ("TURN_PEND", "TURN_TICK", "COMBAT_NOT_BEFORE", "FX_DROP", "SPQ_K", "dh_rtick"):
+    for nm in ("TURN_PEND", "TURN_TICK", "COMBAT_NOT_BEFORE", "FX_DROP", "SPQ_K"):      # (never dh_rtick: it is a bank-0 byte, $E57F = bank-7 CODE while the game runs)
         p.wb(nm, 0)
 
 
@@ -961,49 +968,141 @@ def sc_tut(st, p, rec):
     st.wait_s(2.0)
 
 
+def legal_x(st, x, w):
+    """the game's lp_legal rule for a body w cols wide: a 1-col margin round every ladder / shaft footprint
+    (x + w - 1 <= f - 3 or x >= f + 4 for each ladder left col f), 2 cols off the walls / doors."""
+    lo, hi = st.reach_span(1)
+    return lo + 2 <= x and x + w - 1 <= hi - 2 and all(x + w - 1 <= f - 3 or x >= f + 4 for f in st.room_ladders())
+
+
+def find_x(st, want, w, direction=0):
+    """the legal col nearest `want` (direction -1 / +1: only that side of it)."""
+    for d in range(0, 30):
+        for x in ((want - d, want + d) if direction == 0 else (want + direction * d,)):
+            if legal_x(st, x, w):
+                return x
+    raise RuntimeError(f"no legal col near {want}")
+
+
 def sc_garg(st, p, rec):
-    """D6 start room: a perched Gargoyle (statue, intangible), an Orc walks right through it toward the hero, the
-    hero kills the Orc and steps up to the statue: it wakes ("THE GARGOYLE WAKES UP.") and the fight is on."""
+    """D6, the Mage.  The game perches a Gargoyle high on the wall (y = 9s + 1): the statue.  An Orc walks in from the
+    right THROUGH it (a perched Gargoyle is intangible) toward the hero, who waits, kills it, then walks up to the
+    statue: within 2 cols it wakes ("THE GARGOYLE WAKES UP."), flies and fights."""
     box = {}
+    kg, ko = S["K_GARGOYLE"], S["K_ORC"]
 
     def put():
-        lo, hi = stage_room(st, p, 6, 120, 20, [2, 2, 0, 0, 0], 6, hx=6)
-        g = 6 + st.kw + 3                                        # one step from the wake gap (PERCH_GAP 2)
-        box.update(lo=lo, hi=hi, g=g)
-        spawn(st, p, S["K_GARGOYLE"], g, 1, flags=EF_ACTIVE | EF_HOSTILE | S["EF_GHOST"], rcd=1)
-        spawn(st, p, S["K_ORC"], g + 7, 1, left=True)
+        stage_room(st, p, 6, 100, 90, [2, 2, 2, 1, 2], 6, hx=6)
+        gw = st.kb(kg, "KT_BW")
+        for r in [st.rb("LVL_START")] + [r for r in st.rooms if r != st.rb("LVL_START")]:    # a room that fits the layout
+            teleport(st, p, r, 1, 4)
+            st.refresh_room()
+            lo, hi = st.reach_span(1)
+            cand = [x for x in range(lo + st.kw + 6, hi - 9) if legal_x(st, x, gw)]
+            if cand:
+                break
+        g = cand[0]
+        ox = find_x(st, g + 8, st.kb(ko, "KT_BW"), -1)
+        hx = g - st.kw - 6
+        teleport(st, p, r, 1, hx)
+        clear_room_mons(p)
+        st.refresh_room()
+        box.update(r=r, lo=lo, hi=hi, g=g, hx=hx, ox=ox)
+        spawn(st, p, kg, g, 1, hp=60, flags=EF_ACTIVE | EF_HOSTILE | S["EF_GHOST"], fly=True)   # 60 HP: a fight to watch
+        spawn(st, p, ko, ox, 1, left=True)
         refresh(p)
     cut(st, rec, put, sec=0.4)
     rec.marks.append(("garg", rec.total()))
-    log(st, f"garg room span {box}")
-    st.wait_s(1.0)
+    log(st, f"garg {box}")
+    st.wait_s(1.5)                                               # the statue, high on the wall
     st.god = True
-    for _ in range(30):                                          # let the Orc come through the statue
-        orcs = [h for h in st.hostiles() if h["kind"] == S["K_ORC"]]
-        if not orcs or orcs[0]["x"] < box["g"] - 1:
+    for _ in range(40):                                          # the Orc walks through it; the hero holds
+        orcs = [h for h in st.hostiles() if h["kind"] == ko]
+        if not orcs or orcs[0]["x"] < box["g"] - 3:
             break
         st.act("WAIT")
+    st.fight_room(120, until=lambda: not [h for h in st.hostiles() if h["kind"] == ko], max_s=8)
+    st.wait_s(0.6)
+    for _ in range(12):                                          # now up to the statue, one slow step at a time
+        garg = [h for h in st.hostiles() if h["kind"] == kg]
+        if not garg or not garg[0]["fl"] & S["EF_GHOST"]:
+            break
+        st.act("L")
+        st.wait_s(0.35)
     st.fight_room(200, max_s=9)
     st.wait_s(1.5)
 
 
+def flyer_clip(st, p, rec, depth, hero_kit, gap, mark, hold=3.5, fight_s=3.0, total=7.0):
+    """a flyer (the row-31 alias: Fire Imp D6 / Ice Shade D7) on the cruise row 9s + 1, inside its shot range: the hero
+    holds `hold` seconds (the shots are the real flyer AI's), then fights."""
+    def put():
+        stage_room(st, p, depth, *hero_kit, depth, hx=6)
+        x = find_x(st, 6 + st.kw + gap, st.kb(S["K_ALIAS"], "KT_BW"), 1)
+        spawn(st, p, S["K_ALIAS"], x, 1, hp=3 * p.rb(S["kind_tab"] + S["KT_HP"] + S["K_ALIAS"]), left=True, fly=True)
+        refresh(p)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append((mark, rec.total()))
+    t0 = rec.total()
+    st.god = True
+    while rec.total() - t0 < hold * 50:                          # stand still, the flyer shoots (seconds, not turns)
+        st.act("WAIT")
+    st.fight_room(200, max_s=fight_s)
+    st.wait_s(max(0.3, total - (rec.total() - t0) / 50))
+
+
 def sc_imp(st, p, rec):
-    """Fire Imp (D6) then Frost Wraith (D7): the Mage meets each, the shots are the real flyer AI's."""
-    def put(depth, gap):
-        def f():                                                 # inside the shot range (Imp r 6, Wraith r 8): it fires at once
-            lo, hi = stage_room(st, p, depth, 90, 60, [2, 2, 2, 1, 2], depth, hx=6)
-            spawn(st, p, S["K_ALIAS"], 6 + st.kw + gap, 1, left=True, fly=True)
-            refresh(p)
-        return f
-    for depth, gap, mark in ((6, 5, "imp"), (7, 7, "wraith")):
-        cut(st, rec, put(depth, gap), sec=0.4)
-        if mark == "imp":
-            rec.marks.append(("imp", rec.total()))
-        st.god = True
-        for _ in range(4):                                       # stand still: the flyer shoots
-            st.act("WAIT")
-        st.fight_room(200, max_s=4.2)
-    st.wait_s(0.5)
+    """Fire Imp (D6), the Warrior."""
+    flyer_clip(st, p, rec, 6, (120, 20, [2, 2, 0, 0, 0]), 5, "imp", hold=3.5, fight_s=3.0)
+
+
+def sc_wraith(st, p, rec):
+    """Frost Wraith (shown in game as ICE SHADE, D7), the Mage."""
+    flyer_clip(st, p, rec, 7, (100, 60, [2, 2, 2, 1, 2]), 7, "wraith", hold=3.5, fight_s=3.0)
+
+
+def mont_floor(st, p, rec, depth, kind, hero_kit, mark, secs, gap=5, fly=False):
+    """one montage cut: a regular of the level (staged on the floor / cruise row, 3x HP so the fight lasts) and the hero."""
+    def put():
+        stage_room(st, p, depth, *hero_kit, depth, hx=6)
+        x = find_x(st, 6 + st.kw + gap, st.kb(kind, "KT_BW"), 1)
+        spawn(st, p, kind, x, 1, hp=min(250, 3 * p.rb(S["kind_tab"] + S["KT_HP"] + kind)), left=True, fly=fly)
+        refresh(p)
+    cut(st, rec, put, sec=0.3)
+    rec.marks.append((mark, rec.total()))
+    st.god = True
+    st.fight_room(200, max_s=secs)
+
+
+def mont_lair(st, p, rec, depth, hero_kit, mark, secs):
+    """one montage cut: the real lair boss of `depth` (the game spawns it on entering the lair), the fight."""
+    def put():
+        st.go_depth(depth)
+        st.buff(hp=hero_kit[0], mp=hero_kit[1], ranks=hero_kit[2], lvl=depth)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])      # the level keys in hand: the lair door can be walked to
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    rec.marks.append((mark, rec.total()))
+    log(st, f"boss {boss:#x}")
+    st.god = True
+    st.fight_room(260, max_s=secs)
+
+
+KIT_W = (120, 30, [3, 3, 0, 0, 0])
+KIT_M = (100, 60, [3, 3, 2, 2, 3])
+
+
+def sc_montW(st, p, rec):
+    """old favourites, the Warrior: Vampire (D3), OGRE LORD (D4 lair), DEATHLORD (D7 lair)."""
+    mont_floor(st, p, rec, 3, S["K_VAMPIRE"], KIT_W, "vamp", 2.5)
+    mont_lair(st, p, rec, 4, KIT_W, "ogre", 4.0)
+    mont_lair(st, p, rec, 7, KIT_W, "dlord", 3.0)
+
+
+def sc_montM(st, p, rec):
+    """old favourites, the Mage: Skeleton, Ghost (D3)."""
+    mont_floor(st, p, rec, 3, S["K_SKELETON"], KIT_M, "skel", 2.5)
+    mont_floor(st, p, rec, 3, S["K_GHOST"], KIT_M, "ghost", 2.5, fly=True)
 
 
 def sc_key(st, p, rec):
@@ -1052,8 +1151,9 @@ def sc_xp(st, p, rec):
     st.wait_s(2.0)
 
 
-SCENES = {"tut": ("W", True, sc_tut), "garg": ("W", False, sc_garg), "imp": ("M", False, sc_imp),
-          "key": ("W", False, sc_key), "xp": ("W", False, sc_xp)}
+SCENES = {"tut": ("W", True, sc_tut), "garg": ("M", False, sc_garg), "imp": ("W", False, sc_imp),
+          "wraith": ("M", False, sc_wraith), "key": ("M", False, sc_key), "xp": ("W", False, sc_xp),
+          "mW": ("W", False, sc_montW), "mM": ("M", False, sc_montM)}
 
 
 def start_tut(p, st, rec):
@@ -1112,10 +1212,12 @@ def cmd_scene(what):
     """dev: run a scene at max speed (no sound) and write build/itch/scene_<what>.png, 1 frame per second."""
     rec, span = run_scene(what, True, sfx_only=False)
     TMP.mkdir(parents=True, exist_ok=True)
-    t0 = dict(rec.marks).get(what, 0)
     tl = np.repeat(np.arange(len(rec.frames)), [d for _, d in rec.frames])
-    pics = [scaled(scr_to_rgb(rec.frames[tl[min(t0 + k * 50, len(tl) - 1)]][0]), 1)
-            for k in range(0, min(16, (len(tl) - t0) // 50))]
+    ms = [t for m, t in rec.marks if not m.endswith("_end")]
+    secs = 12 if len(ms) == 1 else 4                      # 1 frame/s from each mark (a scene) / 4 per montage cut
+    pics = []
+    for t0 in ms:
+        pics += [scaled(scr_to_rgb(rec.frames[tl[min(t0 + k * 50 + 10, len(tl) - 1)]][0]), 1) for k in range(secs)]
     cols = 4
     w, hh = pics[0].size
     sh = Image.new("RGB", (cols * w, ((len(pics) + cols - 1) // cols) * hh))
@@ -1193,13 +1295,19 @@ def cmd_trailer():
     segs = [("loading", TITLE), ("title", TITLE)] + [((c[0], c[1]), nf(c[2])) for c in TR_CLIPS] + [("cover", COVER)]
     total = sum(n for _, n in segs)
     # ---- the music: ONE contiguous slice of the single menu capture, frame-aligned with its title picture
-    music_all = _tr_audio("music", mus)
+    # (v1.2 fix: from the FIRST NOTE of the whole file, not the end-anchored tail of the capture, which began mid-tune)
+    u8 = np.fromfile(TMP / "tr_audio_music.raw", np.uint8)
+    i0 = int(np.argmax(u8 != 128))                                             # the first sample that is not digital silence
+    raw = u8.astype(np.float32)
+    raw -= np.convolve(raw, np.ones(2000) / 2000, mode="same")
+    raw /= 128.0
+    music_all = raw[max(0, i0 - AUDIO_HZ // 20):]                              # 50 ms of lead-in before the first sound
     if len(music_all) < total * BPF:
         sys.exit(f"music capture too short: {len(music_all)} < {total * BPF}")
     music = music_all[:total * BPF].copy()                                     # THE music: one slice, never spliced
     first = int(np.argmax(np.abs(music) > 0.02))
-    print(f"music: first sound {first / AUDIO_HZ:.2f} s into the slice; capture {len(music_all) / AUDIO_HZ:.1f} s for "
-          f"{mus['span'][2]} frames = {mus['span'][2] / 50:.1f} s (15600 Hz x 312 B/frame -> 50 fps real time)")
+    print(f"music: first sound {first / AUDIO_HZ:.2f} s into the slice (file start {i0 / AUDIO_HZ:.2f} s); "
+          f"{len(music_all) / AUDIO_HZ:.1f} s available for a {total / 50:.1f} s trailer")
     music_src = music.copy()
     scn = [c[0] for c in TR_CLIPS]
     heroes = {h: pickle.load(open(TMP / f"tr_{h}.pkl", "rb")) for h in scn}
