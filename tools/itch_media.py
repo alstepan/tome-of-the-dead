@@ -888,7 +888,8 @@ def cmd_shots():
 # and lasts its TR_CLIPS seconds.  (scene, mark, seconds)
 TR_CLIPS = [("tut", "tut", 8.0), ("garg", "garg", 12.8), ("imp", "imp", 7.0), ("wraith", "wraith", 7.0),
             ("mW", "vamp", 2.5), ("mM", "skel", 2.5), ("mW", "ogre", 4.0), ("mM", "ghost", 2.5), ("mW", "dlord", 3.0),
-            ("key", "key", 8.5), ("xp", "xp", 9.0)]
+            ("key", "key", 8.5), ("xp", "xp", 9.0),
+            ("arch", "arch", 9.6), ("tome", "door", 3.0), ("tome", "tome", 8.5)]
 TR_AT_MARK = tuple(m for _, m, _ in TR_CLIPS)
 TR_CAPS = {}                          # captions (from s, to s, text) by mark; none in v1.2
 TR_MUSIC_S = 100                      # menu capture length (the trailer needs ~60 s of it)
@@ -1151,9 +1152,119 @@ def sc_xp(st, p, rec):
     st.wait_s(2.0)
 
 
+def sc_arch(st, p, rec):
+    """D8, the Warrior: the real lair of the Necromancer Archmage (the game spawns it on entering the lair), the fight to its
+    death ("THE SEAL BREAKS").  The Archmage's HP is brought down to the last few points mid-fight so it fits the clip
+    (as the playthrough bot's boss_poke does); the kill, the log and the seal are the game's."""
+    def put():
+        st.go_depth(8)
+        st.buff(hp=KIT_W[0], mp=KIT_W[1], ranks=KIT_W[2], lvl=8)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    rec.marks.append(("arch", rec.total()))
+    log(st, f"boss {boss:#x}")
+    st.god = True
+    t0 = st.sysf()
+    poked = False
+    for _ in range(300):
+        st.fight_room(1, max_s=None)
+        if st.rb("GAME_STATE") != S["GS_PLAYING"] or st.lflags() & S["LF_SEAL_OPEN"]:
+            break
+        if not poked and ((st.sysf() - t0) & 0xFFFFFF) > 4.5 * 50:
+            for h in st.hostiles():
+                if h["kind"] == S["K_ARCHMAGE"] and h["hp"] > 6:
+                    p.set_ent(h["slot"], HP=6)
+                    poked = True
+    st.wait_s(2.5)
+
+
+def sc_tome(st, p, rec):
+    """D8, the Mage: the Archmage (1 HP, so the cut is short) dies to the hero's real hit -> the seal breaks; the hero walks
+    through the Sanctum door and strikes the Tome with the staff until it is ash: "THE TOME IS DESTROYED", "A GATE GLEAMS"."""
+    def put():
+        st.go_depth(8)
+        st.buff(hp=KIT_M[0], mp=KIT_M[1], ranks=KIT_M[2], lvl=8)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    st.god = True
+
+    def kill():                      # the hero's own hit does the killing; only the boss's HP is brought to 1 (black cut)
+        t0 = st.sysf()
+        while not st.lflags() & S["LF_SEAL_OPEN"] and ((st.sysf() - t0) & 0xFFFFFF) < 40 * 50:
+            for h in st.hostiles():
+                if h["kind"] == S["K_ARCHMAGE"] and h["hp"] > 1:
+                    p.set_ent(h["slot"], HP=1)
+            st.fight_room(1)
+        st.fight_room(150, max_s=25)             # the Archmage's summons die too: nothing follows the hero into the Sanctum
+
+    def to_door():                   # the hero stands 6 cols short of the Sanctum door (legal span, facing it)
+        ex = room_model.field(st.blk, st.room(), "RD_EXITS")
+        k = next(k for m_, k in st.neighbours(st.room()) if m_ == st.sanctum)
+        s_ = 1 if ex & S["RDX_" + ("LS1" if k == "L" else "RS1")] else 0
+        teleport(st, p, st.room(), s_, 14, left=(k == "L"))
+        lo, hi = st.reach_span(s_)
+        teleport(st, p, st.room(), s_, max(lo, min(hi, (lo + 6) if k == "L" else (hi - 6))), left=(k == "L"))
+    cut(st, rec, lambda: (kill(), to_door()), sec=0.2)
+    log(st, f"seal open {bool(st.lflags() & S['LF_SEAL_OPEN'])}")
+    sn = st.sanctum
+    kind = next(k for m_, k in st.neighbours(st.room()) if m_ == sn)
+    rec.marks.append(("door", rec.total()))
+    st.wait_s(0.5)
+    st.leave(kind)                               # the real bump opens the broken-seal door, then the hero walks in
+    st.wait_s(0.3)
+    rec.marks.append(("door_end", rec.total()))
+    st.refresh_room()
+    lect = [(c, rr) for rr in range(S["STOREY_ROWS"], 18) for c in range(32) if st.cell_tf(c, rr) & S["TF_ATTACK"]]
+    left = min(c for c, _ in lect) < 16
+    lo, hi = st.reach_span(1)
+    # the Sanctum walk is long: a black cut puts the hero (legal storey-1 col, 4 cols short of the lectern, facing it)
+    cut(st, rec, lambda: teleport(st, p, sn, 1, (lo + 4) if left else (hi - 4), left=left), sec=0.3)
+    rec.marks.append(("tome", rec.total()))
+    st.wait_s(0.8)
+    for _ in range(14):
+        e, s_, x_, _st = st.hero_pos()
+        if st.rb("TOME_HP") == 0:
+            break
+        if not st.act("H" if left else "L"):
+            st.wait_s(0.3)
+        st.wait_s(0.3)
+    log(st, f"TOME_HP {st.rb('TOME_HP')}")
+    st.wait_s(3.5)
+
+
+def sc_ogre(st, p, rec):
+    """Warrior vs the OGRE LORD in its real D4 lair (itch shot / GIF)."""
+    mont_lair(st, p, rec, 4, KIT_W, "ogre", 6.0)
+    st.wait_s(0.5)
+
+
+def sc_bag(st, p, rec):
+    """Warrior D3: a potion, a helm and a long weapon in the bag; I opens the bag page, the cursor rests on the helm (its
+    properties on the lines under the grid)."""
+    def put():
+        stage_room(st, p, 3, 120, 30, [3, 3, 0, 0, 0], 3, hx=6)
+        for n, q in (("P_HEAL", 2), ("H_HELM", 1), ("W_LONG", 1)):
+            give(st, n, q)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append(("bag", rec.total()))
+    st.wait_s(0.5)
+    i = st.bag_find("H_HELM")
+    st.bag_show(goto=i, dwell=0.8, step_s=0.6, close_dwell=0.2)
+
+
+# ---- itch page shots / GIFs (v1.2): each scene is recorded once at max speed (the same deterministic scenes), the frames
+# are pickled, and `shots12 make` writes the files from picked offsets (display frames after the scene's mark)
+SH_SCENES = {"sh_ogre": ("W", False, sc_ogre, "ogre"), "sh_ice": ("M", False, sc_wraith, "wraith"),
+             "sh_imp": ("W", False, sc_imp, "imp"), "sh_garg": ("M", False, sc_garg, "garg"),
+             "sh_tut": ("W", True, sc_tut, "tut"), "sh_key": ("M", False, sc_key, "key"),
+             "sh_tome": ("M", False, sc_tome, "tome"), "sh_bag": ("W", False, sc_bag, "bag")}
+
+
 SCENES = {"tut": ("W", True, sc_tut), "garg": ("M", False, sc_garg), "imp": ("W", False, sc_imp),
           "wraith": ("M", False, sc_wraith), "key": ("M", False, sc_key), "xp": ("W", False, sc_xp),
-          "mW": ("W", False, sc_montW), "mM": ("M", False, sc_montM)}
+          "mW": ("W", False, sc_montW), "arch": ("W", False, sc_arch), **{k: v[:3] for k, v in SH_SCENES.items()}, "tome": ("M", False, sc_tome), "mM": ("M", False, sc_montM)}
 
 
 def start_tut(p, st, rec):
@@ -1402,6 +1513,90 @@ def cmd_trailer():
     print(f"{out}: {total} frames = {total / 50:.1f} s, {out.stat().st_size / 1e6:.1f} MB")
 
 
+def _sh_frames(name):
+    d = pickle.load(open(TMP / f"sh_{name}.pkl", "rb"))
+    tl = np.repeat(np.arange(len(d["frames"])), [x for _, x in d["frames"]])
+    t0 = dict(d["marks"])[SH_SCENES[name][3]]
+    return d, tl, t0
+
+
+def cmd_sh_rec(name):
+    rec, _ = run_scene(name, True, sfx_only=False)
+    TMP.mkdir(parents=True, exist_ok=True)
+    pickle.dump({"frames": rec.frames, "marks": rec.marks}, open(TMP / f"sh_{name}.pkl", "wb"))
+    print(f"shots12 rec {name}: {rec.total() / 50:.1f} s, marks {rec.marks}")
+
+
+def cmd_sh_sheet(name, step=25, n=24):
+    """contact sheet of one recorded scene: a frame every `step` display frames from its mark, offset in the corner."""
+    d, tl, t0 = _sh_frames(name)
+    from PIL import ImageDraw
+    pics = []
+    for k in range(n):
+        i = min(t0 + k * step, len(tl) - 1)
+        im = scaled(scr_to_rgb(d["frames"][tl[i]][0]), 1)
+        ImageDraw.Draw(im).text((2, 2), str(k * step), fill=(255, 255, 255))
+        pics.append(im)
+    cols = 4
+    w, hh = pics[0].size
+    sh = Image.new("RGB", (cols * w, ((len(pics) + cols - 1) // cols) * hh))
+    for i, im in enumerate(pics):
+        sh.paste(im, ((i % cols) * w, (i // cols) * hh))
+    sh.save(TMP / f"shsheet_{name}.png")
+    print(f"build/itch/shsheet_{name}.png (marks {d['marks']})")
+
+
+def _gif(frames, name, fps=25):
+    """the cmd_clip GIF writer on an explicit list of 6912-B screens at 50 Hz: 2x, Spectrum palette, equal frames merged."""
+    pal = []
+    for br in (0xD7, 0xFF):
+        for c in range(8):
+            pal += [(c >> 1 & 1) * br, (c >> 2 & 1) * br, (c & 1) * br]
+    pal += [0] * (768 - len(pal))
+    ref = Image.new("P", (1, 1))
+    ref.putpalette(pal)
+    q = [scaled(scr_to_rgb(f), 2).quantize(palette=ref, dither=Image.Dither.NONE) for f in frames[::50 // fps]]
+    mi, md = [q[0]], [1000 // fps]
+    for b in q[1:]:
+        if b.tobytes() == mi[-1].tobytes():
+            md[-1] += 1000 // fps
+        else:
+            mi.append(b)
+            md.append(1000 // fps)
+    md[-1] += 600
+    out = OUT / "img" / name
+    mi[0].save(out, save_all=True, append_images=mi[1:], duration=md, loop=0, optimize=True, disposal=1)
+    print(f"{out.name}: {sum(md) / 1000:.1f} s, {out.stat().st_size / 1e6:.2f} MB, {len(mi)} frames")
+
+
+# (file, scene, display-frame offset after the scene's mark) ; (file, scene, from, to) for GIFs
+SH_PNG = [("shot2_warrior_fight.png", "sh_ogre", 250), ("shot3_mage_bolt.png", "sh_ice", 250),
+          ("shot4_bag.png", "sh_bag", 175), ("shot5_deeper_d5.png", "sh_imp", 150),
+          ("shot6_tutorial.png", "sh_tut", 50), ("shot7_key_door.png", "sh_key", 300),
+          ("shot8_gargoyle_statue.png", "sh_garg", 300), ("shot9_tome_destroyed.png", "sh_tome", 300)]
+SH_GIF = [("walk_fight.gif", "sh_garg", 275, 550), ("warrior.gif", "sh_ogre", 150, 400), ("mage.gif", "sh_ice", 100, 375)]
+
+
+def cmd_sh_menu():
+    """shot1_menu: the real main menu (nothing pressed), x3."""
+    _imports()
+    with session("W", 0x1234, fast=True) as (h, p, rec, st):
+        st.wait_s(1.0)
+        scaled(scr_to_rgb(bytes(p.frame())), 3).save(OUT / "img" / "shot1_menu.png")
+    print("wrote shot1_menu.png")
+
+
+def cmd_sh_make():
+    (OUT / "img").mkdir(parents=True, exist_ok=True)
+    for fn, name, off in SH_PNG:
+        d, tl, t0 = _sh_frames(name)
+        scaled(scr_to_rgb(d["frames"][tl[t0 + off]][0]), 3).save(OUT / "img" / fn)
+        print("wrote", fn)
+    for fn, name, a, b in SH_GIF:
+        d, tl, t0 = _sh_frames(name)
+        _gif([d["frames"][tl[i]][0] for i in range(t0 + a, min(t0 + b, len(tl)))], fn)
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -1423,6 +1618,8 @@ def main():
         cmd_clip("M", 1140, 1500, "mage.gif")
     elif a[0] == "scene":
         cmd_scene(a[1])
+    elif a[0] == "shots12":
+        {"rec": lambda: cmd_sh_rec(a[2]), "sheet": lambda: cmd_sh_sheet(a[2]), "make": cmd_sh_make, "menu": cmd_sh_menu}[a[1]]()
     elif a[0] == "trailer":
         if a[1:2] == ["rec"]:
             cmd_trailer_rec(a[2])
