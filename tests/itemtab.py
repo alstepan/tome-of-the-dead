@@ -527,7 +527,7 @@ IE_SPEC = {
 }
 IE_TEXT = {  # item_info.md §3, verbatim
     "ie_cure": "CURES POISON WEAK CONFUSED FEAR", "ie_teleport": "SENDS YOU TO ANOTHER ROOM",
-    "ie_fear": "ROOM'S MONSTERS FLEE 9 TURNS", "ie_sleep": "ROOM'S MONSTERS SLEEP 8 TURNS",
+    "ie_fear": "FOES IN ROOM FLEE 9 TURNS", "ie_sleep": "FOES IN ROOM SLEEP 8 TURNS",
     "ie_enchant": "A RANDOM WORN ITEM +1, UP TO +3", "ie_book": "READ: A NEW SKILL OR A RANK",
     "ie_bow": "SHOOT IT FROM BAR SLOT 5", "ie_rune": "SPELL DMG +1", "ie_bone": "SPELL DMG +2",
     "ie_plate": "HALF MP REGEN", "ie_silk": "IMMUNE TO POISON", "ie_gcloak": "HALF DMG FROM DARK + DRAIN",

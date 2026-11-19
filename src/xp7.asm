@@ -190,7 +190,7 @@ xp_level:
                 jr   z, .ne
                 push bc
                 ld   a, TX_XP_ATK
-                call msg_push                  ; "YOU STRIKE TRUER" (AF, BC, DE, HL)
+                call msg_push                  ; "YOU FEEL MORE ACCURATE" (AF, BC, DE, HL)
                 pop  bc
 .ne:            bit  XPF_EVA, c
                 ld   a, TX_XP_EVA

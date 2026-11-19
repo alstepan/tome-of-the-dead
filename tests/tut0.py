@@ -1214,7 +1214,7 @@ def scen_full(h, hero, via, name, final, scheme="keys", via_menu=None):
           run.wake_mark is not None and line("TL_L75", scheme) not in awake, (run.wake_mark, awake[:6]))
     left = after_fight_to_exit(p, run, heal=True, waits=4 if final else 0, png="tut_last_line.png" if final else None)
     if final:
-        check("TK6", "final run: waiting out B14 (4 turns), the log ends on G5 = L45 / L47 'ON THE GRATE, PRESS A' before the "
+        check("TK6", "final run: waiting out B14 (4 turns), the log ends on G5 = L45 / L47 'ON THE GATE, PRESS A' before the "
               f"step (PNG {getattr(run, 'last_png', None)})",
               getattr(run, "last_rows", None) == [line("TL_L45", scheme), line("TL_L47", scheme)], getattr(run, "last_rows", None))
     for _ in range(400):                                         # the reset's D1 start
@@ -1969,7 +1969,7 @@ def scen_redef(h, keys, via_menu, label):
     l02, l60, l67 = line("TL_L02", "redef"), line("TL_L60", "redef"), line("TL_L67", "redef")
     check("C12", f"{label}: L02 reads '{l02}', R2 L60 '{l60}', L67 '{l67}' (the redefined keys)",
           l02 == f"PRESS {keys[1]} TO CLIMB DOWN" and l02 in lines and l60 == f"ICONS: PRESS {keys[1]}+{keys[4]} AT ONCE"
-          and l60 in lines and l67 == f"LEAPS GO LEFT TOO: {keys[0]}+{keys[2]}" and l67 in lines, lines[:16])
+          and l60 in lines and l67 == f"JUMPS GO LEFT TOO: {keys[0]}+{keys[2]}" and l67 in lines, lines[:16])
     check("C12", f"{label}: the whole route works on the redefined keys: walk, leap the pit, pick up the book, READ it from the page",
           ok and p.rb("ARANK") != 0 and not run.blocked, (ok, p.rb("ARANK"), run.blocked))
 
@@ -2185,7 +2185,7 @@ def scen_tour(h, hero, scheme="keys"):
     g1 = held(p, "TL_L66", scheme), held(p, "TL_L09", scheme), L("TL_L67") in [l.rstrip() for l in p.LOG], held(p, "TL_L68", scheme)
     check("C22", f"{tag}: B2 G0 L65 / L66 (held), then L08 / L09 (held); UP+RIGHT from x 16 lands x 22 storey 0; G1 L67 / L68 "
           "without a hold", g1 == (True, True, True, False) and land == (22, 0), (g1, land))
-    l09 = "LEAP: PRESS UP+RIGHT AT ONCE" if scheme == "kemp" else "LEAP: PRESS Q+P AT ONCE"
+    l09 = "JUMP: PRESS UP+RIGHT AT ONCE" if scheme == "kemp" else "JUMP: PRESS Q+P AT ONCE"
     check("K2", f"{tag}: L09 reads '{l09}' (keys spelled, R4-2)", l09 in [l.rstrip() for l in p.LOG], l09)
     # --- B3: the book; C17 pointer; C19 BAG target ---
     T(p, "L")

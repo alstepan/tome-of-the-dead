@@ -148,7 +148,7 @@ spl_drain_heal | E:spl_drain_heal | "YOU FEEL HEALTHIER"
 # pickup / trap / teleport results that are not turn-path lines
 # (key_found removed by LARGER-D T8: never used; the key lines are lockl.asm str_key_c / str_key_m)
 teleported    | N | "YOU ARE TELEPORTED!"
-trap_bell     | N | "A BELL RINGS. NOTHING COMES"
+trap_bell     | N | "A BELL RINGS, NOTHING COMES"
 # quick-use verbs and effect results (was the overlay set)
 drink         | N | "YOU DRINK THE "
 read          | N | "YOU READ THE "

@@ -193,7 +193,7 @@ def run(h, p, check):
     check("S1 XP 1242 from L1: L8 at once, HP +42, MP +7", st == (8, 72, 72, 7, 13), st)
     check("S1 atk +2 (L4, L8), eva +1 (L6)", a1 == (base_w[0] + 2, base_w[1] + 1), (a1, base_w))
     want = [TXT["xp_reach"] + "8!", TXT["xp_atk"], TXT["xp_eva"]]
-    check("S1 lines: REACH LEVEL 8!, STRIKE TRUER, FEEL NIMBLE (once each)",
+    check("S1 lines: REACH LEVEL 8!, FEEL MORE ACCURATE, FEEL NIMBLE (once each)",
           all(lines.count(w) == 1 for w in want), lines)
     kill(9998)
     check("S2 L9 cap: XP 9999 -> L9, nothing beyond", p.rb("LVL") == 9 and p.rw("XP") == 9999, hero_stats())
@@ -296,7 +296,7 @@ def run(h, p, check):
     p.wmem(S["XP"], w16(220))
     p.wb("XP_UP", 1)
     p.tick(2)
-    check("C3 deferred level-up done by a later INPUT tick: L4, REACH LEVEL 4!, STRIKE TRUER; XP_UP 0",
+    check("C3 deferred level-up done by a later INPUT tick: L4, REACH LEVEL 4!, FEEL MORE ACCURATE; XP_UP 0",
           lines == [TXT["xp_reach"] + "4!", TXT["xp_atk"]] and p.rb("XP_UP") == 0 and p.rb("LVL") == 4,
           (lines, p.rb("XP_UP"), p.rb("LVL")))
 

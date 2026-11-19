@@ -136,7 +136,7 @@ def main():
     # TUT0-F4 K2 (tut0_split.md "Playtest round 2"): no log line starts with a key token; the R4-5 wordings
     for key, text in src:
         check(not (key.startswith("TL_") and TOK.match(text)), f"{key}: begins with a key token: {text!r}")
-    check(texts.get("TL_L09") == "LEAP: PRESS {U}+{R} AT ONCE", f"TL_L09 = {texts.get('TL_L09')!r}")
+    check(texts.get("TL_L09") == "JUMP: PRESS {U}+{R} AT ONCE", f"TL_L09 = {texts.get('TL_L09')!r}")
     check(texts.get("TL_L23") == "AT THE SHAFT (LEFT) PRESS {D}", f"TL_L23 = {texts.get('TL_L23')!r}")
 
     print(f"tut_text: {len(src)} ids; worst KEYS {worst['KEYS'][0]} ({worst['KEYS'][1]}), "
