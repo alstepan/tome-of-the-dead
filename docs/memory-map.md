@@ -7893,7 +7893,7 @@ the IM 2 ISR does not save or use IY).
 | `$5C00-$5C6F` | **R1 `SEQ2`** (`seq2_bytes` EQU, 112 B) | runtime-only: in no tape block, not in the `.sna`; `sq_reset` sets `SQ_TOP2`, `sq_load` fills it (blocks after `ksm_r2`). The ROM IM1 ISR scribbles KSTATE here before `boot`'s `DI` only. ASSERT `SEQ2 + SEQ2_LEN <= SYS_FRAMES` (defs.asm) |
 | `$5C70-$5C77` | free (8 B) | |
 | `$5C78-$5C7A` | `SYS_FRAMES` | **LIVE**: never overlap (ASSERTs in defs.asm / main.asm) |
-| `$5C7B-$5CDA` | **R2 install hole (96 B)**: `depth_tail` + `xp_bar` + `xpb_draw` (XP-BAR2, 86 B, **10 B free**; XP-BAR was 95 B) | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
+| `$5C7B-$5CDA` | **R2 install hole (96 B)**: `depth_tail` + `xp_bar` + `xpb_draw` (XP-BAR2, 90 B, **6 B free**; XP-BAR was 95 B) | `SV_R2`..`SV_R2_END` (`= DN_KEY`, ASSERTed); `src/sv_r2.asm` |
 | `$5CDB..` | `DN_KEY` / `DN_A` / `ITEM_RAM` .. (D3-11 / 3E-T3, unchanged) | `tests/items3e.py` canaries start at `SV_R2_END` now |
 
 ### Reclaims (behaviour identical; goldens unchanged)
@@ -7975,8 +7975,9 @@ level_defs.asm (ASSERTed contiguous: `HUNGER_COL + 5 <= LVL_COL`, `LVL_COL + 1 =
   "Dn" keeps the panel clear's `ATTR_HUD`; the key cells take their own attr (key_pan) as before. No redraw of cols 24..29 writes
   an attr (print6 / xp_bar never do), so the tutorial BARS pointer (`tut_rects` (21, 0, 30, 1), unchanged) keeps its FLASH there.
 - **XP bar:** fill = floor(23 * d / span) (d = XP - T(LVL-1) < span <= 253; full at L9 or d >= span), frame lines 1 / 6 =
-  `FF FF FE`, fill lines 2..5, bit 0 of col 27 never set (1-px gap before "D"). Code split over two install regions:
-  R2 `xp_bar` (head: table reads, range checks; `.full`) + `xpb_draw` (30 B, the 3 cells); **R5 `xpb_div`** (23 * d, then one
+  `FF FF FE`, fill lines 2..5 with the FOOD bar's end caps (bit 7 of col 25, bit 1 of col 27; user 2026-11-19 "a box, not two
+  open lines"; +4 B in `xpb_draw`, fills 0 / 1 and 22 / 23 look alike, a full bar is unchanged), bit 0 of col 27 never set (1-px gap before "D"). Code split over two install regions:
+  R2 `xp_bar` (head: table reads, range checks; `.full`) + `xpb_draw` (34 B, the 3 cells + caps); **R5 `xpb_div`** (23 * d, then one
   subtraction a px shifting a 1 into the B:C:A mask; bank 2 = uncontended, ~56 T a px vs ~90 in R2). `tt_kflash` follows
   `KEY_PAN_ATTR` (ASSERT unchanged, holds at $5A5E).
 - **Row-21 gaps (user 2026-11-19, same task):** the FOOD bar ends at 31 px: item_food `call fbar_gap` (**R5**, was `call
@@ -7985,12 +7986,12 @@ level_defs.asm (ASSERTed contiguous: `HUNGER_COL + 5 <= LVL_COL`, `LVL_COL + 1 =
   byte-aligned x. Word -> digit (>= 5 px) and digit -> XP bar (3 px: FONT6 glyphs use bits 7..3) needed nothing. In R5, not
   B0_CODE2, because the trace build's bank 0 has 2 B free (the 11 B inline version overflowed it by 9).
 - **item_depth** (HOT_COPY, same size): prints "Dn" at (28, 21); marks (30..31, 18..19) and (25..29, 21..22).
-  Cost (xpbar.py C1, release): **L9 5.39k T (was 5.43k), worst fill (22 px) 6.89k T (was 6.25k at 7 of 8 px)**. It stays a
+  Cost (xpbar.py C1, release): **L9 5.35k T (was 5.43k), worst fill (22 px) 6.96k T with the caps (was 6.25k at 7 of 8 px)**. It stays a
   2nd-frame small item (keeping it out of 2nd-frame ticks needs +4 B of HOT_COPY, which has 3): world.py W15 gates panel_step
-  drawing it at <= 7.7k T (measured 7,545 incl. the polls; worst 2nd-frame pre-panel ~117k + 7.7k = 124.7k < the 126k cap).
+  drawing it at <= 7.7k T (measured 7,556 incl. the polls and the caps; worst 2nd-frame pre-panel ~117k + 7.7k = 124.7k < the 126k cap).
 - **Text:** TL_L17 `BELOW YOU: LIFE, MANA, FOOD, XP` (31 chars): raw blob 8,798 -> 8,800 B, **`BLOB_ORG` `$DD9A` -> `$DD98`**
   (tail 8); D0 pool margin 282 -> **280 B**.
-- **Free after (release):** R2 1 -> **10**, R5 48 -> **6** (xpb_div 27 + fbar_gap 15), R4 17, R6 6, B0_CODE2 14 (trace 2),
+- **Free after (release):** R2 1 -> **6** (10 before the caps), R5 48 -> **6** (xpb_div 27 + fbar_gap 15), R4 17, R6 6, B0_CODE2 14 (trace 2),
   bank 2 3, HOT_COPY 3, bank 1 2, bank 3 10, cold block 2, all unchanged; BOOT4 free below `BLOB_ORG` 383 -> **339** (the
   R5 block + its LDIR, boot only).
 - Goldens re-hashed (panel only): `game_start` / `game_start_wizard` (game.py), `w15_panel_mage` (world.py), `tut0_d0_arrival`

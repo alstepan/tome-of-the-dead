@@ -5,8 +5,8 @@ xp_level on every XP gain / level-up and by panel_init), the level digit at (24,
 keys at (30-31, 18 / 19), and the >= 1-px gaps between the row-21 bars and their neighbours (FOOD bar 31 px: R5 fbar_gap).
 Release build (-DDEBUG_KIT=0), PROTO room A, monsters parked.
 
-  X1  new game: XP 0 -> fill 0 (frame lines 1 / 6 = FF FF FE, fill lines 2..5 = 0, lines 0 / 7 blank), attrs $46
-  X2  XP 22 of L1's 44 -> 11 px; XP 43 -> 22 px  (floor(23 * XP / 44))
+  X1  new game: XP 0 -> fill 0 (frame lines 1 / 6 = FF FF FE, lines 2..5 = the end caps 80 00 02, lines 0 / 7 blank), $46
+  X2  XP 11 / 22 / 43 of L1's 44 -> 5 / 11 / 22 px  (floor(23 * XP / 44)); crops build/xpbar_row21_{xp0,xp25,full}.png
   X3  XP 77 (level-up to 2 by xp_turn) -> LVL 2, fill floor(23 * 33 / 66) = 11 px; XP 110 -> L3, empty
   X4  XP 1265 (several levels at once) -> LVL 9, full bar (23 px, bit 0 of col 27 clear)
   X5  the level digit (24, 21) is a glyph, attr $46; "Dn" (28-29, 21) attr $47; the retired (30, 19) cell is blank
@@ -82,16 +82,26 @@ def run(h, p, check):
               FLAGS=EF_ACTIVE | EF_PLAYER, REACT=0, FLT=0, HIT=0, HP=60, MAXHP=60)
     p.tick(3)
 
-    def bar():
-        """(fill px, shape ok, attrs of the 3 cells)"""
+    def bar(want):
+        """(shape ok for a `want`-px fill: frame FF FF FE on lines 1 / 6, mask | the end caps (bit 7 of col 25, bit 1 of
+        col 27) on lines 2..5, lines 0 / 7 blank; the 3 attrs). Fills 0 / 1 and 22 / 23 draw the same (the caps)."""
         f = p.frame()
         cells = [cell_bytes(f, COL + i, ROW) for i in range(NC)]
         line = [[c[ln] for c in cells] for ln in range(8)]
-        fill = sum(bin(b).count("1") for b in line[2])
         frame = [0xFF] * (NC - 1) + [0xFE]
+        fill = [b | c for b, c in zip(mask(want), [0x80] + [0] * (NC - 2) + [0x02])]
         ok = (line[0] == [0] * NC and line[7] == [0] * NC and line[1] == frame and line[6] == frame
-              and line[2] == line[3] == line[4] == line[5] == mask(fill))
-        return fill, ok, tuple(attr_at(f, COL + i, ROW) for i in range(NC))
+              and line[2] == line[3] == line[4] == line[5] == fill)
+        return ok, tuple(attr_at(f, COL + i, ROW) for i in range(NC)), [hex(x) for x in line[2]]
+
+    def crop(tag):
+        try:
+            from PIL import Image
+            full = Path(BUILD_DIR) / "xpbar_screen.png"
+            game_lib.frame_png(p.frame(), str(full), scale=4)
+            Image.open(full).crop((0, ROW * 32, 1024, ROW * 32 + 32)).save(Path(BUILD_DIR) / f"xpbar_row21_{tag}.png")
+        except ImportError:
+            pass
 
     def lvl():
         return p.rb("LVL")
@@ -103,23 +113,29 @@ def run(h, p, check):
         p.tick(6)
 
     gold = (0x46,) * NC
-    f0 = bar()
-    check("X1 new game: XP 0 -> empty 23-px frame (FF FF FE), attrs $46", f0 == (0, True, gold), f0)
+    b = bar(0)
+    check("X1 new game: XP 0 -> empty 23-px box (FF FF FE frame, the end caps), attrs $46", b[:2] == (True, gold), b)
+    crop("xp0")
+    gain(11)
+    b = bar(5)
+    check("X2 XP 11 of 44 -> 5 px (~25%)", (lvl(), b[0]) == (1, True), (lvl(), b))
+    crop("xp25")
     gain(22)
-    b = bar()
-    check("X2a XP 22 of 44 -> 11 px", (lvl(),) + b == (1, 11, True, gold), (lvl(), b))
+    b = bar(11)
+    check("X2a XP 22 of 44 -> 11 px", (lvl(), b[0], b[1]) == (1, True, gold), (lvl(), b))
     gain(43)
-    b = bar()
-    check("X2b XP 43 of 44 -> 22 px", (lvl(), b[0], b[1]) == (1, 22, True), (lvl(), b))
+    b = bar(22)
+    check("X2b XP 43 of 44 -> 22 px", (lvl(), b[0]) == (1, True), (lvl(), b))
     gain(77)
-    b = bar()
-    check("X3 XP 77: level 2, fill floor(23 * 33 / 66) = 11 px", (lvl(), b[0], b[1]) == (2, fill_for(77, 2), True), (lvl(), b))
+    b = bar(fill_for(77, 2))
+    check("X3 XP 77: level 2, fill floor(23 * 33 / 66) = 11 px", (lvl(), b[0]) == (2, True), (lvl(), b))
     gain(110)
-    b = bar()
-    check("X3b XP 110 = the L3 threshold exactly: level 3, empty bar", (lvl(), b[0], b[1]) == (3, 0, True), (lvl(), b))
+    b = bar(0)
+    check("X3b XP 110 = the L3 threshold exactly: level 3, empty bar", (lvl(), b[0]) == (3, True), (lvl(), b))
     gain(1265)
-    b = bar()
-    check("X4 XP 1265: level 9 (several at once), full 23 px", (lvl(), b[0], b[1]) == (9, PX, True), (lvl(), b))
+    b = bar(PX)
+    check("X4 XP 1265: level 9 (several at once), full 23 px", (lvl(), b[0]) == (9, True), (lvl(), b))
+    crop("full")
     fr = p.frame()
     lv = cell_bytes(fr, S["LVL_COL"], ROW)
     dn = [cell_bytes(fr, S["DEPTH_COL"] + i, ROW) for i in range(2)]

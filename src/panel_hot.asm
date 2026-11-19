@@ -364,7 +364,7 @@ item_hp_far:
 ; item_depth — XP-BAR2 (user 2026-11-19): "Dn" at (28, 21) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0",
 ; SMC below), then depth_tail (sv_r2.asm, R2): far6 key_pan = the two 16x8 key icons (30-31, rows 18 / 19:
 ; cyan / magenta while held, else blank) and xp_bar = the 23-px XP bar (25..27, 21). Marks both rects here.
-; HL = PANEL_DIRTY.  5.4k T (L9) .. 6.9k T (a 22-px XP fill) (xpbar.py C1; world.py W15 gates it as a 2nd-frame item)
+; HL = PANEL_DIRTY.  5.35k T (L9) .. 7.0k T (a 22-px XP fill) (xpbar.py C1; world.py W15 gates it as a 2nd-frame item)
 ;------------------------------------------------------------------------------
 item_depth:
                 res  PD_DEPTH_BIT, (hl)

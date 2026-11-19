@@ -1211,7 +1211,7 @@ the level curve. Levels are the stat floor; books are the toolkit.
 **Display (XP-BAR2, user 2026-11-19; was the digit at (31, 19) + an 8-px bar at (30, 19)).** Panel cell **(24, 21)**: the level digit
 `1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). Cells **(25–27, 21)** hold a 23-px XP progress bar, attr `$46`:
 fill = `floor(23 * (XP - T(L-1)) / (T(L) - T(L-1)))` px from the left (`T` = `XP_NEXT`, `T(0)` = 0; full at L9), in the FOOD
-bar's style (frame lines 1 / 6, fill lines 2..5, no side caps: the width is exact); bit 0 of col 27 is never set (a 1-px gap
+bar's style (frame lines 1 / 6, fill lines 2..5, end caps at bit 7 of col 25 and bit 1 of col 27: a closed box); bit 0 of col 27 is never set (a 1-px gap
 before the depth `Dn` at (28–29, 21)). Queued with the depth item (`PD_DEPTH`: set on every XP gain / level-up and by
 `panel_init`), never drawn in an input tick; D0 shows it too (harmless). The tutorial's BARS pointer (row 21 cols 0–29) flashes
 the digit, the bar and the depth too (their redraws never rewrite the attrs). 0 new glyphs; `src/sv_r2.asm` `xp_bar` (R2) +

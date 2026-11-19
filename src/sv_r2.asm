@@ -21,7 +21,7 @@
 ; T(LVL) - T(LVL-1), T = xpn_tab (bank 2, always mapped; T(0) = 0): both fit a byte (<= 253, xp2.asm
 ; ASSERTs), so 23 * d < 2^13 and the divide is <= 22 subtractions. Max level, or a transient d >= span (the
 ; level-up is a turn end later): full (23). Style = the FOOD bar's: frame lines 1 / 6, the fill on lines 2..5,
-; no side caps (the fill's width is exact); bit 0 of col 27 is never set (frame $FE, fill <= 23 px): a 1-px gap
+; end caps at bit 7 of col 25 / bit 1 of col 27 (so fills 0 / 1 and 22 / 23 look alike); bit 0 of col 27 is never set (frame $FE, fill <= 23 px): a 1-px gap
 ; before "D". Lines 0 / 7 stay blank (never written). Attr = pi_rects' ATTR_LVL, never written here (a tutorial
 ; BARS pointer's FLASH survives a redraw). item_depth marks the cells.
 ; Split (R2 has no room for all): the multiply + divide loop xpb_div is R5's (sv_r5.asm, bank 2: uncontended,
@@ -64,13 +64,17 @@ xp_bar:
 ;------------------------------------------------------------------------------
 ; xpb_draw — XP-BAR2: B / C / A = the fill mask of the 3 bar cells (25..27, row STAT_ROW; A bit 0 = 0: the gap
 ; before "D"). Writes lines 1..6 of each cell: frame D on lines 1 / 6 ($FF, the last cell $FE), the mask on
-; lines 2..5. Never the attrs (ATTR_LVL by pi_rects). From .full above or R5's xpb_div.
+; lines 2..5 with the FOOD bar's end caps ORed in (bit 7 of col 25, bit 1 of col 27: a closed box at a low fill;
+; a full bar is unchanged, its mask already has both bits). Never the attrs (ATTR_LVL by pi_rects). From .full
+; above or R5's xpb_div.
 ; Clobbers: A, BC, DE, HL.   ~0.4k T
 ;------------------------------------------------------------------------------
 XPB_BM          EQU SCREEN_BITMAP + ((STAT_ROW & $18) << 8) + ((STAT_ROW & 7) << 5) + XPB_COL
 xpb_draw:
                 ld   hl, XPB_BM + $100         ; line 1 of the first cell
                 ld   d, $FF                    ; D = the frame byte
+                set  7, b                      ; XP-BAR2 caps (user 2026-11-19, as bars_draw / fbar_gap): left cap bit 7
+                or   2                         ; of col 25, right cap bit 1 of col 27 (lines 2..5; 1 / 6 are frame)
                 ld   e, a                      ; E = the last cell's mask
                 call .cl                       ; cell 0: B
                 ld   b, c
