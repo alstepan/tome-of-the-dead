@@ -46,6 +46,7 @@ xpb_div:
 ; word cannot move right instead. The fill scale is item_food's D = FOOD_BAR_D (~31 / 100: <= 31 px).
 ; Here (not in B0_CODE2) because the trace build's bank 0 had 2 B free. In: as bars_draw. Clobbers: as
 ; bars_draw.   bars_draw + ~0.3k T
+; HPMP-GAP: also item_hp / item_mp (cols 1..4 / 8..11, numbers at cols 5 / 12), same geometry.
 ;------------------------------------------------------------------------------
 fbar_gap:
                 call bars_draw                 ; HL out = line 0 of the cell after the bar
