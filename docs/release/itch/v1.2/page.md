@@ -135,8 +135,8 @@ You pick up items by walking over them.
 
 Changes from v1.1 only; everything else stays.
 
-- **Kind of project:** HTML (browser build) is already live alongside the downloads [CONFIRM how the v1.1 page is configured; the browser zip is re-uploaded as `tome-of-the-dead-web-v1.2.zip`, keep "played in the browser"].
-- **Embed / browser play:** JSSpeccy 3, 660x600, fullscreen button on (replaces v1.1's "none").
+- **Kind of project:** HTML, same as v1.1 (WEB1, live since 2026-11-12). Replace the browser zip with `tome-of-the-dead-web-v1.2.zip` and keep "This file will be played in the browser" ticked on it.
+- **Embed options:** unchanged: 660x600, fullscreen button on, screenshots column = Sidebar. How-to: `docs/web_itch.md`.
 - **Tags:** unchanged (`roguelike`, `zx-spectrum`, `retro`, `z80`, `8-bit`, `dungeon-crawler`, `turn-based`, `permadeath`, `homebrew`, `fantasy`).
 
 ---
