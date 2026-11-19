@@ -105,7 +105,7 @@ You pick up items by walking over them.
 
 - **Browser:** press Play on this page. Keyboard only.
 - **Emulator:** set it to ZX Spectrum 128K. Open the `.tap` file and choose Tape Loader, or open the `.sna` file to start at once.
-- **Real Spectrum:** load the `.tap` with a tape interface, TZXDuino or divMMC. Choose **Tape Loader** on a 128K or +2, **Loader** on a +2A, +2B or +3. [Earlier versions were tested on a real 128K; say "v1.2 tested" only if you re-test it.]
+- **Real Spectrum:** load the `.tap` with a tape interface, TZXDuino or divMMC. Choose **Tape Loader** on a 128K or +2, **Loader** on a +2A, +2B or +3. v1.2 was tested on a real ZX Spectrum 128K.
 
 ### System requirements
 
@@ -135,8 +135,8 @@ You pick up items by walking over them.
 
 Changes from v1.1 only; everything else stays.
 
-- **Kind of project:** HTML (browser build) is already live alongside the downloads [CONFIRM how the v1.1 page is configured; the browser zip is re-uploaded as `tome-of-the-dead-web-v1.2.zip`, keep "played in the browser"].
-- **Embed / browser play:** JSSpeccy 3, 660x600, fullscreen button on (replaces v1.1's "none").
+- **Kind of project:** HTML, same as v1.1 (WEB1, live since 2026-11-12). Replace the browser zip with `tome-of-the-dead-web-v1.2.zip` and keep "This file will be played in the browser" ticked on it.
+- **Embed options:** unchanged: 660x600, fullscreen button on, screenshots column = Sidebar. How-to: `docs/web_itch.md`.
 - **Tags:** unchanged (`roguelike`, `zx-spectrum`, `retro`, `z80`, `8-bit`, `dungeon-crawler`, `turn-based`, `permadeath`, `homebrew`, `fantasy`).
 
 ---
