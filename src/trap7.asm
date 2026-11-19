@@ -158,7 +158,7 @@ tr_rearm:       ld   hl, TURN_PEND
 ;           TELEPORT: tele_arm (EX_TELE, the $43 flash, SFX_DRAIN); act_pend's
 ;             monster step sees EXIT_KIND and skips the monsters; end_turn's
 ;             do_exit -> tele_pick ("YOU ARE TELEPORTED!", the arrival flash);
-;           ALARM: 3E stub "A BELL RINGS. NOTHING COMES" (3F: the wave while
+;           ALARM: 3E stub "A BELL RINGS, NOTHING COMES" (3F: the wave while
 ;             the boss lives + the red border, "AN ALARM BELL RINGS!");
 ;   step 1  (TRAP_STEP_T ticks on; TELEPORT: TELE_STEP_T) the plate in its ink (every type stays, TRAP2).
 ;  TEV_FIND: step 0 "TRAP FOUND: <type>"; the plate blinks bright / off
@@ -299,7 +299,7 @@ tr_eff:
                 ld   e, S3_TRAP_ALARM          ; "AN ALARM BELL RINGS!" (bank 1 resident stem)
                 jp   hg_line                   ; (hunger7.asm: the stem alone via it_line / far1; -4 B a site)
 .bell:          xor  a                         ; (A = 0: the stem alone)
-                ld   e, S_FX_TRAP_BELL         ; boss dead / PROTO: "A BELL RINGS. NOTHING COMES"
+                ld   e, S_FX_TRAP_BELL         ; boss dead / PROTO: "A BELL RINGS, NOTHING COMES"
                 ld   hl, fx_line               ; R6 gear6.asm (A = 0: the stem alone; E kept by farb)
                 jp   far6
 .gas:           ld   a, HOLD_ASLEEP

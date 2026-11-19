@@ -29,7 +29,7 @@ class Style(unittest.TestCase):
         strs, longs = tp.read_source()
         self.assertGreaterEqual(len(strs), 24)
         self.assertEqual(strs[0], ("welcome", "YOU ENTER THE DUNGEON"))
-        self.assertTrue(longs)
+        # TEXT-FIX: the unused placeholder @long help block was dropped; no long block is required
 
     def test_violations(self):
         self.bad('a "lower"\n')

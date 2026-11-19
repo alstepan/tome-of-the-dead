@@ -172,21 +172,6 @@ end_press       "PRESS 1-5 OR ENTER"
 card_depth      "DEPTH "
 
 # === long static text (ZX0 blocks) ==============================================
-# Placeholder help page; exercises the packer (real text lands with 3C menus).
-@long help
-CONTROLS
- LEFT RIGHT  WALK, TURN, BUMP TO ATTACK
- UP DOWN     CLIMB A LADDER AT ONE
- UP-LEFT/RIGHT  JUMP
- FIRE TAP    USE THE SELECTED ICON
- FIRE+LEFT/RIGHT  MOVE THE ICON CURSOR
- FIRE+DOWN   INVENTORY PAGE
- FIRE+UP     PAUSE
-
-PLACEHOLDER PAGE - REAL TEXT COMES WITH
-THE 3C MENUS
-@end
-
 # === 3D (D3-2): combat, status, XP, books, wear messages ============
 # --- info lines per rank (game.md §5; rank 1 = the info_* lines above; name field
 # max 15 chars + gap, so POWER STRIKE III is POWER STRK III) -------------------
@@ -217,14 +202,12 @@ ab_whirl        "WHIRLWIND"
 # --- books (game.md §5) ---------------------------------------------------------
 bk_learn        "YOU LEARN "
 bk_rises        " RISES TO RANK "
-# placeholder text - designer to confirm
 bk_vigor        "YOU FEEL MORE VIGOROUS"
-# placeholder text - designer to confirm
 bk_power        "YOU FEEL MORE POWERFUL"
 
 # --- XP and levels (game.md §4.1; LEVEL digit then bang; LV / XP info pieces) ----
 xp_reach        "YOU REACH LEVEL "
-xp_atk          "YOU STRIKE TRUER"
+xp_atk          "YOU FEEL MORE ACCURATE"
 xp_eva          "YOU FEEL NIMBLE"
 
 # --- projectiles and spells (game.md §6): pre + kind name; max pre 20 so that
@@ -330,8 +313,8 @@ mn_tut          "NEW? START > TUTORIAL"
 # bonuses by tests/itemtab.py
 ie_cure         "CURES POISON WEAK CONFUSED FEAR"
 ie_teleport     "SENDS YOU TO ANOTHER ROOM"
-ie_fear         "ROOM'S MONSTERS FLEE 9 TURNS"
-ie_sleep        "ROOM'S MONSTERS SLEEP 8 TURNS"
+ie_fear         "FOES IN ROOM FLEE 9 TURNS"
+ie_sleep        "FOES IN ROOM SLEEP 8 TURNS"
 ie_enchant      "A RANDOM WORN ITEM +1, UP TO +3"
 ie_book         "READ: A NEW SKILL OR A RANK"
 ie_bow          "SHOOT IT FROM BAR SLOT 5"

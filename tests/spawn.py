@@ -497,8 +497,8 @@ def alarm(p, lines):
         p.turn("L")
         ns = new_slots(p, before)
         if dead:
-            check("A4 boss dead (LF_UNIQUE): 'A BELL RINGS. NOTHING COMES', no wave",
-                  "A BELL RINGS. NOTHING COMES" in lines.lines and not ns, (lines.lines, ns))
+            check("A4 boss dead (LF_UNIQUE): 'A BELL RINGS, NOTHING COMES', no wave",
+                  "A BELL RINGS, NOTHING COMES" in lines.lines and not ns, (lines.lines, ns))
             continue
         es = [p.ent(s2) for s2 in ns]
         check("A1 'AN ALARM BELL RINGS!' logged; the queue empty after end_turn",
@@ -533,9 +533,9 @@ def alarm(p, lines):
         lines.lines.clear()
         before = room_slots(p)
         p.turn("L")
-        check("A7 second step on the rung plate: 'A BELL RINGS. NOTHING COMES', no body, LP_RESPAWNS unchanged, "
+        check("A7 second step on the rung plate: 'A BELL RINGS, NOTHING COMES', no body, LP_RESPAWNS unchanged, "
               "SPQ_K empty, plate still known",
-              "A BELL RINGS. NOTHING COMES" in lines.lines and "AN ALARM BELL RINGS!" not in lines.lines
+              "A BELL RINGS, NOTHING COMES" in lines.lines and "AN ALARM BELL RINGS!" not in lines.lines
               and not new_slots(p, before) and p.rb("LP_RESPAWNS") == resp1 and p.rb("SPQ_K") == 0
               and p.rb(S["TRAP_LIST"]) & S["TRF_KNOWN"], (lines.lines, p.rb("LP_RESPAWNS"), resp1))
         # (A8 covers lp_bank / lp_enter only, on a poked summon-made body; a full transit is covered by the lp / roommem suites)
