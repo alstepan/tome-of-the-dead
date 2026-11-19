@@ -116,7 +116,7 @@ slot_want:
 
 ;------------------------------------------------------------------------------
 ; item_icons — far3 via item_icons_far (PD_ICONS). Potion count changed: the potion slot is
-; redrawn (its count digit). Level changed: the digit at (31, 19). Then the
+; redrawn (its count digit). Level changed: the digit at (24, 21) (XP-BAR2). Then the
 ; slots: a selection-only change is painted here (attrs, ~0.3k T each, all of
 ; them); the first other change is ONE slot_redraw (panel.asm, ~2-4k T; IC1: a
 ; quick slot ~15k, only in a tick's 1st frame, else skipped and kept pending)
@@ -284,8 +284,8 @@ sel_paint:
                 jp   pmark_rect                ; (B, C)
                 ASSERT IS_MODE == 1 << 6 && IS_SEL == 1 << 7
 
-; lvl_draw — A = LVL: LVL_SH = A, its digit at (31, 19) (attr $46 by
-; panel_init; 3C shows the reserved state, 3D moves it). Clobbers: A, BC, DE, HL
+; lvl_draw — A = LVL: LVL_SH = A, its digit at (LVL_COL, STAT_ROW) = (24, 21) (XP-BAR2; attr ATTR_LVL by
+; panel_init7's pi_rects; print6 keeps the attr, so a tutorial BARS FLASH survives). Clobbers: A, BC, DE, HL
 lvl_draw:
                 ld   (LVL_SH), a
                 cp   10
@@ -297,14 +297,13 @@ lvl_draw:
                 inc  l
                 ld   (hl), 0
                 dec  l
-                ld   b, ICON_ROW + 1
+                ld   b, STAT_ROW
                 ld   e, LVL_COL * 8
                 call print6
                 ASSERT ((LVL_COL * 8) & 7) == 0 && LVL_COL * 8 + 6 <= 256    ; print6 x rule
-                ld   bc, ((ICON_ROW + 1) << 8) | LVL_COL
+                ld   bc, (STAT_ROW << 8) | LVL_COL
                 ld   de, (1 << 8) | 1
                 jp   pmark_rect
-LVL_COL         EQU 31
 
 ii_frame:       DB   0                         ; IC1: item_icons' A in (0 = a 1st frame)
 

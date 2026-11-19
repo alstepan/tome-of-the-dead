@@ -4,20 +4,20 @@
 ;==============================================================================
 ;------------------------------------------------------------------------------
 ; key_pan — far6 tail of item_depth (HOT_COPY, PD_DEPTH): KEY-PANEL (user 2026-11-16; 16x8 keys, option 1)
-; two 2-cell key icons on row STAT_ROW: cyan at KEY_PAN_COL..+1 (24-25), magenta at KEY_PAN_COLM..+1
-; (27-28), col 26 a gap (cols 24..29 of row 21 are free: the FOOD word ends at col 23, the status icons
-; are cols 30-31; level_defs.asm). Each icon gets the 16x8 key glyph (floor_key.grid rows 8..15) and its
+; two 2-cell key icons at cols KEY_PAN_COL..+1 (30-31): cyan on row KEY_PAN_ROW (18), magenta on row 19
+; (XP-BAR2, user 2026-11-19: beside the BAG slot; was row 21 cols 24-28; level_defs.asm). Rows 18 / 19 share a
+; bitmap third: the magenta icon = the cyan one + $20. Each icon gets the 16x8 key glyph (floor_key.grid rows 8..15) and its
 ; key's ink on paper 0 while that key is held, blank (glyph lines 0, attr ATTR_HUD = the panel clear's)
 ; otherwise. In: A = LVL_FLAGS. item_depth marks the cells for present (R6 has no room for it).
 ; Clobbers: A, F, BC, DE, HL.   ~1.0k T (2 x ~0.45k)
 ;------------------------------------------------------------------------------
-KEY_PAN_ATTR    EQU SCREEN_ATTR + STAT_ROW * 32 + KEY_PAN_COL
-KEY_PAN_BM      EQU SCREEN_BITMAP + ((STAT_ROW & $18) << 8) + ((STAT_ROW & 7) << 5) + KEY_PAN_COL
+KEY_PAN_ATTR    EQU SCREEN_ATTR + KEY_PAN_ROW * 32 + KEY_PAN_COL
+KEY_PAN_BM      EQU SCREEN_BITMAP + ((KEY_PAN_ROW & $18) << 8) + ((KEY_PAN_ROW & 7) << 5) + KEY_PAN_COL
 KP_L6           EQU KEY_PAN_BM + (KEY_GLY_N / 2) * $100     ; glyph line 6 (the last non-0), right cell
 key_pan:                                       ; A = LVL_FLAGS (item_depth loads it: farb passes A in)
                 add  a, a                      ; CF = LF_KEYM (bit 7), A bit 7 = LF_KEYC
                 push af
-                ld   hl, KP_L6 + KEY_PAN_COLM - KEY_PAN_COL + 1
+                ld   hl, KP_L6 + 32 + 1      ; magenta: row KEY_PAN_ROW + 1
                 ld   c, ATTR_KEY_M ^ ATTR_HUD
                 call .k
                 pop  af
@@ -63,9 +63,9 @@ key_gly:        DB   $3C, $00
 KEY_GLY_N       EQU $ - key_gly
                 ASSERT KEY_GLY_N == 12
                 ASSERT KEY_PAN_ATTR - KEY_PAN_BM == $A00 && (KEY_PAN_ATTR & $FF) == (KEY_PAN_BM & $FF)
-                ASSERT (KEY_PAN_BM & $0700) == 0 && (KEY_PAN_BM & $FF) + KEY_PAN_W <= $100
+                ASSERT (KEY_PAN_BM & $0700) == 0 && (KEY_PAN_ROW & 7) < 7 && KEY_PAN_COL + 2 <= 32
+                ASSERT ((KEY_PAN_ATTR + 32) >> 8) == (KEY_PAN_ATTR >> 8)    ; the magenta attr: same H
                 ASSERT (key_gly >> 8) == ((key_gly + KEY_GLY_N - 1) >> 8)
                 ASSERT LF_KEYC == $40 && LF_KEYM == $80
-                ASSERT KEY_PAN_COLM == KEY_PAN_COL + 3 && KEY_PAN_W == 5
-                ASSERT GEAR_COL <= KEY_PAN_COL && KEY_PAN_COL + KEY_PAN_W <= ST_ICON_COL
+                ASSERT KEY_PAN_COL >= ICON_SLOTS * ICON_W && KEY_PAN_ROW == ICON_ROW
                 ASSERT (ATTR_HUD & $38) == 0 && (ATTR_KEY_C & $38) == 0 && (ATTR_KEY_M & $38) == 0 && ATTR_KEY_C != 0 && ATTR_KEY_M != 0

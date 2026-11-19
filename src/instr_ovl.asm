@@ -59,7 +59,7 @@ in_tut:         ld   a, BANK_BLOB              ; = BANK_BOOT4 (main.asm ASSERT)
                 ld   bc, LRI_LEN
                 ldir
     IF SV_R2_LEN > 0                           ; RECLAIM-SV: the sysvar hole / dead print code / ISR stack slack
-                ld   hl, in_sv2                ; (main.asm "RECLAIM-SV INSTALL BLOCKS": R2 = XP-BAR depth_tail + xp_bar)
+                ld   hl, in_sv2                ; (main.asm "RECLAIM-SV INSTALL BLOCKS": R2 = XP-BAR2 depth_tail + xp_bar + xpb_draw)
                 ld   de, SV_R2
                 ld   bc, SV_R2_LEN
                 ldir

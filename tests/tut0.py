@@ -1171,8 +1171,8 @@ def arrival_checks(p, hero, tag):
     check("C2", f"{tag}: B0 on arrival (TV_BEAT 0, the mentor at spot A1)", (tv(p, "TV_BEAT"), tv(p, "TV_SPOT")) == (0, 0),
           (tv(p, "TV_BEAT"), tv(p, "TV_SPOT")))
     fr = p.frame()
-    dig = G.cell_bytes(fr, 31, 18)
-    check("C2", f"{tag}: the panel depth digit cell (31, 18) is drawn (not blank)", any(dig), dig.hex())
+    dig = G.cell_bytes(fr, S["DEPTH_COL"] + 1, S["STAT_ROW"])           # XP-BAR2: "Dn" at (28-29, 21)
+    check("C2", f"{tag}: the panel depth digit cell (29, 21) is drawn (not blank)", any(dig), dig.hex())
     SHARED["d0_digit"] = dig
     return fr
 
@@ -1392,12 +1392,12 @@ def drain_log(p, n=80):
 def panel_key(p):
     """(attrs of the cyan panel key cells, any ink in them, the depth text cells == 'D0')."""
     fr = p.frame()
-    c0 = S["KEY_PAN_COL"]
-    at = [G.attr_at(fr, c, 21) for c in (c0, c0 + 1)]
-    ink = any(any(G.cell_bytes(fr, c, 21)) for c in (c0, c0 + 1))
+    c0, r0 = S["KEY_PAN_COL"], S["KEY_PAN_ROW"]                   # XP-BAR2: the cyan key at (30-31, 18), "Dn" at (28-29, 21)
+    at = [G.attr_at(fr, c, r0) for c in (c0, c0 + 1)]
+    ink = any(any(G.cell_bytes(fr, c, r0)) for c in (c0, c0 + 1))
     if ink:                                                      # TUT-KEY-FLASH: the glyph line 1 = key_gly's (left, right) = $3C, $00
-        ink = [G.cell_bytes(fr, c, 21)[1] for c in (c0, c0 + 1)] == [0x3C, 0x00]
-    d0 = row_bytes(fr, 18, 30, 2) == text6("D0", 0, 2)
+        ink = [G.cell_bytes(fr, c, r0)[1] for c in (c0, c0 + 1)] == [0x3C, 0x00]
+    d0 = row_bytes(fr, S["STAT_ROW"], S["DEPTH_COL"], 2) == text6("D0", 0, 2)
     return at, ink, d0
 
 

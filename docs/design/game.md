@@ -699,9 +699,12 @@ an unpack step. Engineer's choice. Resident cost after boot: **0 B**.
 
 ### 3.3 Panel at a glance (layout: concept-screen §5; approved round 5)
 
-Rows 18–19: **10 icons 24×16** (cols `3i … 3i+2`), cols 30–31 = depth + key icon. Row 20: the
-**info line** (selected icon's name, MP cost, range, bounces/notes; after an attack it temporarily shows the **target readout**, §6.5). Row 21: HP / MP / FOOD
-bars (32 px each) with numbers, the **hunger stage word**, the Warrior's ammo. Rows 22–23:
+Rows 18–19: **10 icons 24×16** (cols `3i … 3i+2`), cols 30–31 = the two 16×8 level keys (cyan row 18, magenta row 19,
+drawn only while held; XP-BAR2). Row 20: the
+**info line** (selected icon's name, MP cost, range, bounces/notes; after an attack it temporarily shows the **target readout**, §6.5). Row 21: HP / MP
+bars (32 px) and FOOD bar (31 px: a 1-px gap before the word) with numbers, the **hunger stage word** (cols 19–23), then
+(XP-BAR2, user 2026-11-19) the **level digit** (col 24), the 23-px **XP bar** (cols 25–27), the **depth `Dn`** (cols 28–29)
+and the 2 hero status icons (cols 30–31). Rows 22–23:
 2-row message log (cols 0–23) + **4 worn-gear icons 16×16** (cols 24–31). Row 17 (the
 storey-1 floor) carries the panel ornament.
 
@@ -711,7 +714,7 @@ input tick**. Accepted latency (user 2026-10-04): **≤ 3 ticks** outside heavy 
 heavy fights a log message may wait **up to ~6 ticks (≈ 0.25 s)**. Logic reads the real values,
 never the panel.
 
-**TUT0 (2026-11-09):** in D0 the depth readout (row 18, col 30, the normal `Dn` cell) reads **`D0`**, drawn by the blob (card and panel). `PD_DEPTH` stays 1 internally, and **the readout would revert if anything set `PD_DEPTH`** (only `panel_init` does, so it holds for the whole D0 run). The build has **no key icon**: B7 has no pointer and L24 reads `YOU HAVE THE KEY. ON TO THE DOOR` (user option a, TUT0-F2).
+**TUT0 (2026-11-09):** in D0 the depth readout (the normal `Dn` cell: row 18 col 30 then; row 21 cols 28–29 since XP-BAR2) reads **`D0`**, drawn by the blob (card and panel). `PD_DEPTH` stays 1 internally, and **the readout would revert if anything set `PD_DEPTH`** (only `panel_init` does, so it holds for the whole D0 run). The build has **no key icon**: B7 has no pointer and L24 reads `YOU HAVE THE KEY. ON TO THE DOOR` (user option a, TUT0-F2).
 
 **TUT0 goal line and hold prompt (TUT0-F4 R4; `tutorial_d0.md` §3, §4.4):**
 - **Goal line:** while a D0 beat waits for the player, its instruction is pinned on row 20, cols 0–23, in Morrow's ink (bright cyan). The engine's log lines scroll past it, so game events do not bury it. It is hidden while the Goblin is awake, during the B12 / B13 fight (row 20 shows the target readout there), and in ICON MODE (the icon info owns row 20); it returns at the next turn end. Story groups (after a trigger) show no goal line; the hold prompt is the cue.
@@ -1205,12 +1208,14 @@ the level curve. Levels are the stat floor; books are the toolkit.
 **Messages:** `YOU REACH LEVEL 5!` (18), then on L4/L8 `YOU STRIKE TRUER` (16), on L6
 `YOU FEEL NIMBLE` (15). Death/win screens show `LEVEL n`.
 
-**Display.** Panel cell **(31, 19)**: the level digit
-`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). **XP-BAR (user 2026-11-18):** cell **(30, 19)** (under the
-depth readout, beside the digit) holds an 8-px XP progress bar, attr `$46`: fill = `floor(8 * (XP - T(L-1)) / (T(L) - T(L-1)))`
-px from the left (`T` = `XP_NEXT`, `T(0)` = 0; full at L9), in the FOOD bar's style (frame lines 1 / 6, fill lines 2..5, no side
-caps: the width is exact). Queued with the depth item (`PD_DEPTH`: set on every XP gain / level-up and by `panel_init`),
-never drawn in an input tick; D0 shows it too (harmless). 0 new glyphs; `src/sv_r2.asm` `xp_bar` (R2, boot-installed). The **BAG icon's info line** shows
+**Display (XP-BAR2, user 2026-11-19; was the digit at (31, 19) + an 8-px bar at (30, 19)).** Panel cell **(24, 21)**: the level digit
+`1`–`9` in the 6×8 text font, attr `$46`; queued (§3.3). Cells **(25–27, 21)** hold a 23-px XP progress bar, attr `$46`:
+fill = `floor(23 * (XP - T(L-1)) / (T(L) - T(L-1)))` px from the left (`T` = `XP_NEXT`, `T(0)` = 0; full at L9), in the FOOD
+bar's style (frame lines 1 / 6, fill lines 2..5, end caps at bit 7 of col 25 and bit 1 of col 27: a closed box); bit 0 of col 27 is never set (a 1-px gap
+before the depth `Dn` at (28–29, 21)). Queued with the depth item (`PD_DEPTH`: set on every XP gain / level-up and by
+`panel_init`), never drawn in an input tick; D0 shows it too (harmless). The tutorial's BARS pointer (row 21 cols 0–29) flashes
+the digit, the bar and the depth too (their redraws never rewrite the attrs). 0 new glyphs; `src/sv_r2.asm` `xp_bar` (R2) +
+`src/sv_r5.asm` `xpb_div` (R5), boot-installed. The **BAG icon's info line** shows
 the numbers: `BAG 12/20  LV 5  XP 412/500` (≤ 42; at L9 `XP 1234`). The inventory page
 header shows the same. 0 new glyphs.
 

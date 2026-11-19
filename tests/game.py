@@ -2246,7 +2246,7 @@ def tape_rest(h, p):
     lri = open(os.path.join(BUILD_DIR, "ovl", "lri.bin"), "rb").read()[:n1]
     h.expect("50 tape: tele_lri block installed over tape_tab == lri.bin", bytes(l5[m1:m1 + n1]), bytes(lri))
     l5[m1:m1 + n1] = s5[m1:m1 + n1] = bytes(n1)
-    # RECLAIM-SV: in_tut's R2 / R4 / R5 blocks (sysvar hole = XP-BAR, print code = ICON-FLASH ic_learn / ic_mark / gh_pend, ISR stack slack = empty) == build/ovl/sv<n>.bin
+    # RECLAIM-SV: in_tut's R2 / R4 / R5 blocks (sysvar hole = XP-BAR2 xp_bar, print code = ICON-FLASH ic_learn / ic_mark / gh_pend, ISR stack slack = XP-BAR2 xpb_div + fbar_gap) == build/ovl/sv<n>.bin
     from game_lib import sv_blocks
     for nm, a, b in sv_blocks():
         off = (5 * 16384 + a - 0x4000) if nm != "R5" else (2 * 16384 + a - 0x8000)

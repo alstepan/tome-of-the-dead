@@ -27,7 +27,7 @@ PLAY_ROWS       EQU STOREY_COUNT * STOREY_ROWS  ; 18 (PROTO ROOM_ROWS: 21)
 PLAY_CELLS      EQU ROOM_COLS * PLAY_ROWS       ; 576 (PROTO: 672)
 PANEL_ROW       EQU PLAY_ROWS       ; 18: first panel row (never stamped / scrolled)
 PANEL_ROWS      EQU 6               ; rows 18..23
-ICON_ROW        EQU 18              ; rows 18–19: 10 icons 24x16 (cols 3i..3i+2), depth + level digit cols 30–31 (KEY-PANEL: keys at (28/29, 21))
+ICON_ROW        EQU 18              ; rows 18–19: 10 icons 24x16 (cols 3i..3i+2); cols 30–31 the 2 panel keys (XP-BAR2)
 INFO_ROW        EQU 20              ; info line (6x8 text, 42 chars)
 STAT_ROW        EQU 21              ; HP/MP/FOOD bars, hunger word, ammo
 LOG_ROW         EQU 22              ; rows 22–23: 2-row log (cols 0–23) + worn gear (cols 24–31)
@@ -201,13 +201,11 @@ DOOR_PLATE_DY   EQU 3               ; plate = the 4th plank row (9s + 5)
 ATTR_PLANK      EQU $06             ; TILE_ATTRS[T_DOOR_R / T_DOOR_LOCK] (tiles_common.asm)
 ATTR_KEY_C      EQU $45             ; cyan: lock colour 0 (plate, panel key, bag line)
 ATTR_KEY_M      EQU $43             ; magenta: lock colour 1
-; KEY-PANEL (user 2026-11-16): two 16x8 panel key icons on row STAT_ROW (21), cyan at cols KEY_PAN_COL..+1,
-; magenta at KEY_PAN_COLM..+1, a 1-col gap between, each drawn only while that key is held (key6.asm key_pan);
-; cols 24..29 of row 21 are free (the FOOD word ends at col 23, the status icons are cols 30-31); (30, 19)
-; stays blank. KEY_PAN_W = the marked rect (both icons + the gap).
-KEY_PAN_COL     EQU 24
-KEY_PAN_COLM    EQU KEY_PAN_COL + 3
-KEY_PAN_W       EQU 5
+; KEY-PANEL (user 2026-11-16) / XP-BAR2 (user 2026-11-19): two 16x8 panel key icons at cols KEY_PAN_COL..+1,
+; cyan on row KEY_PAN_ROW (18), magenta right under it on row 19, beside the BAG slot (cols 27-29), each drawn
+; only while that key is held (key6.asm key_pan), blank (ATTR_HUD) otherwise. (Was row 21 cols 24-28.)
+KEY_PAN_COL     EQU 30
+KEY_PAN_ROW     EQU ICON_ROW
 
 ;------------------------------------------------------------------------------
 ; FLOOR_LIST (game.md §8.5): <= 32 entries x 4 B, FLOOR_N used (header).
@@ -710,7 +708,7 @@ PD_AMMO         EQU %00001000       ; Warrior ammo (row 21 cols 24–31)
 PD_LOG          EQU %00010000       ; log: scroll 23 -> 22 + newest line (LOG_Q non-empty)
 PD_ICONS        EQU %00100000       ; icon states (select / grey)
 PD_INFO         EQU %01000000       ; info line
-PD_DEPTH        EQU %10000000       ; depth (cols 30–31, row 18) + KEY-PANEL the key cells (cols 28–29, row 21)
+PD_DEPTH        EQU %10000000       ; XP-BAR2: XP bar (25–27) + depth (28–29) on row 21, the key cells (30–31, rows 18 / 19)
 
 ;------------------------------------------------------------------------------
 ; B3B-11 panel engine (concept-screen §5, game.md §3.3–3.5; src/panel.asm).
@@ -748,7 +746,7 @@ FOOD_BAR_COL    EQU 15
 HUNGER_COL      EQU 19              ; hunger stage word, cols 19–23
 BAR_CELLS       EQU 4
 GEAR_COL        EQU 24              ; worn gear 4 x 16x16, cols 24–31, rows 22–23
-DEPTH_COL       EQU 30              ; "Dn", row 18
+DEPTH_COL       EQU 28              ; XP-BAR2: "Dn", row 21 cols 28-29 (was (30, 18))
 ICON_SLOTS      EQU 10              ; slot i at cols 3i..3i+2, rows 18–19
 ICON_W          EQU 3
 ATTR_P_HP       EQU $42
@@ -778,6 +776,13 @@ INFO_NOTE_COL   EQU 21              ; char 28 = 168 px
 ATTR_INFO_NAME  EQU $47
 ATTR_INFO_NUM   EQU $46
 ATTR_INFO_NOTE  EQU $45
-ATTR_LVL        EQU $46             ; the level digit at (31, 19) (game.md §4.1) + XP-BAR the XP bar cell (30, 19)
-XPB_COL         EQU DEPTH_COL       ; XP-BAR (user 2026-11-18): 8-px XP progress bar, cell (30, 19), sv_r2.asm xp_bar
-XPB_ROW         EQU ICON_ROW + 1
+; XP-BAR2 (user 2026-11-19): row 21 after the FOOD word (cols 19-23): col 24 the hero level digit, cols
+; 25-27 the 23-px XP bar (sv_r2.asm xp_bar; bit 0 of col 27 never set: a 1-px gap before "D"), cols 28-29
+; "Dn" (DEPTH_COL), cols 30-31 the status icons. Gold ATTR_LVL over the digit + bar (pi_rects, one 4-cell rect).
+ATTR_LVL        EQU $46             ; the level digit + the XP bar (game.md §4.1)
+LVL_COL         EQU 24              ; the level digit, row STAT_ROW (icons3.asm lvl_draw)
+XPB_COL         EQU 25              ; the XP bar's first cell, row STAT_ROW
+XPB_CELLS       EQU 3
+XPB_PX          EQU XPB_CELLS * 8 - 1   ; 23 px: the bar's full fill
+                ASSERT HUNGER_COL + 5 <= LVL_COL && LVL_COL + 1 == XPB_COL && XPB_COL + XPB_CELLS == DEPTH_COL
+                ASSERT DEPTH_COL + 2 == ST_ICON_COL

@@ -7,13 +7,13 @@ tr_ink7:        TRAP_INKS                      ; trap7 tr_ink: the plate / hero 
 
 ; pi_rects — boot7 panel_init7: the static panel's attr rects, 4 B each: attr, col, row, cols (rows = 1);
 ; $FF ends it. Info line fields (game.md §3.4: name chars 0-15, numbers 16-27, notes 28-41 = cols 0-11 /
-; 12-20 / 21-31), the XP bar (30, 19) + the level digit (31, 19) (XP-BAR: the old black key-icon cell is the bar),
+; 12-20 / 21-31), the level digit + the XP bar (24..27, 21) (XP-BAR2; "Dn" 28-29 keeps the panel clear's ATTR_HUD),
 ; row 21 bar frames' attrs (the labels' cells HP_LBL_COL / MP_LBL_COL / FOOD_LBL_COL are outside: glyph8),
 ; row 22 the log (cols 0..LOG_COLS-1; the gear cells: pblit).
 pi_rects:       DB   ATTR_INFO_NAME, 0, INFO_ROW, INFO_NUM_COL
                 DB   ATTR_INFO_NUM, INFO_NUM_COL, INFO_ROW, INFO_NOTE_COL - INFO_NUM_COL
                 DB   ATTR_INFO_NOTE, INFO_NOTE_COL, INFO_ROW, ROOM_COLS - INFO_NOTE_COL
-                DB   ATTR_LVL, XPB_COL, XPB_ROW, 2          ; XP-BAR: the XP bar cell (30, 19) + the level digit (31, 19), one rect
+                DB   ATTR_LVL, LVL_COL, STAT_ROW, 1 + XPB_CELLS   ; XP-BAR2: the level digit (24, 21) + the XP bar (25..27, 21), one rect
                 DB   ATTR_P_HP, HP_BAR_COL, STAT_ROW, HP_NUM_COL + 2 - HP_BAR_COL
                 DB   ATTR_P_MP, MP_BAR_COL, STAT_ROW, MP_NUM_COL + 2 - MP_BAR_COL
                 DB   ATTR_P_FED, FOOD_BAR_COL, STAT_ROW, GEAR_COL - FOOD_BAR_COL

@@ -8,7 +8,7 @@
 ; as last drawn, HERO_ST) — "polled like HP" — and redraws only what changed:
 ; a selection move is an attr-only paper change (sel_paint), any other change
 ; one cold far3 slot_redraw (bank 3, panel.asm) per item. The level digit at
-; (31, 19) rides on the same item (LVL vs LVL_SH). Info line: PD_INFO,
+; (24, 21) (XP-BAR2) rides on the same item (LVL vs LVL_SH). Info line: PD_INFO,
 ; item_info (bank 3) via panel_more. The state / drawing code is bank 3
 ; (icons3.asm); item_icons_far is panel_step's entry to it.
 ;==============================================================================

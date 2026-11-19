@@ -310,7 +310,7 @@ tut_rects:
         DEFB 18, 21, 3, 2               ; POTION (slot 8)
         DEFB 18, 24, 3, 2               ; SCROLL (slot 9)
         DEFB 21, 30, 2, 1               ; hero status icons, row 21 cols 30-31
-        DEFB 21,  0, 30, 1              ; HP / MP / FOOD bars + numbers + hunger word
+        DEFB 21,  0, 30, 1              ; HP / MP / FOOD bars + numbers + hunger word + (XP-BAR2) level, XP bar, "Dn"
         DEFB 20,  0, TUT_R20_W, 1       ; row 20, the info line cols 0-23 (TUT0-F4 R4-6: the hold
                                         ; prompt owns 24-31; ASSERT tut_turn)
         DEFB LOG_ROW, GEAR_COL + 2 * WS_HELM, 2, 2   ; TUT-GEAR HELM: the worn helmet's 16x16 cell (icons6.asm worn_draw)

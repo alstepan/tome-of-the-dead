@@ -685,7 +685,7 @@ def w15(p, check):
     check("W15 start: log attrs row 22 $07 / row 23 $47 (cols 0-23)",
           [attr_at(fr, c, 22) for c in range(24)] + [attr_at(fr, c, 23) for c in range(24)]
           == [S["ATTR_LOG_OLD"]] * 24 + [S["ATTR_LOG_NEW"]] * 24, "")
-    check("W15 start: depth D1 at (30, 18)", log_row(fr, 18, 30, 2) == text6("D1", 0, 2), "")
+    check("W15 start: depth D1 at (28, 21)", log_row(fr, 21, 28, 2) == text6("D1", 0, 2), "")
     check("W15 start: HP bar + number == hero HP", hp_ok(fr), p.ent(0)["HP"])
     check("W15 start: queue empty, nothing dirty, nothing dropped",
           (p.rb("LOG_QN"), p.rb("PANEL_DIRTY"), p.rb(S["LOG_Q"] + S["LQ_DROP"])) == (0, 0, 0), "")
@@ -759,6 +759,19 @@ def w15(p, check):
     t_none = step(1)
     check("W15 2nd frame: a waiting log item alone is not drawn (row 23 = old line)",
           (log_row(p.composed_frame(), 23), p.rb("LOG_QN")) == (text6(TXT["str_fall"]), 1), "")
+    # XP-BAR2: DEPTH is a 2nd-frame small item too (item_depth: "Dn" + keys + the XP bar); its worst case is the
+    # longest divide, L1 XP 43 of 44 = a 22-px fill (tests/xpbar.py C1 measures the same: ~6.9k T)
+    lv0, xp0 = p.rb("LVL"), p.rb(S["XP"]) | p.rb(S["XP"] + 1) << 8
+    p.wb("LVL", 1)
+    p.wmem(S["XP"], [43, 0])
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+    t_dep2 = step(1)
+    check("W15 2nd frame: the DEPTH item drawn (22-px XP fill), the log item still queued",
+          (p.rb("PANEL_DIRTY") & (S["PD_DEPTH"] | S["PD_LOG"]), p.rb("LOG_QN")) == (S["PD_LOG"], 1), (hex(p.rb("PANEL_DIRTY")), p.rb("LOG_QN")))
+    p.wb("LVL", lv0)
+    p.wmem(S["XP"], [xp0 & 255, xp0 >> 8])
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+    step(1)
     step(0)
     check("W15 1st frame: the whole line in one item, queue empty",
           (log_row(p.composed_frame(), 22), log_row(p.composed_frame(), 23), p.rb("LOG_QN"),
@@ -833,7 +846,7 @@ def w15(p, check):
     p.tick(2)
     print(f"[info] W15 measured (contended, ZEsarUX): whole log item scroll + 32 chars {t_whole} T;"
           f" scroll of 24 cols {t_s} T; print6 32 chars {t_p} T (~{t_p // 32} T/char), 4 chars {t_p4} T;"
-          f" 2nd-frame HP item {t_hp2} T, idle step {t_none} T", flush=True)
+          f" 2nd-frame HP item {t_hp2} T, DEPTH item (22-px XP fill) {t_dep2} T, idle step {t_none} T", flush=True)
     check("W15 whole log item <= 25k T (1st-frame ticks only: < 70.9k T used before it)", t_whole <= 25000, t_whole)
     # NEW-MON3 T1: item_hp is bank 0 (FARB0 from HOT_COPY, +~0.3k): cap 5.2k -> 5.5k (measured 5,464);
     # 117k + 5.5k = 122.5k still < the 126k cap, and tests/budget.py (the real per-tick gate) passes.
@@ -841,6 +854,10 @@ def w15(p, check):
     # bank 2): the screen writes' contention phase at the stub's start moved. Cap 5.5k -> 5.55k (117k + 5.55k < 126k).
     check("W15 2nd-frame small item (HP) <= 5.55k T (worst 2nd-frame pre-panel ~117k + 5.55k < 126k cap; C3-3: + icon_poll ~0.1k; NEW-MON3 T1: + FARB0)",
           t_hp2 <= 5550, t_hp2)
+    # XP-BAR2: panel_step drawing DEPTH at the worst XP fill (22 px) measures 7,556 T with the caps (item_depth alone 6.96k, xpbar.py C1;
+    # + the HP / icon_poll polls): cap 7.7k (117k + 7.7k = 124.7k < the 126k cap; budget.py passes)
+    check("W15 2nd-frame small item (DEPTH, worst XP fill) <= 7.7k T (worst 2nd-frame pre-panel ~117k + 7.7k < 126k cap)",
+          t_dep2 <= 7700, t_dep2)
     check("W15 print6 <= 500 T/char (32 chars)", t_p <= 500 * 32, t_p)
 
     # --- bars follow HP ------------------------------------------------------
@@ -1580,7 +1597,7 @@ def w22_23(p, check, which):
 
 def w15_icons(p, check):
     """C3-3: icon bar states (concept-screen §5), cursor attr move, info line
-    text per icon (row 20, 42 chars, game.md §3.4), level digit (31, 19)."""
+    text per icon (row 20, 42 chars, game.md §3.4), level digit (24, 21)."""
     TXT = dict(STRINGS)
     p.boot(K_KNIGHT)
     p.isolate()
@@ -1622,8 +1639,8 @@ def w15_icons(p, check):
           grey and normal, (a[4], a[6], a[8], a[3], a[9]))
     check("W15i quick potion: glyph ATTR_POTION, count '1' (ATTR_HUD)",
           pot == (S["ATTR_POTION"], S["ATTR_HUD"], True), pot)
-    check("W15i level digit '1' at (31, 19), attr $46",
-          log_row(fr, 19, 31, 1) == text6("1", 0, 1) and fr[6144 + 19 * 32 + 31] == 0x46, "")
+    check("W15i level digit '1' at (24, 21), attr $46",
+          log_row(fr, 21, 24, 1) == text6("1", 0, 1) and fr[6144 + 21 * 32 + 24] == 0x46, "")
     check("W15i info line = the sword's line (row 20), field attrs $47 / $46 / $45",
           info(fr) == text6(TXT["info_sword"], 0, 32) and
           [fr[6144 + 20 * 32 + c] for c in (0, 11, 12, 20, 21, 31)] == [0x47, 0x47, 0x46, 0x46, 0x45, 0x45],
@@ -1654,7 +1671,7 @@ def w15_icons(p, check):
     fr = settle_panel()
     check("W15i Bag line follows LVL / XP; level digit follows LVL",
           info(fr) == text6(line((0, "BAG"), (16, "LV 4"), (28, "XP 295/374")), 0, 32)
-          and log_row(fr, 19, 31, 1) == text6("4", 0, 1), "")
+          and log_row(fr, 21, 24, 1) == text6("4", 0, 1), "")
     check("W15i displayed == composed", fr == p.composed_frame(), "")
 
 
@@ -3080,7 +3097,7 @@ def w16_level(p, check):
               "(property check on the engine's maps)", bad == [], bad[:4])
         p.settle(2)
         fr = p.frame()
-        check(f"W16 {tag}: panel depth D{d} at (30, 18)", log_row(fr, 18, 30, 2) == text6("D%d" % d, 0, 2), "")
+        check(f"W16 {tag}: panel depth D{d} at (28, 21)", log_row(fr, 21, 28, 2) == text6("D%d" % d, 0, 2), "")
         stale = [s_ for s_ in range(16) if p.ent(s_)["DVIS"] & 1 and
                  (p.ent(s_)["ROOM"] != p.rb("CUR_ROOM") or not p.ent(s_)["FLAGS"] & EF_ACTIVE)]
         check(f"W16 {tag}: no stale sprite (B7: every drawn slot is in CUR_ROOM)", stale == [], stale)
