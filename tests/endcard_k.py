@@ -16,7 +16,8 @@ EC_PCOL_L..+FT_COLS == the kind's KT_ATTR; the title KILLED BY + the kind name (
   K   every monster kind 2..29 (bases on an lp_dtab depth listing them, the bosses on their depth,
       tiers on their base's depth, K_VBAT on the Vampire's) killed the hero through deal_hit (stub,
       attacker = the kind, slot 1): ST1_KILLER = $80 | kind + the card; heroes alternate
-  R1  Mage, D6, Ghost in line (right, then left): Spark (real cast, HP 1) reflected -> GS_DEAD,
+  R1  (fixture: Ghost SHOCK X poked into kx_tab, shipped is R since BALANCE-PKG4)
+      Mage, D6, Ghost in line (right, then left): Spark (real cast, HP 1) reflected -> GS_DEAD,
       ST1_KILLER $85, the Ghost's portrait;  R2 the same with Lightning on D3 (pierce + reflect)
   R3  Warrior / Mage, D6: the Ghost's own DRAIN touch through real turns (ANIM_FREEZE 0) -> $85 + card
   N1  a reflected Spark the Mage survives (HP 200), then trap_hit at HP 1 (stub): ST1_KILLER 0 (no stale
@@ -151,6 +152,17 @@ def main():
             return ingame([0x3A] + w16(S["PORT_7FFD_SHADOW"]) + [0xF5, 0x3E, 3, 0xCD] + w16(S["page_bank"])
                           + body + [0xF1, 0xCD] + w16(S["restore_page"]))
 
+        def ghost_shock_x():
+            """BALANCE-PKG4 (a5683c4): the shipped Ghost is SHOCK R (no reflect, game.md). R1 / R2 / N1 test the
+            reflector-killer path, so the Ghost row is poked to SHOCK X (kx_tab byte 0 bits 7-6, as proj3.py):
+            a fixture, not the shipped table. After every setup (p.boot reloads the snapshot)."""
+            kxg = S["BANK_COLD3"] * 16384 + S["kx_tab"] - 0xC000 + K_GHOST * 8
+            p.z.cmd("set-memory-zone 0")
+            try:
+                p.wmem(kxg, [p.z.read_memory(kxg, 1)[0] | 0xC0])   # RSP_X = 3
+            finally:
+                p.z.cmd("set-memory-zone -1")
+
         def setup(depth, hero, seed):
             L = Lair(p, depth, seed, hero=hero)
             room = p.rb("CUR_ROOM")
@@ -230,6 +242,7 @@ def main():
         # ------------------------------------------------------------- R: reflected bolts
         for dx in (4, -4):
             ok, room = setup(6, 1, 0x6E06)
+            ghost_shock_x()
             put(K_GHOST, room, dx)
             p.set_ent(0, HP=1)
             rev, rfl = cast(1, S["ABL_SPARK"])
@@ -238,6 +251,7 @@ def main():
                   (ok, rev, rfl, p.rb("GAME_STATE"), hex(p.rb("ST1_KILLER"))))
             card(f"R1 Spark dx {dx}", K_GHOST)
         ok, room = setup(3, 1, 0x3E03)
+        ghost_shock_x()
         put(K_GHOST, room, 4)
         p.set_ent(0, HP=1)
         rev, rfl = cast(1 + S["ABL_LIGHTNING"], S["ABL_LIGHTNING"])
@@ -262,6 +276,7 @@ def main():
 
         # ------------------------------------------------------------- N: no stale reflector
         ok, room = setup(6, 1, 0x6E06)
+        ghost_shock_x()
         put(K_GHOST, room, 4)
         p.set_ent(0, HP=200, MAXHP=200)
         rev, rfl = cast(1, S["ABL_SPARK"])
