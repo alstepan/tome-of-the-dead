@@ -9,8 +9,21 @@ the real Spectrum palette (FLASH shown non-inverted).  Output: docs/release/itch
   python3 tools/itch_media.py gif                    # img/walk_fight.gif
   python3 tools/itch_media.py script W|M [part..]    # dev: run the hand-written input script (fast, no sound)
   python3 tools/itch_media.py video W|M [--reuse]    # script at emulator speed 100 + --aofile -> video/warrior.mp4 | mage.mp4 (with sound)
-  python3 tools/itch_media.py trailer rec music|W|M  # trailer captures (music once from the menu; hero SFX-only runs), speed 100
-  python3 tools/itch_media.py trailer                # assemble video/trailer.mp4 from those captures (real time, trim only)
+  python3 tools/itch_media.py scene tut|garg|imp|key|xp  # dev: one trailer scene at max speed -> build/itch/scene_<n>.png (1 frame/s)
+  python3 tools/itch_media.py trailer rec music|tut|garg|imp|key|xp  # one trailer capture, speed 100 + sound
+  python3 tools/itch_media.py trailer                # assemble video/trailer.mp4 from the captures (real time, trim only)
+  ZRCP_PORT=<free port> python3 tools/itch_media.py trailer all   # THE v1.2 TRAILER RE-RECORD, one command: release
+                                                     # build first (tools/build.sh -DDEBUG_KIT=0), no other ZEsarUX running
+                                                     # (~5 min); records music + the 5 scenes, then assembles video/trailer.mp4
+
+The v1.2 trailer (TRAILER-V12, ~76 s) = loading screen, title, then clips of the real game (a staged start, then real
+time) in this order: tut (W) Brother Morrow's opening + the climb down; garg (M) a Gargoyle perched high on the wall
+(y = 9s + 1), an Orc walking through it, the hero walks up, THE GARGOYLE WAKES UP, the fight; imp (W) Fire Imp (D6)
+and wraith (M) Ice Shade (D7), their shots; the old-favourites montage vamp (W) skel (M) ogre (W, OGRE LORD D4 lair)
+ghost (M) dlord (W, DEATHLORD D7 lair); key (M) level key + locked door; xp (W) the XP bar to a level-up; the cover.
+A capture is one session ("mW" / "mM" hold the montage cuts of one hero); TR_CLIPS = (capture, mark, seconds).
+Staged monsters follow the generator's rules: flyers + the Gargoyle on the cruise row 9s + 1, nobody inside the
+1-col margin of a ladder / shaft (legal_x), lair bosses spawned by the real lair entry.  Scenes: sc_* below.
 
 Recording needs the release build (tools/build.sh -DDEBUG_KIT=0), ZEsarUX and a free ZRCP port
 (ZRCP_PORT, never 10000).  The run is tick-exact (the playthrough bot of tests/pt_bot.py drives the
@@ -153,7 +166,7 @@ BPF = AUDIO_HZ // 50
 BLACK_KEEP = 0.35                     # s of black kept at each end of a cut (the rest is trimmed, picture AND sound)
 
 
-def check_audio(frames, audio_path, span):
+def check_audio(frames, audio_path, span, quiet_ok=False):
     """Fail loudly on stretched/garbled/silent sound.  span = (bytes at recording start, bytes at end) of the
     --aofile while the recording ran: must equal emulated frames x 312 within 2 %."""
     raw = np.fromfile(audio_path, np.uint8)
@@ -168,10 +181,13 @@ def check_audio(frames, audio_path, span):
     tail = raw[-need:].astype(np.float32)
     sd = float(tail.std())
     print(f"audio check: {got} B vs {need} B expected, ratio {ratio:.4f}, file {len(raw)} B, std {sd:.2f}")
-    if abs(ratio - 1) > 0.02:
+    if abs(ratio - 1) > (0.03 if quiet_ok else 0.02):     # scenes: 3 % (each level generation under DI adds a little sound-clock skew;
+        #                                                        the sound is end-anchored, so the skew is at most ~0.6 s at a capture's start)
         sys.exit(f"AUDIO CHECK FAILED: ratio {ratio:.4f} (emulator not real time?)")
     if sd < 1.0 or len(np.unique(tail[::97])) < 4:
-        sys.exit("AUDIO CHECK FAILED: audio is silent/constant")
+        if not quiet_ok:                                # an SFX-only scene can be (nearly) silent: the music carries it
+            sys.exit("AUDIO CHECK FAILED: audio is silent/constant")
+        print("note: (nearly) silent SFX capture, fine for a scene")
 
 
 def assemble(frames, audio_path, out, scale=6):
@@ -559,7 +575,7 @@ def make_stage(p, hero):
 
 
 @contextlib.contextmanager
-def session(hero_name, seed, audio=None, fast=True):
+def session(hero_name, seed, audio=None, fast=True, tut=False):
     """Emulator at the main menu (cold boot passed, seed fixed).  fast: tick-exact at max speed (no usable
     audio); not fast: emulator speed 100 + --aofile (raw sound: 15600 Hz, mono, unsigned 8-bit, written
     only while the emulated machine runs, 312 bytes per 50 Hz frame)."""
@@ -576,6 +592,7 @@ def session(hero_name, seed, audio=None, fast=True):
         p.mon = Mon(p)
         p.proto_start = 0
         p.snd_mode = None                         # music + SFX on (the boot default)
+        p.tut_default_off = not tut               # tut: the real menu path (START, then 1 = TUTORIAL) stays live
         p.load()
         p.wait_state(pt.GS_SELECT)
         p.wb("seed_fixed", 1)
@@ -864,55 +881,482 @@ def cmd_shots():
         scaled(scr_to_rgb(load_rec(h, tag)[i][0]), 3).save(OUT / "img" / f"{name}.png")
 
 
-# ------------------------------------------------------------------ trailer
-# hero alternates, every clip from a different depth
-# (W D7 is left out: the scripted boss fight there stalls (hero idle 14 s), nothing readable to show)
-# (hero, mark, seconds).  inv / icon start exactly at their mark (scripted for readability); the others take the
-# most-motion window after the mark unless TR_STARTS gives an offset (s after the mark) picked by eye.
-TR_CLIPS = [("W", "d1fight", 9.5), ("W", "inv", 8.3), ("M", "icon", 9.5), ("W", "lair4", 9.5), ("M", "lair5", 9.5),
-            ("M", "lair8", 9.5)]
-TR_STARTS = {"d1fight": 5.7, "lair5": 9.0}
-TR_AT_MARK = ("inv", "icon")
-# captions (only on the control-teaching clips): (from s, to s, text), drawn in the game's own 6x8 bold font
-TR_CAPS = {"inv": [(0.0, 5.0, "I OR BAG ICON: INVENTORY"), (5.0, 8.3, "FIRE: SELECT   FIRE AGAIN: DRINK/EQUIP")],
-           "icon": [(0.0, 4.5, "DOWN+FIRE (A+SPACE): SPELL/ITEM BAR"),
-                    (4.5, 9.5, "LEFT/RIGHT: MOVE  FIRE: USE  1-0: PICK")]}
-TR_PARTS = {"W": ["d1", "inv", "d4"], "M": ["d3", "d5", "d8"]}
-TR_MUSIC_S = 72                       # menu capture length (the trailer needs ~51 s of it)
+# ------------------------------------------------------------------ trailer (v1.2, TRAILER-V12)
+# Five scenes, each its own session (boot, menu, SFX-only through key 5, a staged start): everything on screen is the
+# real game running; the memory pokes only stage a start (a depth, the hero's kit, which monsters stand where) and are
+# hidden by a black cut, never a speed-up or an edited frame.  The clip starts exactly at its (capture, mark)
+# and lasts its TR_CLIPS seconds.  (scene, mark, seconds)
+TR_CLIPS = [("tut", "tut", 8.0), ("garg", "garg", 12.8), ("imp", "imp", 7.0), ("wraith", "wraith", 7.0),
+            ("mW", "vamp", 2.5), ("mM", "skel", 2.5), ("mW", "ogre", 4.0), ("mM", "ghost", 2.5), ("mW", "dlord", 3.0),
+            ("key", "key", 8.5), ("xp", "xp", 9.0),
+            ("arch", "arch", 9.6), ("tome", "door", 3.0), ("tome", "tome", 8.5)]
+TR_AT_MARK = tuple(m for _, m, _ in TR_CLIPS)
+TR_CAPS = {}                          # captions (from s, to s, text) by mark; none in v1.2
+TR_MUSIC_S = 100                      # menu capture length (the trailer needs ~60 s of it)
+
+EF_ACTIVE, EF_HOSTILE, EF_LEFT = 1, 4, 8
+
+
+def clear_room_mons(p):
+    """every monster slot 1..15 off (the staged room holds only what the scene puts in)."""
+    n = S["P_ENT_STRIDE"]
+    mem = bytearray(p.z.read_memory(S["P_ENTITIES"], 16 * n))
+    for k in range(1, 16):
+        mem[k * n + S["E_FLAGS"]] = 0
+        mem[k * n + S["E_ROOM"]] = 0
+    p.z.cmd("write-memory %d %s" % (S["P_ENTITIES"], " ".join(str(b) for b in mem)))
+    for nm in ("ST_FLAGS", "ST_T1", "ST_T2", "ST_X"):
+        p.z.cmd("write-memory %d %s" % (S[nm], " ".join(["0"] * 16)))
+    for nm in ("TURN_PEND", "TURN_TICK", "COMBAT_NOT_BEFORE", "FX_DROP", "SPQ_K"):      # (never dh_rtick: it is a bank-0 byte, $E57F = bank-7 CODE while the game runs)
+        p.wb(nm, 0)
+
+
+def spawn(st, p, kind, x, s, hp=None, flags=EF_ACTIVE | EF_HOSTILE, left=False, rcd=1, fly=False):
+    """put one monster into the first free slot of the current room (the nm3b.py World.put fixture)."""
+    n = S["P_ENT_STRIDE"]
+    raw = p.z.read_memory(S["P_ENTITIES"], 16 * n)
+    slot = next(k for k in range(1, 16) if not raw[k * n + S["E_FLAGS"]] & EF_ACTIVE)
+    h = st.kb(kind, "KT_BH")
+    from game_lib import stand_y
+    y = 9 * s + 1 if fly else stand_y(s, h)
+    hp = hp or p.rb(S["kind_tab"] + S["KT_HP"] + kind)
+    mem = [0] * n
+    mem[S["E_KIND"]], mem[S["E_ROOM"]], mem[S["E_FLAGS"]] = kind, st.room(), flags | (EF_LEFT if left else 0)
+    mem[S["E_X"]], mem[S["E_Y"]], mem[S["E_HP"]], mem[S["E_MAXHP"]] = x, y, hp, hp
+    mem[S["E_POT"]], mem[S["E_PX"]], mem[S["E_PY"]] = rcd, x * 8, y * 8
+    p.z.cmd("write-memory %d %s" % (S["P_ENTITIES"] + slot * n, " ".join(str(b) for b in mem)))
+    return slot
+
+
+def refresh(p):
+    """the staged entity table becomes the live world: build_live + vis_reset + a full present (a stub, as teleport)."""
+    from lp import w16
+    pc0 = p.pc()
+    p.code([0xCD] + w16(S["build_live"]) + [0xCD] + w16(S["vis_reset"]) + [0xCD] + w16(S["present_full"]), game=True)
+    p.z.cmd("set-register PC=%d" % pc0)
+    p.release()
+    p.settle(3)
+
+
+def stage_room(st, p, depth, hp, mp, ranks, lvl, room=None, hx=None, hs=1, left=False):
+    """staging (call inside cut()): the real descent to `depth`, the kit, a room cleared of monsters with the hero on
+    storey hs at col hx (default: the start room, col 4).  -> the walkable span (lo, hi) of that storey."""
+    st.go_depth(depth)
+    st.buff(hp=hp, mp=mp, ranks=ranks, lvl=lvl)
+    r = st.rb("LVL_START") if room is None else room
+    teleport(st, p, r, hs, 4 if hx is None else hx, left=left)
+    clear_room_mons(p)
+    st.refresh_room()
+    return st.reach_span(hs)
+
+
+def sc_tut(st, p, rec):
+    """Tutorial opening (D0): Brother Morrow's balloon + log line while the hero stands at the top of the ladder, then
+    the hero climbs down (DOWN = the A key) as the goal line says."""
+    rec.marks.append(("tut", rec.total()))
+    st.wait_s(4.0)
+    for _ in range(14):                                          # one DOWN per turn (no key repeat): the ladder, 0.35 s apart
+        if not p.turn("J"):
+            st.wait_s(0.3)
+        e = p.ent(0)
+        if e["Y"] >= 9 and (e["Y"] + 4) % 9 == 8:
+            break
+        st.wait_s(0.1)
+    st.wait_s(0.6)
+    for _ in range(7):                                           # then right, toward the room
+        p.turn("L")
+        st.wait_s(0.15)
+    st.wait_s(2.0)
+
+
+def legal_x(st, x, w):
+    """the game's lp_legal rule for a body w cols wide: a 1-col margin round every ladder / shaft footprint
+    (x + w - 1 <= f - 3 or x >= f + 4 for each ladder left col f), 2 cols off the walls / doors."""
+    lo, hi = st.reach_span(1)
+    return lo + 2 <= x and x + w - 1 <= hi - 2 and all(x + w - 1 <= f - 3 or x >= f + 4 for f in st.room_ladders())
+
+
+def find_x(st, want, w, direction=0):
+    """the legal col nearest `want` (direction -1 / +1: only that side of it)."""
+    for d in range(0, 30):
+        for x in ((want - d, want + d) if direction == 0 else (want + direction * d,)):
+            if legal_x(st, x, w):
+                return x
+    raise RuntimeError(f"no legal col near {want}")
+
+
+def sc_garg(st, p, rec):
+    """D6, the Mage.  The game perches a Gargoyle high on the wall (y = 9s + 1): the statue.  An Orc walks in from the
+    right THROUGH it (a perched Gargoyle is intangible) toward the hero, who waits, kills it, then walks up to the
+    statue: within 2 cols it wakes ("THE GARGOYLE WAKES UP."), flies and fights."""
+    box = {}
+    kg, ko = S["K_GARGOYLE"], S["K_ORC"]
+
+    def put():
+        stage_room(st, p, 6, 100, 90, [2, 2, 2, 1, 2], 6, hx=6)
+        gw = st.kb(kg, "KT_BW")
+        for r in [st.rb("LVL_START")] + [r for r in st.rooms if r != st.rb("LVL_START")]:    # a room that fits the layout
+            teleport(st, p, r, 1, 4)
+            st.refresh_room()
+            lo, hi = st.reach_span(1)
+            cand = [x for x in range(lo + st.kw + 6, hi - 9) if legal_x(st, x, gw)]
+            if cand:
+                break
+        g = cand[0]
+        ox = find_x(st, g + 8, st.kb(ko, "KT_BW"), -1)
+        hx = g - st.kw - 6
+        teleport(st, p, r, 1, hx)
+        clear_room_mons(p)
+        st.refresh_room()
+        box.update(r=r, lo=lo, hi=hi, g=g, hx=hx, ox=ox)
+        spawn(st, p, kg, g, 1, hp=60, flags=EF_ACTIVE | EF_HOSTILE | S["EF_GHOST"], fly=True)   # 60 HP: a fight to watch
+        spawn(st, p, ko, ox, 1, left=True)
+        refresh(p)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append(("garg", rec.total()))
+    log(st, f"garg {box}")
+    st.wait_s(1.5)                                               # the statue, high on the wall
+    st.god = True
+    for _ in range(40):                                          # the Orc walks through it; the hero holds
+        orcs = [h for h in st.hostiles() if h["kind"] == ko]
+        if not orcs or orcs[0]["x"] < box["g"] - 3:
+            break
+        st.act("WAIT")
+    st.fight_room(120, until=lambda: not [h for h in st.hostiles() if h["kind"] == ko], max_s=8)
+    st.wait_s(0.6)
+    for _ in range(12):                                          # now up to the statue, one slow step at a time
+        garg = [h for h in st.hostiles() if h["kind"] == kg]
+        if not garg or not garg[0]["fl"] & S["EF_GHOST"]:
+            break
+        st.act("L")
+        st.wait_s(0.35)
+    st.fight_room(200, max_s=9)
+    st.wait_s(1.5)
+
+
+def flyer_clip(st, p, rec, depth, hero_kit, gap, mark, hold=3.5, fight_s=3.0, total=7.0):
+    """a flyer (the row-31 alias: Fire Imp D6 / Ice Shade D7) on the cruise row 9s + 1, inside its shot range: the hero
+    holds `hold` seconds (the shots are the real flyer AI's), then fights."""
+    def put():
+        stage_room(st, p, depth, *hero_kit, depth, hx=6)
+        x = find_x(st, 6 + st.kw + gap, st.kb(S["K_ALIAS"], "KT_BW"), 1)
+        spawn(st, p, S["K_ALIAS"], x, 1, hp=3 * p.rb(S["kind_tab"] + S["KT_HP"] + S["K_ALIAS"]), left=True, fly=True)
+        refresh(p)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append((mark, rec.total()))
+    t0 = rec.total()
+    st.god = True
+    while rec.total() - t0 < hold * 50:                          # stand still, the flyer shoots (seconds, not turns)
+        st.act("WAIT")
+    st.fight_room(200, max_s=fight_s)
+    st.wait_s(max(0.3, total - (rec.total() - t0) / 50))
+
+
+def sc_imp(st, p, rec):
+    """Fire Imp (D6), the Warrior."""
+    flyer_clip(st, p, rec, 6, (120, 20, [2, 2, 0, 0, 0]), 5, "imp", hold=3.5, fight_s=3.0)
+
+
+def sc_wraith(st, p, rec):
+    """Frost Wraith (shown in game as ICE SHADE, D7), the Mage."""
+    flyer_clip(st, p, rec, 7, (100, 60, [2, 2, 2, 1, 2]), 7, "wraith", hold=3.5, fight_s=3.0)
+
+
+def mont_floor(st, p, rec, depth, kind, hero_kit, mark, secs, gap=5, fly=False):
+    """one montage cut: a regular of the level (staged on the floor / cruise row, 3x HP so the fight lasts) and the hero."""
+    def put():
+        stage_room(st, p, depth, *hero_kit, depth, hx=6)
+        x = find_x(st, 6 + st.kw + gap, st.kb(kind, "KT_BW"), 1)
+        spawn(st, p, kind, x, 1, hp=min(250, 3 * p.rb(S["kind_tab"] + S["KT_HP"] + kind)), left=True, fly=fly)
+        refresh(p)
+    cut(st, rec, put, sec=0.3)
+    rec.marks.append((mark, rec.total()))
+    st.god = True
+    st.fight_room(200, max_s=secs)
+
+
+def mont_lair(st, p, rec, depth, hero_kit, mark, secs):
+    """one montage cut: the real lair boss of `depth` (the game spawns it on entering the lair), the fight."""
+    def put():
+        st.go_depth(depth)
+        st.buff(hp=hero_kit[0], mp=hero_kit[1], ranks=hero_kit[2], lvl=depth)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])      # the level keys in hand: the lair door can be walked to
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    rec.marks.append((mark, rec.total()))
+    log(st, f"boss {boss:#x}")
+    st.god = True
+    st.fight_room(260, max_s=secs)
+
+
+KIT_W = (120, 30, [3, 3, 0, 0, 0])
+KIT_M = (100, 60, [3, 3, 2, 2, 3])
+
+
+def sc_montW(st, p, rec):
+    """old favourites, the Warrior: Vampire (D3), OGRE LORD (D4 lair), DEATHLORD (D7 lair)."""
+    mont_floor(st, p, rec, 3, S["K_VAMPIRE"], KIT_W, "vamp", 2.5)
+    mont_lair(st, p, rec, 4, KIT_W, "ogre", 4.0)
+    mont_lair(st, p, rec, 7, KIT_W, "dlord", 3.0)
+
+
+def sc_montM(st, p, rec):
+    """old favourites, the Mage: Skeleton, Ghost (D3)."""
+    mont_floor(st, p, rec, 3, S["K_SKELETON"], KIT_M, "skel", 2.5)
+    mont_floor(st, p, rec, 3, S["K_GHOST"], KIT_M, "ghost", 2.5, fly=True)
+
+
+def sc_key(st, p, rec):
+    """D1 (seeded): the level key lies in room 0; the hero picks it up ("YOU FIND A CYAN KEY", the panel key by the bag),
+    then walks into the locked door (EG_LOCK between rooms 6 | 7): "YOU UNLOCK THE DOOR", through it."""
+    lock = next(m for m in range(12) if m % 3 != 2 and st.edge_flags(m) & S["EG_LOCK"])
+    near_right = bool(st.edge_flags(lock) & S["EG_NEARR"])
+    prev, kind = (lock + 1, "L") if near_right else (lock, "R")        # the near side bars; the door's other side is the far room
+    key = next(i for i in st.floor_items(st.keyroom) if i["type"] == S["IT_KEY"])
+    log(st, f"key r{st.keyroom} {key}, lock edge {lock} near {'R' if near_right else 'L'}")
+    cut(st, rec, lambda: teleport(st, p, st.keyroom, key["s"], key["x"] + 7), sec=0.4)
+    rec.marks.append(("key", rec.total()))
+    st.wait_s(1.0)
+    st.walk_to(key["s"], key["x"])
+    log(st, f"keys held {st.lflags() & (S['LF_KEYC'] | S['LF_KEYM'])}")
+    st.wait_s(2.0)
+
+    def put():
+        ex = room_model.field(st.blk, prev, "RD_EXITS")
+        s_ = 1 if ex & S["RDX_" + ("LS1" if kind == "L" else "RS1")] else 0
+        lo, hi = st.reach_span(s_) if st.room() == prev else (None, None)
+        teleport(st, p, prev, s_, 14, left=(kind == "L"))
+        lo, hi = st.reach_span(s_)
+        tx = (lo + 7) if kind == "L" else (hi - 7)
+        teleport(st, p, prev, s_, max(lo, min(hi, tx)), left=(kind == "L"))
+    cut(st, rec, put, sec=0.4)
+    st.wait_s(0.8)
+    st.leave(kind)
+    st.wait_s(2.0)
+
+
+def sc_xp(st, p, rec):
+    """Warrior at D3, level 2 with the bar nearly full (XP poked just under XP_NEXT[3]): two monsters, the kills fill the
+    XP bar on row 21 and the second level-up lands."""
+    def put():
+        lo, hi = stage_room(st, p, 3, 80, 30, [2, 2, 0, 0, 0], 2, hx=5)
+        p.z.cmd("write-memory %d %d %d" % (S["XP"], 106, 0))       # XP_NEXT[3] = 110
+        spawn(st, p, S["K_SKELETON"], 5 + st.kw + 6, 1, left=True)
+        spawn(st, p, S["K_GOBLIN"], 5 + st.kw + 10, 1, left=True)
+        refresh(p)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append(("xp", rec.total()))
+    st.god = True
+    st.wait_s(0.8)
+    st.fight_room(200, max_s=9)
+    st.wait_s(2.0)
+
+
+def sc_arch(st, p, rec):
+    """D8, the Warrior: the real lair of the Necromancer Archmage (the game spawns it on entering the lair), the fight to its
+    death ("THE SEAL BREAKS").  The Archmage's HP is brought down to the last few points mid-fight so it fits the clip
+    (as the playthrough bot's boss_poke does); the kill, the log and the seal are the game's."""
+    def put():
+        st.go_depth(8)
+        st.buff(hp=KIT_W[0], mp=KIT_W[1], ranks=KIT_W[2], lvl=8)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    rec.marks.append(("arch", rec.total()))
+    log(st, f"boss {boss:#x}")
+    st.god = True
+    t0 = st.sysf()
+    poked = False
+    for _ in range(300):
+        st.fight_room(1, max_s=None)
+        if st.rb("GAME_STATE") != S["GS_PLAYING"] or st.lflags() & S["LF_SEAL_OPEN"]:
+            break
+        if not poked and ((st.sysf() - t0) & 0xFFFFFF) > 4.5 * 50:
+            for h in st.hostiles():
+                if h["kind"] == S["K_ARCHMAGE"] and h["hp"] > 6:
+                    p.set_ent(h["slot"], HP=6)
+                    poked = True
+    st.wait_s(2.5)
+
+
+def sc_tome(st, p, rec):
+    """D8, the Mage: the Archmage (1 HP, so the cut is short) dies to the hero's real hit -> the seal breaks; the hero walks
+    through the Sanctum door and strikes the Tome with the staff until it is ash: "THE TOME IS DESTROYED", "A GATE GLEAMS"."""
+    def put():
+        st.go_depth(8)
+        st.buff(hp=KIT_M[0], mp=KIT_M[1], ranks=KIT_M[2], lvl=8)
+        p.wb("LVL_FLAGS", p.rb("LVL_FLAGS") | S["LF_KEYC"] | S["LF_KEYM"])
+    cut(st, rec, put, sec=0.3)
+    boss = enter_lair(st, p, rec)
+    st.god = True
+
+    def kill():                      # the hero's own hit does the killing; only the boss's HP is brought to 1 (black cut)
+        t0 = st.sysf()
+        while not st.lflags() & S["LF_SEAL_OPEN"] and ((st.sysf() - t0) & 0xFFFFFF) < 40 * 50:
+            for h in st.hostiles():
+                if h["kind"] == S["K_ARCHMAGE"] and h["hp"] > 1:
+                    p.set_ent(h["slot"], HP=1)
+            st.fight_room(1)
+        st.fight_room(150, max_s=25)             # the Archmage's summons die too: nothing follows the hero into the Sanctum
+
+    def to_door():                   # the hero stands 6 cols short of the Sanctum door (legal span, facing it)
+        ex = room_model.field(st.blk, st.room(), "RD_EXITS")
+        k = next(k for m_, k in st.neighbours(st.room()) if m_ == st.sanctum)
+        s_ = 1 if ex & S["RDX_" + ("LS1" if k == "L" else "RS1")] else 0
+        teleport(st, p, st.room(), s_, 14, left=(k == "L"))
+        lo, hi = st.reach_span(s_)
+        teleport(st, p, st.room(), s_, max(lo, min(hi, (lo + 6) if k == "L" else (hi - 6))), left=(k == "L"))
+    cut(st, rec, lambda: (kill(), to_door()), sec=0.2)
+    log(st, f"seal open {bool(st.lflags() & S['LF_SEAL_OPEN'])}")
+    sn = st.sanctum
+    kind = next(k for m_, k in st.neighbours(st.room()) if m_ == sn)
+    rec.marks.append(("door", rec.total()))
+    st.wait_s(0.5)
+    st.leave(kind)                               # the real bump opens the broken-seal door, then the hero walks in
+    st.wait_s(0.3)
+    rec.marks.append(("door_end", rec.total()))
+    st.refresh_room()
+    lect = [(c, rr) for rr in range(S["STOREY_ROWS"], 18) for c in range(32) if st.cell_tf(c, rr) & S["TF_ATTACK"]]
+    left = min(c for c, _ in lect) < 16
+    lo, hi = st.reach_span(1)
+    # the Sanctum walk is long: a black cut puts the hero (legal storey-1 col, 4 cols short of the lectern, facing it)
+    cut(st, rec, lambda: teleport(st, p, sn, 1, (lo + 4) if left else (hi - 4), left=left), sec=0.3)
+    rec.marks.append(("tome", rec.total()))
+    st.wait_s(0.8)
+    for _ in range(14):
+        e, s_, x_, _st = st.hero_pos()
+        if st.rb("TOME_HP") == 0:
+            break
+        if not st.act("H" if left else "L"):
+            st.wait_s(0.3)
+        st.wait_s(0.3)
+    log(st, f"TOME_HP {st.rb('TOME_HP')}")
+    st.wait_s(3.5)
+
+
+def sc_ogre(st, p, rec):
+    """Warrior vs the OGRE LORD in its real D4 lair (itch shot / GIF)."""
+    mont_lair(st, p, rec, 4, KIT_W, "ogre", 6.0)
+    st.wait_s(0.5)
+
+
+def sc_bag(st, p, rec):
+    """Warrior D3: a potion, a helm and a long weapon in the bag; I opens the bag page, the cursor rests on the helm (its
+    properties on the lines under the grid)."""
+    def put():
+        stage_room(st, p, 3, 120, 30, [3, 3, 0, 0, 0], 3, hx=6)
+        for n, q in (("P_HEAL", 2), ("H_HELM", 1), ("W_LONG", 1)):
+            give(st, n, q)
+    cut(st, rec, put, sec=0.4)
+    rec.marks.append(("bag", rec.total()))
+    st.wait_s(0.5)
+    i = st.bag_find("H_HELM")
+    st.bag_show(goto=i, dwell=0.8, step_s=0.6, close_dwell=0.2)
+
+
+# ---- itch page shots / GIFs (v1.2): each scene is recorded once at max speed (the same deterministic scenes), the frames
+# are pickled, and `shots12 make` writes the files from picked offsets (display frames after the scene's mark)
+SH_SCENES = {"sh_ogre": ("W", False, sc_ogre, "ogre"), "sh_ice": ("M", False, sc_wraith, "wraith"),
+             "sh_imp": ("W", False, sc_imp, "imp"), "sh_garg": ("M", False, sc_garg, "garg"),
+             "sh_tut": ("W", True, sc_tut, "tut"), "sh_key": ("M", False, sc_key, "key"),
+             "sh_tome": ("M", False, sc_tome, "tome"), "sh_bag": ("W", False, sc_bag, "bag")}
+
+
+SCENES = {"tut": ("W", True, sc_tut), "garg": ("M", False, sc_garg), "imp": ("W", False, sc_imp),
+          "wraith": ("M", False, sc_wraith), "key": ("M", False, sc_key), "xp": ("W", False, sc_xp),
+          "mW": ("W", False, sc_montW), "arch": ("W", False, sc_arch), **{k: v[:3] for k, v in SH_SCENES.items()}, "tome": ("M", False, sc_tome), "mM": ("M", False, sc_montM)}
+
+
+def start_tut(p, st, rec):
+    """real path: START, then 1 = TUTORIAL (the key is held until D0's start, never into its first tick)."""
+    rec.start()
+    st.wait_s(0.5)
+    p.hold("1")
+    p.tick(3)
+    p.release()
+    st.wait_s(1.0)
+    p.hold("1")
+    p.z.cmd("set-breakpoint 21 PC=%d" % S["tut_d0"])
+    for _ in range(60):
+        p.z.cmd("cpu-step")
+        p.z.cmd("run 20000000")
+        if p.pc() == S["tut_d0"]:
+            break
+    p.z.cmd("set-breakpoint 21")
+    p.release()
+    p.z.cmd("cpu-step")
+    p.wait_state(pt.GS_PLAYING)
+    p.settle(3)
+
+
+def run_scene(what, fast, audio=None, sfx_only=True):
+    _imports()
+    hero_name, tut, fn = SCENES[what]
+    hero = K_KNIGHT if hero_name == "W" else K_WIZARD
+    with session(hero_name, 0x1234, audio=audio, fast=fast, tut=tut) as (h, p, rec, st):
+        sz = lambda: audio.stat().st_size if audio and Path(audio).exists() else 0     # noqa: E731
+        if sfx_only:
+            p.tap("5")                                    # ALL ON -> EFFECTS ONLY through the real menu key
+            st.wait_s(0.5)
+            if p.rb("SND_MODE") != 2:
+                sys.exit(f"SND_MODE {p.rb('SND_MODE')}: key 5 did not give EFFECTS ONLY")
+        s0 = (sz(), rec.sys())
+        if tut:
+            for _ in range(2):
+                if p.rb("menu_hero") == hero:
+                    break
+                p.tap("2")
+                st.wait_s(1.5)
+            start_tut(p, st, rec)
+        else:
+            menu_start(p, rec, st, hero, dwell=0.5)
+        try:
+            fn(st, p, rec)
+        finally:
+            rec.marks.append((what + "_end", rec.total()))
+            if sfx_only and p.rb("SND_MODE") != 2:
+                print("WARNING: SND_MODE changed during the run:", p.rb("SND_MODE"))
+        return rec, (s0, (sz(), rec.sys()), rec.total())
+
+
+def cmd_scene(what):
+    """dev: run a scene at max speed (no sound) and write build/itch/scene_<what>.png, 1 frame per second."""
+    rec, span = run_scene(what, True, sfx_only=False)
+    TMP.mkdir(parents=True, exist_ok=True)
+    tl = np.repeat(np.arange(len(rec.frames)), [d for _, d in rec.frames])
+    ms = [t for m, t in rec.marks if not m.endswith("_end")]
+    secs = 12 if len(ms) == 1 else 4                      # 1 frame/s from each mark (a scene) / 4 per montage cut
+    pics = []
+    for t0 in ms:
+        pics += [scaled(scr_to_rgb(rec.frames[tl[min(t0 + k * 50 + 10, len(tl) - 1)]][0]), 1) for k in range(secs)]
+    cols = 4
+    w, hh = pics[0].size
+    sh = Image.new("RGB", (cols * w, ((len(pics) + cols - 1) // cols) * hh))
+    for i, im in enumerate(pics):
+        sh.paste(im, ((i % cols) * w, (i // cols) * hh))
+    sh.save(TMP / f"scene_{what}.png")
+    print(f"scene {what}: {rec.total() / 50:.1f} s, marks {rec.marks}, sheet build/itch/scene_{what}.png")
 
 
 def cmd_trailer_rec(what):
     """what = music: the title/menu theme once, uninterrupted, from the menu (sound ALL ON, nothing pressed).
-    what = W|M: a scripted run with in-game sound set to EFFECTS ONLY through the real menu key 5 (ALL ON -> SFX ONLY),
-    so its --aofile holds SFX and no song.  Always emulator speed 100 (real time), never turbo."""
+    what = a scene (tut garg imp key xp): that scene's own session with in-game sound set to EFFECTS ONLY through the
+    real menu key 5, so its --aofile holds SFX and no song.  Always emulator speed 100 (real time), never turbo."""
     audio = TMP / f"tr_audio_{what}.raw"
     TMP.mkdir(parents=True, exist_ok=True)
     if audio.exists():
         audio.unlink()
-    with session("W" if what == "music" else what, 0x1234, audio=audio, fast=False) as (h, p, rec, st):
-        sz = lambda: audio.stat().st_size if audio.exists() else 0
-        if what == "music":
-            s0 = (sz(), rec.sys())
+    if what == "music":
+        with session("W", 0x1234, audio=audio, fast=False) as (h, p, rec, st):
+            s0 = (audio.stat().st_size if audio.exists() else 0, rec.sys())
             rec.start()
             st.wait_s(TR_MUSIC_S)
-        else:
-            p.tap("5")
-            st.wait_s(0.5)
-            if p.rb("SND_MODE") != 2:
-                sys.exit(f"SND_MODE {p.rb('SND_MODE')}: key 5 did not give EFFECTS ONLY")
-            s0 = (sz(), rec.sys())
-            hero = K_KNIGHT if what == "W" else K_WIZARD
-            try:
-                menu_start(p, rec, st, hero, dwell=0.5)
-                for nm in TR_PARTS[what]:
-                    PARTS[what][nm](st, p, rec)
-            finally:
-                if p.rb("SND_MODE") != 2:
-                    print("WARNING: SND_MODE changed during the run:", p.rb("SND_MODE"))
-        span = (s0, (sz(), rec.sys()), rec.total())
-        pickle.dump({"frames": rec.frames, "span": span, "marks": rec.marks}, open(TMP / f"tr_{what}.pkl", "wb"))
-        print(f"trailer capture {what}: {len(rec.frames)} probes, {rec.total() / 50:.1f} s, marks {rec.marks}")
-    check_audio(rec.frames, audio, span)
+            span = (s0, (audio.stat().st_size, rec.sys()), rec.total())
+    else:
+        rec, span = run_scene(what, False, audio=audio)
+    pickle.dump({"frames": rec.frames, "span": span, "marks": rec.marks}, open(TMP / f"tr_{what}.pkl", "wb"))
+    print(f"trailer capture {what}: {len(rec.frames)} probes, {rec.total() / 50:.1f} s, marks {rec.marks}")
+    check_audio(rec.frames, audio, span, quiet_ok=what != "music")
 
 
 def _tr_audio(what, d):
@@ -925,33 +1369,11 @@ def _tr_audio(what, d):
 
 
 def _tr_timeline(d):
-    """per 50 Hz display frame: probe index, picture change (bytes differing from the previous probe), black flag."""
+    """per 50 Hz display frame: probe index and black flag (the clips start at their marks, no window search)."""
     fr = d["frames"]
     tl_i = np.repeat(np.arange(len(fr)), [dd for _, dd in fr])
-    first = np.concatenate([[0], np.cumsum([dd for _, dd in fr])])[:-1]
-    act = np.zeros(len(tl_i), np.float32)
-    for i in range(1, len(fr)):
-        act[first[i]] = np.count_nonzero(np.frombuffer(fr[i][0][:6912], np.uint8) != np.frombuffer(fr[i - 1][0][:6912], np.uint8))
     black = np.array([not any(f) for f, _ in fr])[tl_i]
-    return tl_i, act, black
-
-
-def _tr_window(d, tlx, mark, length):
-    """best `length`-frame window after `mark` (display frames of the capture): most picture change, no black frame."""
-    tl_i, act, black = tlx
-    mk = sorted(d["marks"], key=lambda x: x[1])
-    t0 = dict(mk)[mark] + 25
-    nxt = [t for _, t in mk if t > t0]
-    cut_end = nxt[0] if nxt else len(act)                       # stay inside this scene
-    cs, cb = np.concatenate([[0], np.cumsum(act)]), np.concatenate([[0], np.cumsum(black)])
-    best, bt = -1.0, None
-    for t in range(t0, cut_end - length):
-        if cb[t + length] - cb[t]:
-            continue
-        v = cs[t + length] - cs[t]
-        if v > best:
-            best, bt = v, t
-    return bt
+    return tl_i, None, black
 
 
 _FONT = None
@@ -975,9 +1397,8 @@ def caption_bar(text, w, h, k=3):
     return bar
 
 
-def cmd_trailer(starts=None):
-    """starts: {mark: seconds into the capture} overriding the automatic window pick (default TR_STARTS)."""
-    starts = starts or TR_STARTS
+def cmd_trailer():
+    """assemble video/trailer.mp4 from the music capture + one capture per scene (every clip starts at its mark)."""
     W, H, FPS, BAR = 768, 624, 50, 48                       # 3x game picture under a 48 px black caption bar
     nf = lambda s: int(round(s * FPS))                                        # noqa: E731
     FADE, TITLE, COVER = nf(0.4), nf(3.0), nf(3.0)
@@ -985,17 +1406,24 @@ def cmd_trailer(starts=None):
     segs = [("loading", TITLE), ("title", TITLE)] + [((c[0], c[1]), nf(c[2])) for c in TR_CLIPS] + [("cover", COVER)]
     total = sum(n for _, n in segs)
     # ---- the music: ONE contiguous slice of the single menu capture, frame-aligned with its title picture
-    music_all = _tr_audio("music", mus)
+    # (v1.2 fix: from the FIRST NOTE of the whole file, not the end-anchored tail of the capture, which began mid-tune)
+    u8 = np.fromfile(TMP / "tr_audio_music.raw", np.uint8)
+    i0 = int(np.argmax(u8 != 128))                                             # the first sample that is not digital silence
+    raw = u8.astype(np.float32)
+    raw -= np.convolve(raw, np.ones(2000) / 2000, mode="same")
+    raw /= 128.0
+    music_all = raw[max(0, i0 - AUDIO_HZ // 20):]                              # 50 ms of lead-in before the first sound
     if len(music_all) < total * BPF:
         sys.exit(f"music capture too short: {len(music_all)} < {total * BPF}")
     music = music_all[:total * BPF].copy()                                     # THE music: one slice, never spliced
     first = int(np.argmax(np.abs(music) > 0.02))
-    print(f"music: first sound {first / AUDIO_HZ:.2f} s into the slice; capture {len(music_all) / AUDIO_HZ:.1f} s for "
-          f"{mus['span'][2]} frames = {mus['span'][2] / 50:.1f} s (15600 Hz x 312 B/frame -> 50 fps real time)")
+    print(f"music: first sound {first / AUDIO_HZ:.2f} s into the slice (file start {i0 / AUDIO_HZ:.2f} s); "
+          f"{len(music_all) / AUDIO_HZ:.1f} s available for a {total / 50:.1f} s trailer")
     music_src = music.copy()
-    heroes = {h: pickle.load(open(TMP / f"tr_{h}.pkl", "rb")) for h in "WM"}
-    aud = {h: _tr_audio(h, heroes[h]) for h in "WM"}
-    tlx = {h: _tr_timeline(heroes[h]) for h in "WM"}
+    scn = [c[0] for c in TR_CLIPS]
+    heroes = {h: pickle.load(open(TMP / f"tr_{h}.pkl", "rb")) for h in scn}
+    aud = {h: _tr_audio(h, heroes[h]) for h in scn}
+    tlx = {h: _tr_timeline(heroes[h]) for h in scn}
     env_pic = np.ones(total, np.float32)
     sfx = np.zeros(total * BPF, np.float32)
     env_sfx = np.zeros(total, np.float32)
@@ -1010,12 +1438,10 @@ def cmd_trailer(starts=None):
         if isinstance(name, tuple):
             h, mark = name
             mt = dict(heroes[h]["marks"])[mark]
-            if mark in TR_AT_MARK:
-                t = mt
-            elif mark in starts:
-                t = mt + nf(starts[mark])
-            else:
-                t = _tr_window(heroes[h], tlx[h], mark, n)
+            t = mt
+            if t + n > heroes[h]["span"][2] or tlx[h][2][t]:      # a black cut INSIDE a clip is a staging poke (imp: D6 -> D7)
+                sys.exit(f"scene {h}: its {n / 50:.1f} s clip runs past the capture ({heroes[h]['span'][2] / 50:.1f} s) "
+                         f"or starts on a black frame")
             plan[pos] = (h, t)
             sfx[pos * BPF:(pos + n) * BPF] = aud[h][t * BPF:(t + n) * BPF] * np.repeat(e, BPF)
             env_sfx[pos:pos + n] = 1
@@ -1087,6 +1513,90 @@ def cmd_trailer(starts=None):
     print(f"{out}: {total} frames = {total / 50:.1f} s, {out.stat().st_size / 1e6:.1f} MB")
 
 
+def _sh_frames(name):
+    d = pickle.load(open(TMP / f"sh_{name}.pkl", "rb"))
+    tl = np.repeat(np.arange(len(d["frames"])), [x for _, x in d["frames"]])
+    t0 = dict(d["marks"])[SH_SCENES[name][3]]
+    return d, tl, t0
+
+
+def cmd_sh_rec(name):
+    rec, _ = run_scene(name, True, sfx_only=False)
+    TMP.mkdir(parents=True, exist_ok=True)
+    pickle.dump({"frames": rec.frames, "marks": rec.marks}, open(TMP / f"sh_{name}.pkl", "wb"))
+    print(f"shots12 rec {name}: {rec.total() / 50:.1f} s, marks {rec.marks}")
+
+
+def cmd_sh_sheet(name, step=25, n=24):
+    """contact sheet of one recorded scene: a frame every `step` display frames from its mark, offset in the corner."""
+    d, tl, t0 = _sh_frames(name)
+    from PIL import ImageDraw
+    pics = []
+    for k in range(n):
+        i = min(t0 + k * step, len(tl) - 1)
+        im = scaled(scr_to_rgb(d["frames"][tl[i]][0]), 1)
+        ImageDraw.Draw(im).text((2, 2), str(k * step), fill=(255, 255, 255))
+        pics.append(im)
+    cols = 4
+    w, hh = pics[0].size
+    sh = Image.new("RGB", (cols * w, ((len(pics) + cols - 1) // cols) * hh))
+    for i, im in enumerate(pics):
+        sh.paste(im, ((i % cols) * w, (i // cols) * hh))
+    sh.save(TMP / f"shsheet_{name}.png")
+    print(f"build/itch/shsheet_{name}.png (marks {d['marks']})")
+
+
+def _gif(frames, name, fps=25):
+    """the cmd_clip GIF writer on an explicit list of 6912-B screens at 50 Hz: 2x, Spectrum palette, equal frames merged."""
+    pal = []
+    for br in (0xD7, 0xFF):
+        for c in range(8):
+            pal += [(c >> 1 & 1) * br, (c >> 2 & 1) * br, (c & 1) * br]
+    pal += [0] * (768 - len(pal))
+    ref = Image.new("P", (1, 1))
+    ref.putpalette(pal)
+    q = [scaled(scr_to_rgb(f), 2).quantize(palette=ref, dither=Image.Dither.NONE) for f in frames[::50 // fps]]
+    mi, md = [q[0]], [1000 // fps]
+    for b in q[1:]:
+        if b.tobytes() == mi[-1].tobytes():
+            md[-1] += 1000 // fps
+        else:
+            mi.append(b)
+            md.append(1000 // fps)
+    md[-1] += 600
+    out = OUT / "img" / name
+    mi[0].save(out, save_all=True, append_images=mi[1:], duration=md, loop=0, optimize=True, disposal=1)
+    print(f"{out.name}: {sum(md) / 1000:.1f} s, {out.stat().st_size / 1e6:.2f} MB, {len(mi)} frames")
+
+
+# (file, scene, display-frame offset after the scene's mark) ; (file, scene, from, to) for GIFs
+SH_PNG = [("shot2_warrior_fight.png", "sh_ogre", 250), ("shot3_mage_bolt.png", "sh_ice", 250),
+          ("shot4_bag.png", "sh_bag", 175), ("shot5_deeper_d5.png", "sh_imp", 150),
+          ("shot6_tutorial.png", "sh_tut", 50), ("shot7_key_door.png", "sh_key", 300),
+          ("shot8_gargoyle_statue.png", "sh_garg", 300), ("shot9_tome_destroyed.png", "sh_tome", 300)]
+SH_GIF = [("walk_fight.gif", "sh_garg", 275, 550), ("warrior.gif", "sh_ogre", 150, 400), ("mage.gif", "sh_ice", 100, 375)]
+
+
+def cmd_sh_menu():
+    """shot1_menu: the real main menu (nothing pressed), x3."""
+    _imports()
+    with session("W", 0x1234, fast=True) as (h, p, rec, st):
+        st.wait_s(1.0)
+        scaled(scr_to_rgb(bytes(p.frame())), 3).save(OUT / "img" / "shot1_menu.png")
+    print("wrote shot1_menu.png")
+
+
+def cmd_sh_make():
+    (OUT / "img").mkdir(parents=True, exist_ok=True)
+    for fn, name, off in SH_PNG:
+        d, tl, t0 = _sh_frames(name)
+        scaled(scr_to_rgb(d["frames"][tl[t0 + off]][0]), 3).save(OUT / "img" / fn)
+        print("wrote", fn)
+    for fn, name, a, b in SH_GIF:
+        d, tl, t0 = _sh_frames(name)
+        _gif([d["frames"][tl[i]][0] for i in range(t0 + a, min(t0 + b, len(tl)))], fn)
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -1106,9 +1616,17 @@ def main():
     elif a[0] == "clips":
         cmd_clip("W", 1110, 1400, "warrior.gif")
         cmd_clip("M", 1140, 1500, "mage.gif")
+    elif a[0] == "scene":
+        cmd_scene(a[1])
+    elif a[0] == "shots12":
+        {"rec": lambda: cmd_sh_rec(a[2]), "sheet": lambda: cmd_sh_sheet(a[2]), "make": cmd_sh_make, "menu": cmd_sh_menu}[a[1]]()
     elif a[0] == "trailer":
         if a[1:2] == ["rec"]:
             cmd_trailer_rec(a[2])
+        elif a[1:2] == ["all"]:
+            for w in ["music"] + [c[0] for c in TR_CLIPS]:
+                cmd_trailer_rec(w)
+            cmd_trailer()
         else:
             cmd_trailer()
     elif a[0] == "video":
