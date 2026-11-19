@@ -50,11 +50,15 @@ and per-task evidence: `docs/history.md`.
   - RECLAIM-SV (#87): ROM sysvar area $5C00–$5CDA for data + boot-installed code (user-approved); R2/R4/R5 install slots.
   - GARG-WAKE fix + XP-BAR + GARG-CHAIN + ICON-FLASH (#88). GARG-CHAIN: one wake stirs the room's other perched Gargoyles on the same storey, with "THE STATUES STIR!". ICON-FLASH: a book's new ability icon flashes for 2 s in the main game.
   - XP-BAR2 (#89): food-style 23-px XP bar on row 21 (level digit + bar + "Dn"), keys moved next to the bag, food bar 1-px gap.
+  - HPMP-GAP (#91): 1-px gap after the HP / MP bars via `fbar_gap` (0 B; user-approved).
+  - TEXT-FIX (#92): proofread fixes (GATE / JUMP wording, clearer tutorial lines, ICE SHADE as the single name, xp_atk / ie_fear / ie_sleep / trap_bell), unused help block dropped.
+  - ECK2 (#93): `tests/endcard_k.py` Ghost SHOCK X fixture (test only).
+  - TRAILER-V12 (#94): v1.2 trailer 96.9 s (W 43.1 / M 44.8 s, ends on the Archmage and the Tome destroyed), screenshots shot1–shot9 + 3 GIFs re-captured (6 W / 6 M), v1.2 itch page drafts in `docs/release/itch/v1.2/`. Re-record: `tools/itch_media.py trailer all` / `shots12`.
+  - User playtest of main OK (2026-11-19); **real ZX Spectrum 128K (toastrack) test of 8946272: works** (user 2026-11-19).
 - DROPPED: GARG-REDRAW (partial statue redraw: did not fit, the lean version gave no visible gain; user 2026-11-18). Branch `feat/garg-redraw` kept for reference.
-- OPEN (user decision): 1-px gap between the HP/MP bars and their numbers (0 B; HP ≈ 97 % then looks full).
 - Space: low RAM / bank 2 nearly exhausted (cold block 2, bank 1 2, bank 2 3, bank 7 0, R2 6, R5 6, R4 17, R6 6). The 2nd-frame DEPTH item has ~1.3k T headroom (W15 gate 7.7k). Any new feature needs a reclaim first.
-1. **v1.2 RELEASE** (6b): after the user playtest of main; each public step needs the user's OK.
-Backlog: TV_XP ∈ {0,1,3} invariant in tut0_adv, bot planner ping-pong (tests/pt_bot.py, low), `PL_FRAME_ADD` "worst level D8" display bug, B21 budget scenario, xpb_div constant-time divide (~−1.2k T; needs bytes). (Stale suites d8_stress / endcard_k / roommem: fixed, see Open items D8S1 / ECK1 / ROOMMEM1.)
+1. **v1.2 RELEASE** (6b): playtest + real-hardware test done. Next: release gate on main (release/kit/trace builds + full suites incl. tut0_adv_par on a quiet machine), then the public steps, each with the user's OK. Open on the page: how browser play is configured on itch ([CONFIRM] in page.md). The user uploads the trailer to YouTube.
+Backlog: TV_XP ∈ {0,1,3} invariant in tut0_adv, bot planner ping-pong (tests/pt_bot.py, low), `PL_FRAME_ADD` "worst level D8" display bug, B21 budget scenario, xpb_div constant-time divide (~−1.2k T; needs bytes). `tests/nm3b.py` may poke `dh_rtick` while bank 7 is paged (check; the trailer had the same bug). `tests/pt_mon.py` LOG_CHARS lacks MOR_MARK (false garbage flag on Morrow lines). Add endcard_k to the nightly CI-EMU job. (Stale suites d8_stress / endcard_k / roommem: fixed, see Open items D8S1 / ECK1 / ROOMMEM1.)
 
 **TUT0 — DEPTH-0 TUTORIAL: DONE — merged to main 7ab186f (PR #19, squash, 2026-11-11).** Spec `docs/design/tutorial_d0.md`, decisions `docs/design/tut0_split.md`. Blob in bank 4 (now `$E1B4`, 8 B free after the C merge), mentor Brother Morrow, Goblin, mercy heal, sandbox reset into D1; R4 key clarity (pinned goal line, ▶ ANY KEY, nudges 6/18). Playtest round 3: OK. Known/accepted: B3 inside ICON MODE leaves row 20 blank until the turn ends.
 

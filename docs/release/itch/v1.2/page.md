@@ -105,7 +105,7 @@ You pick up items by walking over them.
 
 - **Browser:** press Play on this page. Keyboard only.
 - **Emulator:** set it to ZX Spectrum 128K. Open the `.tap` file and choose Tape Loader, or open the `.sna` file to start at once.
-- **Real Spectrum:** load the `.tap` with a tape interface, TZXDuino or divMMC. Choose **Tape Loader** on a 128K or +2, **Loader** on a +2A, +2B or +3. [Earlier versions were tested on a real 128K; say "v1.2 tested" only if you re-test it.]
+- **Real Spectrum:** load the `.tap` with a tape interface, TZXDuino or divMMC. Choose **Tape Loader** on a 128K or +2, **Loader** on a +2A, +2B or +3. v1.2 was tested on a real ZX Spectrum 128K.
 
 ### System requirements
 
