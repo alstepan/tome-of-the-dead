@@ -759,6 +759,19 @@ def w15(p, check):
     t_none = step(1)
     check("W15 2nd frame: a waiting log item alone is not drawn (row 23 = old line)",
           (log_row(p.composed_frame(), 23), p.rb("LOG_QN")) == (text6(TXT["str_fall"]), 1), "")
+    # XP-BAR2: DEPTH is a 2nd-frame small item too (item_depth: "Dn" + keys + the XP bar); its worst case is the
+    # longest divide, L1 XP 43 of 44 = a 22-px fill (tests/xpbar.py C1 measures the same: ~6.9k T)
+    lv0, xp0 = p.rb("LVL"), p.rb(S["XP"]) | p.rb(S["XP"] + 1) << 8
+    p.wb("LVL", 1)
+    p.wmem(S["XP"], [43, 0])
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+    t_dep2 = step(1)
+    check("W15 2nd frame: the DEPTH item drawn (22-px XP fill), the log item still queued",
+          (p.rb("PANEL_DIRTY") & (S["PD_DEPTH"] | S["PD_LOG"]), p.rb("LOG_QN")) == (S["PD_LOG"], 1), (hex(p.rb("PANEL_DIRTY")), p.rb("LOG_QN")))
+    p.wb("LVL", lv0)
+    p.wmem(S["XP"], [xp0 & 255, xp0 >> 8])
+    p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_DEPTH"])
+    step(1)
     step(0)
     check("W15 1st frame: the whole line in one item, queue empty",
           (log_row(p.composed_frame(), 22), log_row(p.composed_frame(), 23), p.rb("LOG_QN"),
@@ -833,7 +846,7 @@ def w15(p, check):
     p.tick(2)
     print(f"[info] W15 measured (contended, ZEsarUX): whole log item scroll + 32 chars {t_whole} T;"
           f" scroll of 24 cols {t_s} T; print6 32 chars {t_p} T (~{t_p // 32} T/char), 4 chars {t_p4} T;"
-          f" 2nd-frame HP item {t_hp2} T, idle step {t_none} T", flush=True)
+          f" 2nd-frame HP item {t_hp2} T, DEPTH item (22-px XP fill) {t_dep2} T, idle step {t_none} T", flush=True)
     check("W15 whole log item <= 25k T (1st-frame ticks only: < 70.9k T used before it)", t_whole <= 25000, t_whole)
     # NEW-MON3 T1: item_hp is bank 0 (FARB0 from HOT_COPY, +~0.3k): cap 5.2k -> 5.5k (measured 5,464);
     # 117k + 5.5k = 122.5k still < the 126k cap, and tests/budget.py (the real per-tick gate) passes.
@@ -841,6 +854,10 @@ def w15(p, check):
     # bank 2): the screen writes' contention phase at the stub's start moved. Cap 5.5k -> 5.55k (117k + 5.55k < 126k).
     check("W15 2nd-frame small item (HP) <= 5.55k T (worst 2nd-frame pre-panel ~117k + 5.55k < 126k cap; C3-3: + icon_poll ~0.1k; NEW-MON3 T1: + FARB0)",
           t_hp2 <= 5550, t_hp2)
+    # XP-BAR2: panel_step drawing DEPTH at the worst XP fill (22 px) measures 7,545 T (item_depth alone 6.89k, xpbar.py C1;
+    # + the HP / icon_poll polls): cap 7.7k (117k + 7.7k = 124.7k < the 126k cap; budget.py passes)
+    check("W15 2nd-frame small item (DEPTH, worst XP fill) <= 7.7k T (worst 2nd-frame pre-panel ~117k + 7.7k < 126k cap)",
+          t_dep2 <= 7700, t_dep2)
     check("W15 print6 <= 500 T/char (32 chars)", t_p <= 500 * 32, t_p)
 
     # --- bars follow HP ------------------------------------------------------

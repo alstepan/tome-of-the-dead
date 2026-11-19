@@ -300,7 +300,7 @@ log_drop:       push hl
 ; item — any, incl. a whole log message (scroll + line, <= ~21k T) — and
 ; re-checks: items keep coming until the queue is empty or the 2nd frame has
 ; begun, so it ends below ~92k T. A tick already in its 2nd frame draws ONE
-; small item (HP / ICONS / DEPTH, <= ~5.5k T: item_depth, XP-BAR2, is measured by xpbar.py C1): the render-bound heavy ticks
+; small item (HP ~5.5k / ICONS / DEPTH <= ~7.5k T incl. the polls, XP-BAR2's worst XP fill; world.py W15 gates both): the render-bound heavy ticks
 ; reach ~116k T before the panel (budget.py), a log item there could pass the
 ; 126k T cap; the log waits for a 1st-frame tick (in a fight: the turn's last,
 ; light ANIM ticks — budget.py reports the latency).
@@ -364,7 +364,7 @@ item_hp_far:
 ; item_depth — XP-BAR2 (user 2026-11-19): "Dn" at (28, 21) (LVL_DEPTH; the PROTO level 0 shows D1; D0: "D0",
 ; SMC below), then depth_tail (sv_r2.asm, R2): far6 key_pan = the two 16x8 key icons (30-31, rows 18 / 19:
 ; cyan / magenta while held, else blank) and xp_bar = the 23-px XP bar (25..27, 21). Marks both rects here.
-; HL = PANEL_DIRTY.  ~4.4k T (tests/xpbar.py C1 measures the whole chain)
+; HL = PANEL_DIRTY.  5.4k T (L9) .. 6.9k T (a 22-px XP fill) (xpbar.py C1; world.py W15 gates it as a 2nd-frame item)
 ;------------------------------------------------------------------------------
 item_depth:
                 res  PD_DEPTH_BIT, (hl)

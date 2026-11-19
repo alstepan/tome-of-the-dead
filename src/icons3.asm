@@ -116,7 +116,7 @@ slot_want:
 
 ;------------------------------------------------------------------------------
 ; item_icons — far3 via item_icons_far (PD_ICONS). Potion count changed: the potion slot is
-; redrawn (its count digit). Level changed: the digit at (31, 19). Then the
+; redrawn (its count digit). Level changed: the digit at (24, 21) (XP-BAR2). Then the
 ; slots: a selection-only change is painted here (attrs, ~0.3k T each, all of
 ; them); the first other change is ONE slot_redraw (panel.asm, ~2-4k T; IC1: a
 ; quick slot ~15k, only in a tick's 1st frame, else skipped and kept pending)
