@@ -191,6 +191,36 @@ def run(h, p, check):
     except ImportError:
         print("[info] no Pillow: no PNG", flush=True)
 
+    # G3 (HPMP-GAP): HP / MP bars end at 31 px (fbar_gap): bit 0 of the last cell clear on lines 1..6, cap at bit 1, the 2-digit
+    # number's first glyph (bit 7 set) 1 px clear of it; full and partial fill
+    def hpmp(hp, mhp, mp, mmp):
+        p.set_ent(0, HP=hp, MAXHP=mhp)
+        p.wb("MAXMP", mmp)
+        p.wb("MP", mp)
+        p.wb("PANEL_DIRTY", p.rb("PANEL_DIRTY") | S["PD_HP"] | S["PD_MP"])
+        p.tick(4)
+        f = p.frame()
+        res = {}
+        for nm, bc, nc in (("hp", S["HP_BAR_COL"], S["HP_NUM_COL"]), ("mp", S["MP_BAR_COL"], S["MP_NUM_COL"])):
+            lc = cell_bytes(f, bc + S["BAR_CELLS"] - 1, ROW)
+            res[nm] = {"b0": any(x & 1 for x in lc[1:7]), "cap1": all(x & 2 for x in lc[1:7]),
+                       "num_b7": any(x & 0x80 for x in cell_bytes(f, nc, ROW))}
+        return f, res
+    for tag, args in (("full", (99, 99, 24, 24)), ("part", (50, 99, 22, 33)), ("hp99mp14", (99, 99, 14, 14))):
+        f, g3 = hpmp(*args)
+        ok = all(not r["b0"] and r["cap1"] for r in g3.values())
+        if tag != "hp99mp14":
+            ok = ok and all(r["num_b7"] for r in g3.values())
+        check(f"G3 {tag}: HP / MP bar bit 0 clear, cap bit 1, digit bit 7 (gap >= 1 px)", ok, g3)
+        if tag == "hp99mp14":
+            try:
+                from PIL import Image
+                full = Path(BUILD_DIR) / "xpbar_screen.png"
+                game_lib.frame_png(f, str(full), scale=4)
+                Image.open(full).crop((0, ROW * 32, 1024, ROW * 32 + 32)).save(Path(BUILD_DIR) / "hpmp_row21.png")
+            except ImportError:
+                pass
+
     # G2: a tutorial BARS pointer's FLASH (bit 7, tt_ptr) on cols 24..29 survives the level digit / bar / Dn redraws
     base = S["SCREEN_ATTR"] + ROW * 32
     for c in range(S["LVL_COL"], S["DEPTH_COL"] + 2):

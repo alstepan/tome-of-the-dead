@@ -622,9 +622,10 @@ def log_row(frame, row, c0=0, cols=LOG_COLS):
 
 def bar_bytes(fill):
     """Expected 4 bytes per pixel line of a 32-px bar (concept bar_cells):
-    frame lines 1 / 6, end caps, the first `fill` px of lines 2..5."""
-    full, caps = (1 << 32) - 1, (1 << 31) | 1
-    fillb = ((1 << fill) - 1) << (32 - fill)
+    frame lines 1 / 6, end caps, the first `fill` px of lines 2..5. HPMP-GAP: fbar_gap clears bit 0 of the
+    last cell (lines 1..6) and moves the right cap to bit 1 (a 31-px bar, a 1-px gap to the number)."""
+    full, caps = (1 << 32) - 2, (1 << 31) | 2
+    fillb = (((1 << fill) - 1) << (32 - fill)) & ~1
     rows = [0, full] + [fillb | caps] * 4 + [full, 0]
     return [r.to_bytes(4, "big") for r in rows]
 
@@ -852,8 +853,8 @@ def w15(p, check):
     # 117k + 5.5k = 122.5k still < the 126k cap, and tests/budget.py (the real per-tick gate) passes.
     # GARG-PASS: 5,485 -> 5,502 T with the panel / item_hp code byte-identical (only icon_poll moved 4 B in uncontended
     # bank 2): the screen writes' contention phase at the stub's start moved. Cap 5.5k -> 5.55k (117k + 5.55k < 126k).
-    check("W15 2nd-frame small item (HP) <= 5.55k T (worst 2nd-frame pre-panel ~117k + 5.55k < 126k cap; C3-3: + icon_poll ~0.1k; NEW-MON3 T1: + FARB0)",
-          t_hp2 <= 5550, t_hp2)
+    check("W15 2nd-frame small item (HP) <= 6.0k T (HPMP-GAP: fbar_gap +~0.39k, measured 5,890; worst 2nd-frame pre-panel ~117k + 6.0k < 126k cap; C3-3: + icon_poll ~0.1k; NEW-MON3 T1: + FARB0)",
+          t_hp2 <= 6000, t_hp2)
     # XP-BAR2: panel_step drawing DEPTH at the worst XP fill (22 px) measures 7,556 T with the caps (item_depth alone 6.96k, xpbar.py C1;
     # + the HP / icon_poll polls): cap 7.7k (117k + 7.7k = 124.7k < the 126k cap; budget.py passes)
     check("W15 2nd-frame small item (DEPTH, worst XP fill) <= 7.7k T (worst 2nd-frame pre-panel ~117k + 7.7k < 126k cap)",

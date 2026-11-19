@@ -7985,6 +7985,10 @@ level_defs.asm (ASSERTed contiguous: `HUNGER_COL + 5 <= LVL_COL`, `LVL_COL + 1 =
   (round(FOOD * 32 / 103) ~ FOOD * 31 / 100, <= 31 px; hunger0.asm). Option (b) (word 1 px right) is impossible: print6 needs a
   byte-aligned x. Word -> digit (>= 5 px) and digit -> XP bar (3 px: FONT6 glyphs use bits 7..3) needed nothing. In R5, not
   B0_CODE2, because the trace build's bank 0 has 2 B free (the 11 B inline version overflowed it by 9).
+- **HPMP-GAP (user 2026-11-19):** item_hp / item_mp `call fbar_gap` (was `call bars_draw`; same 3 B, 0 B bank 0, R5 unchanged, 6 B free):
+  the HP (cols 1..4) and MP (cols 8..11) bars end at 31 px with the right cap at bit 1, so the number's first glyph (bit 7) keeps a 1-px
+  gap; MAXHP / MAXMP are not rescaled (31 / 32 reads as full). Cost: +~0.39k T per HP / MP item (W15 2nd-frame HP item 5,502 -> 5,890 T,
+  cap 5.55k -> 6.0k; 117k + 6.0k < 126k). Goldens re-hashed: `game_start`, `game_start_wizard`, `w15_panel_mage`, `tut0_d0_arrival`.
 - **item_depth** (HOT_COPY, same size): prints "Dn" at (28, 21); marks (30..31, 18..19) and (25..29, 21..22).
   Cost (xpbar.py C1, release): **L9 5.35k T (was 5.43k), worst fill (22 px) 6.96k T with the caps (was 6.25k at 7 of 8 px)**. It stays a
   2nd-frame small item (keeping it out of 2nd-frame ticks needs +4 B of HOT_COPY, which has 3): world.py W15 gates panel_step

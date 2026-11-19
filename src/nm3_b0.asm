@@ -139,7 +139,7 @@ LP_DROW         EQU 10
 ; panel_step / panel_more (any frame for HP / MP, a 1st frame for FOOD).
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-; item_hp — HP bar + 2-digit number (row 21, cols 1..6). FARB0 from HOT_COPY item_hp_far
+; item_hp — HP bar (fbar_gap: HPMP-GAP 31 px) + 2-digit number (row 21, cols 1..6). FARB0 from HOT_COPY item_hp_far
 ; (panel_step). Clobbers: all but IX, IY.   ~4.5k T (+ FARB0 ~0.25k)
 ;------------------------------------------------------------------------------
 item_hp:
@@ -152,7 +152,7 @@ item_hp:
                 ld   d, h
                 ld   a, l
                 ld   hl, HP_BAR_ADDR
-                call bars_draw
+                call fbar_gap
                 ld   a, (PANEL_HP_SH)
                 call num2
                 ld   b, STAT_ROW
@@ -180,7 +180,7 @@ item_mp:
                 ld   a, (MP)
                 ld   (MP_SH), a
                 ld   hl, MP_BAR_ADDR
-                call bars_draw
+                call fbar_gap
                 ld   a, (MP_SH)
                 call num2
                 ld   b, STAT_ROW
