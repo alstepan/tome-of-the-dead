@@ -446,6 +446,10 @@ voice is silent (after the gate, in rests); nothing is added under a sounding no
 smear between notes. The cues have no rests and no staccato, so any level is audible
 only at the end of the three one-shots (their final rest now fits the longest, 100 %,
 tail: 118 frames).
+**MUS-DWELL (2026-11-23):** the Level Complete one-shot's final rest is trimmed to the shipped (s1e) tail, 41 frames
+(`GAME_TAIL_STEPS` in `tools/abc2wzm.py`; the 100 % tail is a dev / audition level, not retunable in the game), so
+the 1.6 s of silence after the stinger before the Lament restarts is gone. Win / Over keep 118. Song bytes
+unchanged (the rest is one byte per voice): AY slot 4,023 of 4,024 B, as before.
 
 **Echo experiment: "why not a real wet/dry mix?" (key J, `DEFINE WZM_ECHO`, tape only).**
 A true send/return is impossible: all three channels carry melody and the AY has no
@@ -541,10 +545,13 @@ score for now):** `mus_pick` (`src/mus7.asm`, bank 7, a plain call from `end_tur
 mailbox writes only). Condition = **>= 4 awake hostile monsters in CUR_ROOM** (walks the `LIVE_LIST`; ACTIVE |
 HOSTILE, not PENDING / DYING, not ASLEEP; frozen / stunned count) **or hero HP <= MAXHP / 4** (integer, so
 exactly 25 % enters). Enter on the condition (`MUS_REQ` = `MUS_DANGER`); leave only when the condition has been
-false for **>= 8 consecutive turns AND >= 16 turns have passed since entering** (`DNG_DWELL`, `DNG_CALM`
-`$BFF1/$BFF2`; a turn with the condition resets the calm run); then `MUS_REQ` = `MUS_ROOM` (= Lament today; the Q
-rotation will replace it). The "or one full loop" shortcut is not used (no loop-end flag in the mailbox; calm >= 8
-already implies dwell >= 9). `level_enter` (new game, descent) clears the state. Music off / hold: `MUS_REQ` is
+false for **>= 12 consecutive turns AND >= 250 frames (`DNG_DWELL_FRAMES` = one Dangerous loop) have passed since
+entering** (MUS-DWELL, 2026-11-23: time, not turns; the 16-turn dwell is gone; `DNG_T0` `$BFE2` word = `SYS_FRAMES`
+low word at entry, a 16-bit difference so a wrap is safe; `DNG_DWELL` `$BFF1` is now only the W-on flag 1 / 0 and
+`DNG_CALM` `$BFF2` the calm run; a turn with the condition resets the calm run; calm 12 so a slow player (~1 s / turn) keeps >= 12 turns, the old minimum was ~15; pause / overlays count toward the 250 frames, `SYS_FRAMES` keeps running); then `MUS_REQ` = `MUS_ROOM` (= Lament
+today; the Q rotation will replace it). Why: Danger episodes lasted 3.9-7.2 s, about one 5 s loop or less, so the
+switches (each restarts at bar 1) were abrupt and frequent; now an episode is >= one full loop. The "or one full
+loop" loop-end flag is not used (none in the mailbox); the time dwell does the same job. `level_enter` (new game, descent) clears the state. Music off / hold: `MUS_REQ` is
 still written (level-triggered), the dispatcher restarts the current request at bar 1 when music returns. After a
 room change the list is the old room's for one turn (its entries fail the room test): a one-turn lag.
 Cost ~105 T per monster entry + ~0.15k (typ. < 1k T; 761 T with 2 monsters). **Death (Y):** `end_turn`

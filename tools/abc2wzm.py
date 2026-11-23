@@ -681,7 +681,7 @@ class Blob:
         return "\n".join(lines) + "\n"
 
 
-def tail_frames(inst):
+def tail_frames(inst, steps=REVERB_STEPS):
     """Frames the release (reverb tail) of a full-level note needs to reach 0; 1 for
     the pre-S1e instruments (instant cut, or the S1 organ's rel_per 1: their one-shots
     end as in v0.2).  A reverb-tail instrument: the longest over every REVERB_STEPS
@@ -689,7 +689,7 @@ def tail_frames(inst):
     vols = INSTRUMENTS[inst][6]
     top = max(16 if v & VOL_ENV else v for v in vols)
     out = 1
-    for lv in (REVERB_STEPS if inst in REVERB_INST else (None,)):
+    for lv in (steps if inst in REVERB_INST else (None,)):
         drop, rper = inst_tail(inst, lv)
         if not (rper == 1 or top <= drop):
             out = max(out, 1 + rper * (top - drop))
@@ -728,10 +728,11 @@ def encode_stream(blob, label, events, loop, tail=0):
         blob.b(CMD_END)
 
 
-def build_song(name, voices_events, instr, loop, gate=None, reverb=None):
+def build_song(name, voices_events, instr, loop, gate=None, reverb=None, tail_steps=REVERB_STEPS):
     """voices_events: 3 event lists. instr: instrument set / name (instr_map).
     gate: GATES key overriding every instrument's staccato gate.  reverb: REVERB_STEPS
-    level for the reverb-tail instruments (None = their own = "s1e")."""
+    level for the reverb-tail instruments (None = their own = "s1e").  tail_steps: the reverb
+    levels the final rest must fit (MUS-DWELL: the game ships s1e only, no run-time retune)."""
     imap = instr_map(instr)
     uniq = list(dict.fromkeys(imap))
     for v, ins in enumerate(imap):
@@ -745,7 +746,7 @@ def build_song(name, voices_events, instr, loop, gate=None, reverb=None):
     blob.b(*(uniq.index(x) for x in imap), BUZZ_SHAPE[imap[2]] if buzz else 0)
     for ins in uniq:
         blob.w("%s_inst_%s" % (name, ins))
-    tail = max(tail_frames(i) for i in imap)
+    tail = max(tail_frames(i, tail_steps) for i in imap)
     for i, s in enumerate("abc"):
         encode_stream(blob, "%s_%s" % (name, s), voices_events[i], loop, tail)
     for ins in uniq:
@@ -769,7 +770,8 @@ def default_accidentals(path):
 
 def convert(path, tune_idx=0, accidentals=None, transpose=0, fpe=None, fit=True,
             instr=None, loop=None, name=None, transpose_v3=None, stac=True,
-            legato="slurs", source="abc", bpm=None, gate=None, reverb=None):
+            legato="slurs", source="abc", bpm=None, gate=None, reverb=None,
+            tail_steps=REVERB_STEPS):
     """fpe: frames per eighth (Fraction/int) overrides the tempo; default = the exact
     Fraction from bpm (or the tune's own Q:/bpm).  loop None: the JSON's loop flag (ABC:
     one-shot).  instr None: 'tsx' for JSON, 'harpsichord' for ABC.  transpose_v3 None:
@@ -804,7 +806,7 @@ def convert(path, tune_idx=0, accidentals=None, transpose=0, fpe=None, fit=True,
                 raise AbcError("%s: staccato gate 0 for a %d-frame note" % (vn, fr))
         evs.append(ev)
     name = name or re.sub(r"\W", "_", os.path.splitext(os.path.basename(path))[0])
-    blob = build_song(name, evs, instr, loop, gate, reverb)
+    blob = build_song(name, evs, instr, loop, gate, reverb, tail_steps)
     data, _ = blob.bytes_()
     info = {"tune": t, "errors": errs, "exact_fpe": exact, "fpe": fpe, "events": evs,
             "voice_names": names, "name": name, "blob": blob, "bytes": data,
@@ -948,6 +950,12 @@ GAME_FIRST_ID = 2   # id 1 (Dungeon Crawl, cue Q) removed 2026-10-19 (user): res
                     # rejects it; the other ids keep their numbers
 
 
+# MUS-DWELL: the Level Complete stinger's final rest fits the shipped (s1e) reverb tail only:
+# 118 -> 41 frames (the tape's H cycle is a dev/audition feature; the 50 / 100 % tails stay
+# for every other tune).  Silence between the stinger and the next tune was 1.6 s.
+GAME_TAIL_STEPS = {"level_complete": ("s1e",)}
+
+
 def game(srcdir, outdir):
     """Emit the in-game songs: the hps_* (harp-rev) BATCH entries at GAME_GATE, one .asm each,
     plus game_songs.asm (INCLUDEs + mus_tab, id order); returns [(asmpath, info)].  Same
@@ -958,7 +966,7 @@ def game(srcdir, outdir):
         name = "hps_" + t
         tune, kw = ents[name]
         info = convert(os.path.join(srcdir, tune + ".json"), name=name, source="json",
-                       **dict(kw, gate=GAME_GATE))
+                       **dict(kw, gate=GAME_GATE, tail_steps=GAME_TAIL_STEPS.get(t, REVERB_STEPS)))
         p = os.path.join(outdir, name + ".asm")
         write_asm(info, p)
         res.append((p, info))

@@ -1326,7 +1326,7 @@ level_card:     push af
 ;------------------------------------------------------------------------------
 stinger_wait:
                 ld   de, 0                     ; D bit 0 = released once; D bits 1-2 + E = a
-.w:             ld   a, (MUS_STATE)            ; 512-frame cap (R is 385 frames: never a hang)
+.w:             ld   a, (MUS_STATE)            ; 512-frame cap (R is ~308 frames, MUS-DWELL: never a hang)
                 and  MS_MASK
                 cp   MS_SHOT
                 ret  nz

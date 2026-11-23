@@ -720,9 +720,11 @@ P_NUMBUF        EQU $BFDC           ; 3 B: num2 / depth text ("NN", 0)
                 ASSERT E_MAXHP == E_HP + 1          ; one 16-bit poll / store
 ; LOG_Q layout (8 B): the ring of pending messages is LOG_TXT; LOG_QN counts them.
 ; One message = one panel item (scroll + whole line, B3B-11b).
+; +2..+3 = DNG_T0 (MUS-DWELL word, defs.asm); +4..+7 spare.
 LQ_RD           EQU 0               ; ring slot of the oldest pending message (0..LOG_SLOTS-1)
 LQ_DROP         EQU 1               ; saturating count of messages dropped / replaced (ring full; expect 0)
                 ASSERT LQ_DROP < LOG_Q_LEN
+                ASSERT DNG_T0 == LOG_Q + 2 && LQ_DROP < 2 && DNG_T0 + 2 <= LOG_Q + LOG_Q_LEN   ; MUS-DWELL: LOG_Q +2..+3 = DNG_T0
 ; Message text ring: bank-5 printer buffer (runtime-only RAM, free after boot;
 ; contended, but read once per char).
 LOG_TXT         EQU $5B00           ; LOG_SLOTS x LOG_SLOT_LEN, page-aligned
