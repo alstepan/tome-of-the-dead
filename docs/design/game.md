@@ -1001,6 +1001,8 @@ never counted.
 - **Real-time floor.** The ISR applies a tune change at the next bar line (sound.md §3 B), and
   a request reversed before that bar is a no-op. So the shortest audible W segment is 1 bar
   (2.5 s at 96 bpm). A combat turn is 6–7 ticks (~0.27 s), so 8 turns of dwell plus 3 safe
+- **MUS-DWELL (2026-11-23, as built; supersedes the turn dwell above):** the shipped rule leaves DANGER only after
+  >= 12 calm turns AND >= 250 frames (one Dangerous loop) since entering; see sound.md S1f.
   turns is about 3 s, or 1–2 bars.
 
 **When it runs.** Once per **game turn**, at the end-of-turn step (§2.2), after the monsters'

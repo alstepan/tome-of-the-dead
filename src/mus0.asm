@@ -9,13 +9,14 @@
 ; Rule (manager decision, sound.md S1f): DANGER = >= DNG_N awake hostiles in
 ; CUR_ROOM (ACTIVE | HOSTILE, not PENDING / DYING / ASLEEP) or hero HP <=
 ; MAXHP / 4. Enter on the condition; leave only after DNG_CALM_MIN consecutive
-; calm turns AND >= DNG_DWELL_MIN turns since entering; then MUS_ROOM again.
-; (The "or one full loop" shortcut is not used: no loop-end flag in the mailbox;
-; calm >= 8 already implies dwell >= 9.)
+; calm turns AND >= DNG_DWELL_FRAMES frames since entering; then MUS_ROOM again
+; (MUS-DWELL: the old 16-turn dwell and DNG_DWELL's turn count are dropped, the time dwell
+; supersedes them (-12 B in a full bank); DNG_DWELL is now just the W-on flag, 1 / 0.)
+; A Danger episode thus lasts at least one Dangerous loop: no abrupt bar-1 restarts.
 ;==============================================================================
 DNG_N           EQU 4
-DNG_CALM_MIN    EQU 8
-DNG_DWELL_MIN   EQU 16
+DNG_CALM_MIN    EQU 12                         ; slow players (~1 s / turn): >= 12 turns, the old minimum was ~15
+DNG_DWELL_FRAMES EQU 250                       ; MUS-DWELL: + >= one Dangerous loop (250 frames, game_songs dangerous) in TIME since entry
 DNG_SCAN_MASK   EQU EF_ACTIVE | EF_HOSTILE | EF_PENDING | EF_DYING | EF_GHOST   ; GARG-PASS: a perched Gargoyle is not awake
                 ASSERT (P_ENTITIES & 31) == 0 && P_ENT_STRIDE == 32 && E_ROOM == E_FLAGS - 1
                 ASSERT (ST_FLAGS & $F0) == $10 && (ST_FLAGS & $0F) == 0   ; 'or slot' builds the address
@@ -89,19 +90,22 @@ mus_pick0:
                 ld   a, (hl)
                 or   a
                 ret  z                         ; W off
-                inc  a
-                jr   z, .nd                    ; saturate at 255
-                ld   (hl), a
-.nd:            inc  l
-                inc  (hl)                      ; DNG_CALM (<= ~16: it leaves by then)
+                inc  l
+                inc  (hl)                      ; DNG_CALM (<= ~125: it leaves by then)
                 ld   a, (hl)
                 cp   DNG_CALM_MIN
                 ret  c
-                dec  l
-                ld   a, (hl)
-                cp   DNG_DWELL_MIN
-                ret  c
+                ld   hl, (SYS_FRAMES)          ; MUS-DWELL: frames since entry (16-bit diff, wrap-safe)
+                ld   de, (DNG_T0)
+                or   a
+                sbc  hl, de
+                ld   a, l
+                sub  DNG_DWELL_FRAMES          ; CF = (HL < 250): borrow from L, and H = 0
+                ld   a, h
+                sbc  a, 0
+                ret  c                         ; (>= 21 min in one episode wraps: only a longer wait)
                 xor  a
+                ld   hl, DNG_DWELL
                 ld   (hl), a                   ; W off
                 inc  l
                 ld   (hl), a
@@ -111,16 +115,15 @@ mus_pick0:
 .cond:          ld   hl, DNG_DWELL
                 ld   a, (hl)
                 or   a
-                jr   nz, .on
+                jr   nz, .nc
                 ld   (hl), 1                   ; enter
                 inc  l
                 ld   (hl), 0
+                ld   hl, (SYS_FRAMES)          ; MUS-DWELL: the entry time
+                ld   (DNG_T0), hl
                 ld   a, MUS_DANGER
                 ld   (MUS_REQ), a
                 ret
-.on:            inc  a
-                jr   z, .nc
-                ld   (hl), a
 .nc:            inc  l
                 ld   (hl), 0                   ; calm run broken
                 ret

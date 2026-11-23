@@ -714,10 +714,33 @@ class GameSongs(unittest.TestCase):
         cls.names = ["hps_" + t for t in a2w.GAME_TUNES]
 
     def test_identical_to_batch(self):
+        """Identical, except the tunes in GAME_TAIL_STEPS (MUS-DWELL): their final rest before
+        each voice's END ($81) is the shorter game tail; every other line must match."""
         for n in self.names:
             with open(os.path.join(self.g, n + ".asm")) as f1, \
                     open(os.path.join(self.b, n + ".asm")) as f2:
-                self.assertEqual(f1.read(), f2.read(), n)
+                g, b = f1.read(), f2.read()
+            if n[len("hps_"):] not in a2w.GAME_TAIL_STEPS:
+                self.assertEqual(g, b, n)
+                continue
+            def toks(src):   # (line, byte) stream: labels kept as tokens, DEFB split per byte
+                out = []
+                for ln in src.splitlines():
+                    t = ln.strip()
+                    out += [v.strip() for v in t[5:].split(",")] if t.startswith("DEFB ") else [t]
+                return out
+            gt, bt = toks(g), toks(b)
+            self.assertEqual(len(gt), len(bt), n)
+            tails = 0
+            for i, (x, y) in enumerate(zip(gt, bt)):
+                if x == y:
+                    continue
+                # only a voice's last rest length ($60, len, $81) may differ, and only shorter
+                self.assertTrue(0 < i < len(gt) - 1 and gt[i - 1] == "$60" and gt[i + 1] == "$81",
+                                (n, i, x, y))
+                self.assertLess(int(x.lstrip("$"), 16), int(y.lstrip("$"), 16), (n, i))
+                tails += 1
+            self.assertGreater(tails, 0, n)
 
     def test_total_bytes_and_table(self):
         ents = {n: (t, kw) for n, t, kw in a2w.BATCH}
