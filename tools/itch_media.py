@@ -9,6 +9,13 @@ the real Spectrum palette (FLASH shown non-inverted).  Output: docs/release/itch
   python3 tools/itch_media.py gif                    # img/walk_fight.gif
   python3 tools/itch_media.py script W|M [part..]    # dev: run the hand-written input script (fast, no sound)
   python3 tools/itch_media.py video W|M [--reuse]    # script at emulator speed 100 + --aofile -> video/warrior.mp4 | mage.mp4 (with sound)
+  ZRCP_PORT=<free port> python3 tools/itch_media.py walkthrough M --seed N [--god] [--out DIR] [--smoke TICKS] [--search A B [--no-pace] [--max-ticks N] [--events DIR]]
+                                                     # full-game YouTube walkthrough: menu -> 2 START -> D1..D8 -> Tome -> win,
+                                                     # real speed + AY, paced for viewers (WT_* below, idle ticks only), 1920x1080
+                                                     # (x5 centred), H.264 + AAC, + chapters.txt.  --search A B: fast seed scan
+                                                     # (no sound, no frames, same pacing) -> prints win/dead per seed.
+  python3 tools/itch_media.py walkthrough --fmf RUN.fmf [--out DIR]   # a user's RZX at real speed: Fuse --playback ->
+                                                     # FMF -> mp4 + chapters (tools/fmf.py; Fuse command in its docstring)
   python3 tools/itch_media.py scene tut|garg|imp|key|xp  # dev: one trailer scene at max speed -> build/itch/scene_<n>.png (1 frame/s)
   python3 tools/itch_media.py trailer rec music|tut|garg|imp|key|xp  # one trailer capture, speed 100 + sound
   python3 tools/itch_media.py trailer                # assemble video/trailer.mp4 from the captures (real time, trim only)
@@ -86,7 +93,10 @@ def cmd_cover():
 # ------------------------------------------------------------------ recording
 def require_no_zesarux():
     """A second ZEsarUX steals CPU, the speed-100 emulator falls behind real time and --aofile is stretched/garbled.
-    Fuse may run (never touched)."""
+    Fuse may run (never touched).  WT_ALLOW_PARALLEL=1 skips the check on a shared machine (check_audio then judges the sound)."""
+    if os.environ.get("WT_ALLOW_PARALLEL"):
+        print("note: WT_ALLOW_PARALLEL set, other ZEsarUX processes are not refused")
+        return
     r = subprocess.run(["pgrep", "-il", "zesarux"], capture_output=True, text=True)
     if r.stdout.strip():
         sys.exit("ERROR: another ZEsarUX process is running (would corrupt the sound recording); refusing:\n" + r.stdout)
@@ -190,12 +200,11 @@ def check_audio(frames, audio_path, span, quiet_ok=False):
         print("note: (nearly) silent SFX capture, fine for a scene")
 
 
-def assemble(frames, audio_path, out, scale=6):
+def assemble(frames, audio_path, out, scale=6, canvas=None, marks=None, chapters=None):
     """frames [(6912 B, display frames)] + the raw sound file -> constant-50 fps H.264 + AAC MP4.
     The sound file covers the whole emulator run, the recording its last sum(d) frames: it is anchored at the END
     (the file is complete when the emulator exits).  Black runs longer than 2*BLACK_KEEP are trimmed in picture
     and sound alike (10 ms crossfade) so a cut costs ~0.7 s, never a de-sync."""
-    imgs = [scr_to_rgb(f) for f, _ in frames]
     tl = [i for i, (_, d) in enumerate(frames) for _ in range(d)]            # image per 50 Hz display frame
     n = len(tl)
     black = [not any(f) for f, _ in frames]
@@ -219,7 +228,7 @@ def assemble(frames, audio_path, out, scale=6):
         if len(raw) < need:
             sys.exit(f"audio file shorter than the video ({len(raw)} < {need})")
         a = raw[len(raw) - need:].astype(np.float32)
-        a -= np.convolve(a, np.ones(2000) / 2000, mode="same")                # drop the DC offset / slow drift
+        a -= _movavg2000(a)                                                   # drop the DC offset / slow drift
         a *= 0.89 / max(1.0, float(np.abs(a).max()))                          # level: peak at -1 dBFS, no clipping
         a = np.clip(a, -1, 1)
         seg = a.reshape(n, BPF)
@@ -242,14 +251,22 @@ def assemble(frames, audio_path, out, scale=6):
         wav = TMP / "audio.s16"
         (audio * 32000).astype("<i2").tofile(wav)
         cmd += ["-f", "s16le", "-ar", str(AUDIO_HZ), "-ac", "1", "-i", str(wav)]
-    cmd += ["-vf", f"scale={256 * scale}:{192 * scale}:flags=neighbor,format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-profile:v", "main", "-level", "4.0",
+    vf = f"scale={256 * scale}:{192 * scale}:flags=neighbor"
+    lvl = "4.0"
+    if canvas:                                              # integer-scaled image centred on a black canvas (1080p50 needs level 4.2)
+        vf += f",pad={canvas[0]}:{canvas[1]}:{(canvas[0] - 256 * scale) // 2}:{(canvas[1] - 192 * scale) // 2}:black"
+        lvl = "4.2"
+    cmd += ["-vf", vf + ",format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-profile:v", "high" if canvas else "main", "-level", lvl,
             "-crf", "16", "-r", "50"]
     if audio is not None:
         cmd += ["-af", "aresample=44100", "-c:a", "aac", "-b:a", "128k", "-shortest"]
     cmd += ["-movflags", "+faststart", str(out)]
     pr = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    last_i, buf = -1, b""
     for t in np.nonzero(keep)[0]:
-        pr.stdin.write(imgs[tl[t]].tobytes())
+        if tl[t] != last_i:                                 # convert lazily, once per captured frame (a 1 h run is ~90k probes)
+            last_i, buf = tl[t], scr_to_rgb(frames[tl[t]][0]).tobytes()
+        pr.stdin.write(buf)
     pr.stdin.close()
     if pr.wait():
         sys.exit("ffmpeg failed")
@@ -260,6 +277,27 @@ def assemble(frames, audio_path, out, scale=6):
         dur = -1
     print(f"ffprobe duration {dur:.1f} s vs expected {int(keep.sum()) / 50:.1f} s")
     print(f"{out}: {int(keep.sum()) / 50:.1f} s, {Path(out).stat().st_size / 1e6:.1f} MB, audio {'yes' if audio is not None else 'NO'}")
+    if marks and chapters:                                  # (title, display-frame index) -> YouTube chapters on the TRIMMED timeline
+        kept = np.concatenate([[0], np.cumsum(keep)])      # kept[i] = kept display frames before frame i
+        rows, prev = [], None
+        for title, at in marks:
+            t = int(kept[min(int(at), n)] / 50)
+            if prev is not None and t - prev < 10:          # YouTube: chapters >= 10 s apart
+                continue
+            stamp = f"{t // 3600}:{t % 3600 // 60:02d}:{t % 60:02d}" if t >= 3600 else f"{t // 60}:{t % 60:02d}"
+            rows.append(f"{stamp} {title}")
+            prev = t
+        Path(chapters).write_text("\n".join(rows) + "\n")
+        print(f"{chapters}: {len(rows)} chapters")
+
+
+def _movavg2000(a):
+    """== np.convolve(a, ones(2000) / 2000, 'same') (window [i-1000, i+999], zero padded) in O(n): the full
+    convolution of a 1 h recording (56 M samples) would take hours."""
+    k = 2000
+    c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.zeros(k), a.astype(np.float64), np.zeros(k)]))])
+    i = np.arange(len(a)) + k                               # index of a[i] in the padded array
+    return ((c[i + 1000] - c[i - 1000]) / k).astype(np.float32)
 
 
 def _runs(keep):
@@ -391,7 +429,10 @@ class Rec:
                 if extra > 20:
                     d += int(extra)
             self.tot += d
-            self.frames.append((bytes(6912) if self.black else bytes(self.p.frame()), d))
+            f = bytes(6912) if self.black else bytes(self.p.frame())
+            if self.frames and self.frames[-1][0] == f:
+                f = self.frames[-1][0]                    # identical picture: share the object (a 1 h run stays small in RAM)
+            self.frames.append((f, d))
 
     def total(self):
         return sum(d for _, d in self.frames)
@@ -581,7 +622,8 @@ def session(hero_name, seed, audio=None, fast=True, tut=False):
     only while the emulated machine runs, 312 bytes per 50 Hz frame)."""
     if os.environ.get("ZRCP_PORT", "10000") == "10000":
         sys.exit("never port 10000: set ZRCP_PORT")
-    require_no_zesarux()
+    if not fast:                                  # a tick-exact max-speed run has no sound to corrupt (parallel seed searches)
+        require_no_zesarux()
     TMP.mkdir(parents=True, exist_ok=True)
     _imports()
     hero = K_KNIGHT if hero_name == "W" else K_WIZARD
@@ -1597,6 +1639,171 @@ def cmd_sh_make():
         _gif([d["frames"][tl[i]][0] for i in range(t0 + a, min(t0 + b, len(tl)))], fn)
 
 
+# ------------------------------------------------------------------ full-game walkthrough (YouTube)
+# Pacing = idle ticks only (no key held): the bot's decisions and the game's turns are untouched, but the idle ticks
+# are part of the run, so a seed must be searched WITH the same pacing (--search does).
+WT_TURN_TICKS = 10        # 0.4 s: a bot action (turn) never takes less than this many 25 Hz ticks
+WT_BAG_TICKS = 38         # 1.5 s on the bag page when it opens
+WT_BAG_TAP = 8            # 0.32 s after every key press inside the bag page
+WT_ROOM_TICKS = 25        # 1.0 s on each new room / new depth
+WT_BOSS_TICKS = 50        # 2.0 s after a boss dies
+WT_WIN_TICKS = 50         # 2.0 s on the win screen
+WT_TAIL_TICKS = 25        # + 1 s of end card in the picture so the cut is not abrupt
+
+
+def make_walker(p, hero, god, pace, marks_cb, max_ticks=10 ** 6):
+    """The expert bot (tests/pt_plan.Player) + the viewer pacing.  marks_cb(title) records a chapter mark."""
+    _imports()
+    from pt_plan import Player
+    from pt_bot import GS_PLAYING
+    kname = {}
+    for k, v in S.items():
+        if k.startswith("K_") and isinstance(v, int):
+            kname.setdefault(v, k[2:])
+
+    class Walker(Player):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.in_bag, self.seen_rooms, self.seen_depth = False, set(), 0
+            self.boss, self.tome_seen = None, False
+            tap = self.p.tap
+
+            def paced_tap(*keys, **kw2):
+                tap(*keys, **kw2)
+                if pace and self.in_bag:
+                    self.idle(WT_BAG_TAP)
+            self.p.tap = paced_tap
+
+        def idle(self, n):
+            # the bot's timers (blocked 250, ignore 800, ping-pong 500, stuck / level caps) count mon.ticks: idle ticks
+            # are taken back out of that clock so the bot decides exactly as it does unpaced (the game itself still
+            # sees them: hunger and the RNG move on)
+            for _ in range(n):
+                self.p.tick(1)
+                self.mon.ticks -= 1
+
+        def ev(self, text):
+            super().ev(text)
+            if text.startswith("Tome bump") and not self.tome_seen:
+                self.tome_seen = True
+                marks_cb("The Tome")
+
+        def act(self, *keys):
+            t0 = self.mon.ticks
+            ok = super().act(*keys)
+            if pace and self.rb("GAME_STATE") == GS_PLAYING:
+                self.idle(max(0, WT_TURN_TICKS - (self.mon.ticks - t0)))
+            return ok
+
+        def bag_nav(self, slot):
+            if pace:
+                self.idle(WT_BAG_TICKS)
+            return super().bag_nav(slot)
+
+        def bag_use(self, slot):
+            self.in_bag = True
+            try:
+                return super().bag_use(slot)
+            finally:
+                self.in_bag = False
+
+        def boss_here(self):
+            for h in self.hostiles():
+                if h["gold"] or h["kind"] in (S["K_OGRE"], S["K_DKNIGHT"], S["K_ARCHMAGE"]):
+                    return h
+            return None
+
+        def step(self):
+            if self.rb("GAME_STATE") == GS_PLAYING:
+                d, r = self.rb("LVL_DEPTH"), self.rb("CUR_ROOM")
+                if d != self.seen_depth:
+                    self.seen_depth, self.boss = d, None
+                    self.seen_rooms = {(d, r)}
+                    marks_cb(f"Depth {d}")
+                    if pace:
+                        self.idle(WT_ROOM_TICKS)
+                elif (d, r) not in self.seen_rooms:
+                    self.seen_rooms.add((d, r))
+                    if pace:
+                        self.idle(WT_ROOM_TICKS)
+                if r == getattr(self, "lair", None):
+                    b = self.boss_here()
+                    if b and not self.boss:
+                        self.boss = kname.get(b["kind"], "BOSS")
+                        marks_cb(f"Depth {d} boss: {self.boss.replace('_', ' ').title()}")
+                    elif self.boss and not b:
+                        self.boss = None
+                        marks_cb(f"__boss_dead D{d}")
+                        if pace:
+                            self.idle(WT_BOSS_TICKS)
+            super().step()
+
+    w = Walker(p, hero, mode="win", god=god, max_ticks=max_ticks, level_cap=60000)
+    w.boss_poke = 60 if god else 0
+    return w
+
+
+def walk_run(seed, god=False, pace=True, audio=None, capture=True, hero_name="M", max_ticks=10 ** 6):
+    """One bot run from the menu (2 START, no tutorial).  capture: speed 100 + --aofile + frames; else tick-exact max
+    speed, nothing recorded (seed search).  Returns (end, rec, span, marks, bot)."""
+    _imports()
+    hero = K_KNIGHT if hero_name == "W" else K_WIZARD
+    marks = []
+    with session(hero_name, seed, audio=audio, fast=not capture) as (h, p, rec, st):
+        sz = lambda: audio.stat().st_size if audio and Path(audio).exists() else 0     # noqa: E731
+        s0 = (sz(), rec.sys())
+        menu_start(p, rec, st, hero)
+        if not capture:
+            p.tick = rec.orig                                  # no frame grabbing
+        rec.marks.append(("Menu", 0))
+        bot = make_walker(p, hero, god, pace, lambda t: marks.append((t, rec.total())), max_ticks)
+        end = bot.play()
+        if end == "win" and pace:
+            marks.append(("Victory", rec.total()))
+            bot.idle(WT_WIN_TICKS + WT_TAIL_TICKS)
+        span = (s0, (sz(), rec.sys()), rec.total())
+        if end.startswith("no path") and os.environ.get("WT_DEBUG"):         # why did the planner give up?
+            print("DEBUG flags", hex(bot.lflags()), "keyroom", bot.keyroom, "lair", bot.lair, "visited", sorted(bot.visited),
+                  "skip", sorted(bot.skip_rooms), "bag", bot.bag()[:8], flush=True)
+            for rm in bot.rooms:
+                print("DEBUG floor r%d" % rm, bot.floor_items(rm), flush=True)
+            print("DEBUG edges", [(m, hex(bot.edge_flags(m))) for m in bot.rooms], flush=True)
+        bot.info = dict(ticks=bot.mon.ticks, lvl=bot.rb("LVL"), depth=bot.rb("LVL_DEPTH"), turns=bot.p.rw("TURN_COUNTER"))
+        return end, rec, span, marks, bot
+
+
+def cmd_walkthrough(hero_name, seed, god=False, out=None, smoke=0):
+    out = Path(out or TMP / "walkthrough")
+    out.mkdir(parents=True, exist_ok=True)
+    audio = out / "audio.raw"
+    if audio.exists():
+        audio.unlink()
+    end, rec, span, marks, bot = walk_run(seed, god, True, audio, True, hero_name, smoke or 10 ** 6)
+    pickle.dump((rec.frames, span, marks), open(out / "walk.pkl", "wb"))
+    print(f"end {end}: {rec.total() / 50:.1f} s, pokes {dict(bot.pokes)}, stats {dict(bot.stats)}")
+    if end != "win" and not smoke:
+        sys.exit(f"the run ended {end}, not win: pick another seed")
+    walk_assemble(out, out / ("smoke.mp4" if smoke else "mage_walkthrough.mp4"))
+
+
+def walk_assemble(out, mp4):
+    frames, span, marks = pickle.load(open(Path(out) / "walk.pkl", "rb"))
+    check_audio(frames, Path(out) / "audio.raw", span)
+    chap = [("Start - Depth 1", 0)] + [m for m in marks if not m[0].startswith("__")]
+    assemble(frames, Path(out) / "audio.raw", mp4, scale=5, canvas=(1920, 1080), marks=chap,
+             chapters=Path(mp4).with_name("chapters.txt"))
+
+
+def cmd_walk_search(hero_name, a, b, god=False, pace=True, max_ticks=10 ** 6, events=None):
+    for seed in range(a, b + 1):
+        end, rec, span, marks, bot = walk_run(seed, god, pace, None, False, hero_name, max_ticks)
+        print(f"SEED {seed}: {end} ticks {bot.info['ticks']} lvl {bot.info['lvl']} depth {bot.info['depth']} "
+              f"turns {bot.info['turns']} pokes {dict(bot.pokes)}", flush=True)
+        if events:                                  # event texts without tick numbers: diff two runs (pacing neutrality)
+            Path(events).mkdir(parents=True, exist_ok=True)
+            Path(events, f"{seed}.ev").write_text("\n".join(t for _, t in bot.events) + "\n")
+
+
 def main():
     a = sys.argv[1:]
     if not a:
@@ -1629,6 +1836,23 @@ def main():
             cmd_trailer()
         else:
             cmd_trailer()
+    elif a[0] == "walkthrough" and "--fmf" in a:          # a user's Fuse RZX, replayed by Fuse into an FMF (tools/fmf.py)
+        import fmf
+        fmf.video(a[a.index("--fmf") + 1], a[a.index("--out") + 1] if "--out" in a else TMP / "walkthrough")
+    elif a[0] == "walkthrough":
+        hero = a[1] if a[1:2] and a[1] in ("W", "M") else "M"
+        god = "--god" in a
+        if "--search" in a:
+            i = a.index("--search")
+            cmd_walk_search(hero, int(a[i + 1], 0), int(a[i + 2], 0), god, "--no-pace" not in a,
+                            int(a[a.index("--max-ticks") + 1]) if "--max-ticks" in a else 10 ** 6,
+                            a[a.index("--events") + 1] if "--events" in a else None)
+        elif "--assemble" in a:
+            walk_assemble(a[a.index("--out") + 1], a[a.index("--assemble") + 1])
+        else:
+            cmd_walkthrough(hero, int(a[a.index("--seed") + 1], 0), god,
+                            a[a.index("--out") + 1] if "--out" in a else None,
+                            int(a[a.index("--smoke") + 1]) if "--smoke" in a else 0)
     elif a[0] == "video":
         cmd_video(a[1], reuse="--reuse" in a)
     else:
